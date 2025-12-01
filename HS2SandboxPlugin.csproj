@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <!-- Set your Honey Select 2 Managed folder path here -->
+    <!-- Example: C:\Games\HoneySelect2\HS2_Data\Managed -->
+    <HS2_Managed Condition="'$(HS2_Managed)' == ''">D:\Honey Select\StudioNEOV2_Data\Managed</HS2_Managed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="1.1.0" />
+    <PackageReference Include="UnityEngine.Modules" Version="2018.4.30" IncludeAssets="compile" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(HS2_Managed)\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(HS2_Managed)\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="HS2API">
+      <HintPath>packages\IllusionModdingAPI.HS2API.1.39.0\lib\net46\HS2API.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
+

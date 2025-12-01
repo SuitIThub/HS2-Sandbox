@@ -1,0 +1,13 @@
+{
+  "name": "HS2 Sandbox Plugin",
+  "version_number": "1.0.0",
+  "website_url": "",
+  "description": "A sandbox plugin for Honey Select 2 StudioNeoV2 with customizable Unity GUI windows",
+  "dependencies": [
+    "bbepis-BepInEx-5.4.21"
+  ],
+  "optional_dependencies": [
+    "BepInEx-BepInExPack-5.4.21"
+  ]
+}
+
