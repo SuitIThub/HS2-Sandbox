@@ -193,18 +193,25 @@ namespace HS2SandboxPlugin
             }
         }
 
-        // Get tracked files
-        public IEnumerator GetTrackedFilesAsync(int count, Action<TrackedFilesResponse?> callback)
+        // Get tracked files (no count = use API default; response still includes total_count)
+        public IEnumerator GetTrackedFilesAsync(Action<TrackedFilesResponse?> callback)
         {
-            using (UnityWebRequest request = UnityWebRequest.Get($"{_baseUrl}/api/tracking?count={count}"))
+            using (UnityWebRequest request = UnityWebRequest.Get($"{_baseUrl}/api/tracking"))
             {
                 yield return request.SendWebRequest();
                 if (!request.isNetworkError && !request.isHttpError)
                 {
+                    string rawJson = request.downloadHandler.text;
                     TrackedFilesResponse? result = null;
                     try
                     {
-                        result = JsonUtility.FromJson<TrackedFilesResponse>(request.downloadHandler.text);
+                        result = JsonUtility.FromJson<TrackedFilesResponse>(rawJson);
+                        if (result != null && result.success && (result.files == null || result.files.Length == 0) && rawJson.IndexOf("\"files\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            TrackedFile[]? manual = ParseTrackedFilesArrayFromJson(rawJson);
+                            if (manual != null && manual.Length > 0)
+                                result.files = manual;
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -220,15 +227,141 @@ namespace HS2SandboxPlugin
             }
         }
 
-        // Clear tracked files
-        public IEnumerator ClearTrackedFilesAsync(Action<bool> callback)
+        // Get tracked files with count parameter
+        public IEnumerator GetTrackedFilesAsync(int count, Action<TrackedFilesResponse?> callback)
         {
-            using (UnityWebRequest request = UnityWebRequest.Delete($"{_baseUrl}/api/tracking"))
+            using (UnityWebRequest request = UnityWebRequest.Get($"{_baseUrl}/api/tracking?count={count}"))
             {
                 yield return request.SendWebRequest();
                 if (!request.isNetworkError && !request.isHttpError)
                 {
-                    var result = JsonUtility.FromJson<ApiResponse>(request.downloadHandler.text);
+                    string rawJson = request.downloadHandler.text;
+                    TrackedFilesResponse? result = null;
+                    try
+                    {
+                        result = JsonUtility.FromJson<TrackedFilesResponse>(rawJson);
+                        // Unity JsonUtility often leaves nested arrays (e.g. "files") null or empty.
+                        // If the response looks successful but files is empty, parse the "files" array manually.
+                        if (result != null && result.success && (result.files == null || result.files.Length == 0) && rawJson.IndexOf("\"files\"", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            TrackedFile[]? manual = ParseTrackedFilesArrayFromJson(rawJson);
+                            if (manual != null && manual.Length > 0)
+                            {
+                                result.files = manual;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        HS2SandboxPlugin.Log.LogError($"Failed to parse tracked files response: {ex.Message}");
+                    }
+                    callback(result);
+                }
+                else
+                {
+                    HS2SandboxPlugin.Log.LogError($"Get tracked files failed: {request.error}");
+                    callback(null);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Parses the "files" array from the API JSON when JsonUtility fails to deserialize nested arrays.
+        /// </summary>
+        private static TrackedFile[]? ParseTrackedFilesArrayFromJson(string json)
+        {
+            int filesKey = json.IndexOf("\"files\"", StringComparison.OrdinalIgnoreCase);
+            if (filesKey < 0) return null;
+            int arrayStart = json.IndexOf('[', filesKey);
+            if (arrayStart < 0) return null;
+            int arrayEnd = IndexOfMatchingBracket(json, arrayStart, '[', ']');
+            if (arrayEnd < 0) return null;
+            string arrayContent = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1).Trim();
+            if (arrayContent.Length == 0) return new TrackedFile[0];
+            var list = new List<TrackedFile>();
+            int pos = 0;
+            while (pos < arrayContent.Length)
+            {
+                int objStart = arrayContent.IndexOf('{', pos);
+                if (objStart < 0) break;
+                int objEnd = IndexOfMatchingBracket(arrayContent, objStart, '{', '}');
+                if (objEnd < 0) break;
+                string objJson = arrayContent.Substring(objStart, objEnd - objStart + 1);
+                try
+                {
+                    var file = JsonUtility.FromJson<TrackedFile>(objJson);
+                    if (file != null) list.Add(file);
+                }
+                catch { /* skip malformed element */ }
+                pos = objEnd + 1;
+            }
+            return list.Count > 0 ? list.ToArray() : null;
+        }
+
+        private static int IndexOfMatchingBracket(string s, int openIndex, char open, char close)
+        {
+            bool inString = false;
+            bool escape = false;
+            int depth = 0;
+            for (int i = openIndex; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (inString)
+                {
+                    if (escape) escape = false;
+                    else if (c == '\\') escape = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+                if (c == '"') { inString = true; continue; }
+                if (c == open) { depth++; continue; }
+                if (c == close)
+                {
+                    depth--;
+                    if (depth == 0) return i;
+                }
+            }
+            return -1;
+        }
+
+        // Get issues (files with duplicate/exists problems)
+        public IEnumerator GetIssuesAsync(Action<IssuesResponse?> callback)
+        {
+            using (UnityWebRequest request = UnityWebRequest.Get($"{_baseUrl}/api/issues"))
+            {
+                yield return request.SendWebRequest();
+                if (!request.isNetworkError && !request.isHttpError)
+                {
+                    IssuesResponse? result = null;
+                    try
+                    {
+                        result = JsonUtility.FromJson<IssuesResponse>(request.downloadHandler.text);
+                    }
+                    catch (Exception ex)
+                    {
+                        HS2SandboxPlugin.Log.LogError($"Failed to parse issues response: {ex.Message}");
+                    }
+                    callback(result);
+                }
+                else
+                {
+                    HS2SandboxPlugin.Log.LogError($"Get issues failed: {request.error}");
+                    callback(null);
+                }
+            }
+        }
+
+        // Clear tracked files
+        public IEnumerator ClearTrackedFilesAsync(Action<bool> callback)
+        {
+            using (UnityWebRequest request = new UnityWebRequest($"{_baseUrl}/api/tracking", "DELETE"))
+            {
+                request.downloadHandler = new DownloadHandlerBuffer();
+                yield return request.SendWebRequest();
+                if (!request.isNetworkError && !request.isHttpError)
+                {
+                    string responseText = request.downloadHandler?.text ?? "{}";
+                    var result = JsonUtility.FromJson<ApiResponse>(responseText);
                     callback(result != null && result.success);
                 }
                 else
@@ -371,6 +504,16 @@ namespace HS2SandboxPlugin
         public TrackedFile[] files = new TrackedFile[0];
         public int total_count;
         public int returned_count;
+    }
+
+    [Serializable]
+    public class IssuesResponse
+    {
+        public bool success;
+        public TrackedFile[] files = new TrackedFile[0];
+        public int duplicate_count;
+        public int exists_count;
+        public int issues_count;
     }
 
     [Serializable]

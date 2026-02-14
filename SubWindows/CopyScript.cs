@@ -22,6 +22,7 @@ namespace HS2SandboxPlugin
         private const float REFRESH_INTERVAL = 2f; // Refresh every 2 seconds
         private float lastHealthCheckTime = 0f;
         private const float HEALTHCHECK_INTERVAL = 5f; // Health check every 5 seconds when unavailable
+        private bool isRefreshingTrackedFiles = false;
 
         protected override void Start()
         {
@@ -34,6 +35,15 @@ namespace HS2SandboxPlugin
             if (apiClient != null)
             {
                 StartCoroutine(InitializeAsync());
+            }
+        }
+
+        protected override void OnVisibilityChanged(bool visible)
+        {
+            base.OnVisibilityChanged(visible);
+            if (visible && apiAvailable && apiClient != null && !isRefreshingTrackedFiles)
+            {
+                StartCoroutine(RefreshTrackedFilesAsync());
             }
         }
 
@@ -78,14 +88,25 @@ namespace HS2SandboxPlugin
 
         private IEnumerator RefreshTrackedFilesAsync()
         {
-            if (apiClient == null) yield break;
-            TrackedFilesResponse? filesResult = null;
-            yield return StartCoroutine(apiClient.GetTrackedFilesAsync(5, (result) => { filesResult = result; }));
-            
-            
-            if (filesResult != null && filesResult.success)
+            if (apiClient == null || isRefreshingTrackedFiles) yield break;
+            isRefreshingTrackedFiles = true;
+            try
             {
-                trackedFiles = filesResult.files ?? new TrackedFile[0];
+                TrackedFilesResponse? filesResult = null;
+                yield return StartCoroutine(apiClient.GetTrackedFilesAsync(5, (result) => { filesResult = result; }));
+
+                if (filesResult != null && filesResult.success)
+                {
+                    trackedFiles = filesResult.files ?? new TrackedFile[0];
+                    if (filesResult.files == null && filesResult.total_count > 0)
+                    {
+                        HS2SandboxPlugin.Log.LogWarning("Tracked files response had success but null files array (total_count=" + filesResult.total_count + "). Check API response format.");
+                    }
+                }
+            }
+            finally
+            {
+                isRefreshingTrackedFiles = false;
             }
         }
 
@@ -94,8 +115,8 @@ namespace HS2SandboxPlugin
             if (isLoading)
                 return;
 
-            // When API is available, periodically refresh tracked files
-            if (apiAvailable)
+            // When API is available, periodically refresh tracked files (skip if a refresh is already in progress)
+            if (apiAvailable && !isRefreshingTrackedFiles)
             {
                 if (Time.time - lastRefreshTime > REFRESH_INTERVAL)
                 {
@@ -259,7 +280,13 @@ namespace HS2SandboxPlugin
             GUILayout.Space(3);
 
             // Rows 5-9: Last 5 tracked files
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
             GUILayout.Label("Last 5 Files:", GUILayout.Height(20));
+            if (GUILayout.Button("Refresh", GUILayout.Width(60), GUILayout.Height(20)) && !isRefreshingTrackedFiles && apiClient != null)
+            {
+                StartCoroutine(RefreshTrackedFilesAsync());
+            }
+            GUILayout.EndHorizontal();
             GUILayout.BeginVertical("box");
             
             if (trackedFiles != null && trackedFiles.Length > 0)

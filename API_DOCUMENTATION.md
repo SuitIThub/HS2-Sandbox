@@ -31,6 +31,7 @@ All responses include a `success` boolean field. The structure of successful res
 - GET endpoints return the requested data directly (e.g., `path`, `pattern`, `files`)
 - POST/DELETE endpoints typically return a `message` field
 - The `/api/tracking` GET endpoint returns `files`, `total_count`, and `returned_count`
+- The `/api/issues` GET endpoint returns `files`, `duplicate_count`, `exists_count`, and `issues_count`
 - The `/api/status` endpoint returns multiple status fields
 
 
@@ -312,7 +313,56 @@ curl -X DELETE http://127.0.0.1:5000/api/tracking
 
 
 
-### 8. Copy and Rename
+### 8. Get Issues
+
+Get all tracked files that have naming issues: either a duplicate preview name (collision with another tracked file) or a preview name that already exists in the destination folder. The `files` array uses the same structure as the tracking GET response.
+
+**Endpoint:** `GET /api/issues`
+
+**Request:** No parameters required
+
+**Response:**
+```json
+{
+  "success": true,
+  "files": [
+    {
+      "original_path": "C:\\Source\\file2.jpg",
+      "original_name": "file2.jpg",
+      "new_name": "renamed_file1.jpg",
+      "state": "duplicate"
+    },
+    {
+      "original_path": "C:\\Source\\file3.jpg",
+      "original_name": "file3.jpg",
+      "new_name": "existing_file.jpg",
+      "state": "exists"
+    }
+  ],
+  "duplicate_count": 1,
+  "exists_count": 1,
+  "issues_count": 2
+}
+```
+
+**Response Fields:**
+- `files` - Array of file entries with issues only (same shape as tracking: `original_path`, `original_name`, `new_name`, `state`)
+- `duplicate_count` - Number of tracked files whose preview name collides with another tracked file
+- `exists_count` - Number of tracked files whose preview name already exists in the destination folder
+- `issues_count` - Total number of issues (`duplicate_count` + `exists_count`)
+
+**File State Values in `files`:**
+- `"duplicate"` - The new filename collides with another tracked file
+- `"exists"` - The new filename already exists in the destination folder
+
+**Example:**
+```bash
+curl http://127.0.0.1:5000/api/issues
+```
+
+
+
+### 9. Copy and Rename
 
 Copy all tracked files to the destination folder with new names based on the naming pattern.
 
@@ -337,7 +387,7 @@ curl -X POST http://127.0.0.1:5000/api/copy_rename
 
 
 
-### 9. Get Application Status
+### 10. Get Application Status
 
 Get the current status of the application including tracking state, file counts, and current settings.
 
@@ -450,6 +500,14 @@ public class FileManagerApiClient
         return result.Success;
     }
 
+    // Get issues (files with duplicate or exists state)
+    public async Task<IssuesResponse> GetIssuesAsync()
+    {
+        var response = await _client.GetAsync("/api/issues");
+        var content = await response.Content.ReadAsStringAsync();
+        return JsonConvert.DeserializeObject<IssuesResponse>(content);
+    }
+
     // Copy and rename
     public async Task<bool> CopyAndRenameAsync()
     {
@@ -518,6 +576,24 @@ public class TrackedFilesResponse
 
     [JsonProperty("returned_count")]
     public int ReturnedCount { get; set; }
+}
+
+public class IssuesResponse
+{
+    [JsonProperty("success")]
+    public bool Success { get; set; }
+
+    [JsonProperty("files")]
+    public TrackedFile[] Files { get; set; }
+
+    [JsonProperty("duplicate_count")]
+    public int DuplicateCount { get; set; }
+
+    [JsonProperty("exists_count")]
+    public int ExistsCount { get; set; }
+
+    [JsonProperty("issues_count")]
+    public int IssuesCount { get; set; }
 }
 
 public class StatusResponse

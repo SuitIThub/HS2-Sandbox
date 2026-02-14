@@ -22,7 +22,7 @@ namespace HS2SandboxPlugin
 
             // Create subwindow instances
             subwindows["Window1"] = gameObject.AddComponent<CopyScript>();
-            subwindows["Window2"] = gameObject.AddComponent<SubWindow2>();
+            subwindows["Window2"] = gameObject.AddComponent<ActionTimeline>();
             subwindows["Window3"] = gameObject.AddComponent<SubWindow3>();
         }
 
@@ -52,6 +52,10 @@ namespace HS2SandboxPlugin
                     subwindows[kvp.Key].DrawWindow();
                 }
             }
+
+            // Draw timeline mouse-position crosses on top when enabled
+            if (subwindowStates.TryGetValue("Window2", out bool timelineVisible) && timelineVisible && subwindows["Window2"] is ActionTimeline timeline)
+                timeline.DrawCrossesOverlay();
         }
 
         private void DrawMainWindow(int windowID)
@@ -67,7 +71,7 @@ namespace HS2SandboxPlugin
             }
 
             // Checkbox for Window 2
-            bool window2State = GUILayout.Toggle(subwindowStates["Window2"], "Window 2", GUILayout.Height(20));
+            bool window2State = GUILayout.Toggle(subwindowStates["Window2"], "Timeline", GUILayout.Height(20));
             if (window2State != subwindowStates["Window2"])
             {
                 subwindowStates["Window2"] = window2State;

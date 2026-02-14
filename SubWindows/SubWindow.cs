@@ -26,7 +26,7 @@ namespace HS2SandboxPlugin
             // Override in derived classes if needed
         }
 
-        public void DrawWindow()
+        public virtual void DrawWindow()
         {
             if (isVisible)
             {
