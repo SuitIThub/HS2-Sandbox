@@ -13,7 +13,12 @@ namespace HS2SandboxPlugin
         private string sourcePath = string.Empty;
         private string destinationPath = string.Empty;
         private string namePattern = string.Empty;
-        private TrackedFile[] trackedFiles = new TrackedFile[0];
+        private TrackedFile[] trackedFiles = [];
+        private CopyScriptRule[] rules = [];
+        private string[] ruleTagKeys = []; // tag_name used for API URL (current on server)
+        private bool showAddRuleUI = false;
+        private string newRuleTagName = "";
+        private int newRuleTypeIndex = 0; // 0=counter, 1=list, 2=batch
         private bool isTracking = false;
         private bool isLoading = false;
         private bool apiAvailable = false;
@@ -24,12 +29,21 @@ namespace HS2SandboxPlugin
         private const float HEALTHCHECK_INTERVAL = 5f; // Health check every 5 seconds when unavailable
         private bool isRefreshingTrackedFiles = false;
 
+        private const float WindowMinWidth = 506f;
+        private const float WindowMaxWidth = 706f;
+
+        public override void DrawWindow()
+        {
+            base.DrawWindow();
+            windowRect.width = Mathf.Clamp(windowRect.width, WindowMinWidth, WindowMaxWidth);
+        }
+
         protected override void Start()
         {
             base.Start();
             windowID = 2001;
             windowTitle = "CopyScript Control";
-            windowRect = new Rect(400, 100, 420, 480);
+            windowRect = new Rect(400, 100, WindowMaxWidth, 480);
             
             apiClient = new CopyScriptApiClient();
             if (apiClient != null)
@@ -60,7 +74,6 @@ namespace HS2SandboxPlugin
 
             if (healthOk)
             {
-                yield return StartCoroutine(LoadSettingsAsync());
                 yield return StartCoroutine(RefreshTrackedFilesAsync());
             }
             else
@@ -86,23 +99,67 @@ namespace HS2SandboxPlugin
             }
         }
 
+        private IEnumerator LoadRulesAsync()
+        {
+            if (apiClient == null) yield break;
+            RulesListResponse? result = null;
+            yield return StartCoroutine(apiClient.GetRulesAsync((r) => { result = r; }));
+            if (result != null && result.success && result.rules != null)
+            {
+                rules = result.rules;
+                ruleTagKeys = new string[rules.Length];
+                for (int i = 0; i < rules.Length; i++)
+                    ruleTagKeys[i] = rules[i].tag_name ?? "";
+            }
+        }
+
         private IEnumerator RefreshTrackedFilesAsync()
         {
             if (apiClient == null || isRefreshingTrackedFiles) yield break;
             isRefreshingTrackedFiles = true;
             try
             {
-                TrackedFilesResponse? filesResult = null;
-                yield return StartCoroutine(apiClient.GetTrackedFilesAsync(5, (result) => { filesResult = result; }));
+                yield return StartCoroutine(FetchTrackedFilesOnlyAsync());
+            }
+            finally
+            {
+                isRefreshingTrackedFiles = false;
+            }
+        }
 
-                if (filesResult != null && filesResult.success)
+        /// <summary>Fetches only tracked files from the API (no rules/settings).</summary>
+        private IEnumerator FetchTrackedFilesOnlyAsync()
+        {
+            if (apiClient == null) yield break;
+            TrackedFilesResponse? filesResult = null;
+            yield return StartCoroutine(apiClient.GetTrackedFilesAsync(5, (result) => { filesResult = result; }));
+            if (filesResult != null && filesResult.success)
+            {
+                trackedFiles = filesResult.files ?? [];
+                if (filesResult.files == null && filesResult.total_count > 0)
                 {
-                    trackedFiles = filesResult.files ?? new TrackedFile[0];
-                    if (filesResult.files == null && filesResult.total_count > 0)
-                    {
-                        HS2SandboxPlugin.Log.LogWarning("Tracked files response had success but null files array (total_count=" + filesResult.total_count + "). Check API response format.");
-                    }
+                    HS2SandboxPlugin.Log.LogWarning("Tracked files response had success but null files array (total_count=" + filesResult.total_count + "). Check API response format.");
                 }
+            }
+        }
+
+        /// <summary>Called from timeline when a config command succeeds. Fetches rules, settings, and tracked files if the window is open.</summary>
+        public void RefreshFromTimeline()
+        {
+            if (isVisible && apiClient != null && !isRefreshingTrackedFiles)
+                StartCoroutine(RefreshRulesSettingsAndFilesAsync());
+        }
+
+        /// <summary>Fetches rules, settings, and tracked files. Called only when the user presses the Refresh button.</summary>
+        private IEnumerator RefreshRulesSettingsAndFilesAsync()
+        {
+            if (apiClient == null || isRefreshingTrackedFiles) yield break;
+            isRefreshingTrackedFiles = true;
+            try
+            {
+                yield return StartCoroutine(LoadSettingsAsync());
+                yield return StartCoroutine(LoadRulesAsync());
+                yield return StartCoroutine(FetchTrackedFilesOnlyAsync());
             }
             finally
             {
@@ -271,6 +328,35 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(3);
 
+            // Rules section (above tracked files)
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
+            GUILayout.Label("Rules:", GUILayout.Height(20));
+            if (GUILayout.Button("Add rule", GUILayout.Width(70), GUILayout.Height(20)))
+            {
+                showAddRuleUI = !showAddRuleUI;
+                if (!showAddRuleUI) newRuleTagName = "";
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginVertical("box");
+            if (rules != null && rules.Length > 0)
+            {
+                for (int i = 0; i < rules.Length; i++)
+                {
+                    DrawRuleRow(i);
+                }
+            }
+            else if (!showAddRuleUI)
+            {
+                GUILayout.Label("No rules", GUILayout.Height(18));
+            }
+            if (showAddRuleUI)
+            {
+                DrawAddRuleRow();
+            }
+            GUILayout.EndVertical();
+
+            GUILayout.Space(3);
+
             // Status message
             if (!string.IsNullOrEmpty(statusMessage))
             {
@@ -284,7 +370,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("Last 5 Files:", GUILayout.Height(20));
             if (GUILayout.Button("Refresh", GUILayout.Width(60), GUILayout.Height(20)) && !isRefreshingTrackedFiles && apiClient != null)
             {
-                StartCoroutine(RefreshTrackedFilesAsync());
+                StartCoroutine(RefreshRulesSettingsAndFilesAsync());
             }
             GUILayout.EndHorizontal();
             GUILayout.BeginVertical("box");
@@ -419,8 +505,7 @@ namespace HS2SandboxPlugin
             {
                 isTracking = true;
                 statusMessage = "Tracking started";
-                // Refresh tracked files immediately after starting tracking
-                yield return StartCoroutine(RefreshTrackedFilesAsync());
+                yield return StartCoroutine(RefreshRulesSettingsAndFilesAsync());
             }
             else
             {
@@ -440,6 +525,7 @@ namespace HS2SandboxPlugin
             {
                 isTracking = false;
                 statusMessage = "Tracking stopped";
+                yield return StartCoroutine(RefreshRulesSettingsAndFilesAsync());
             }
             else
             {
@@ -458,7 +544,7 @@ namespace HS2SandboxPlugin
             if (success)
             {
                 statusMessage = "Copy and rename initiated";
-                yield return StartCoroutine(RefreshTrackedFilesAsync());
+                yield return StartCoroutine(RefreshRulesSettingsAndFilesAsync());
             }
             else
             {
@@ -476,8 +562,8 @@ namespace HS2SandboxPlugin
             
             if (success)
             {
-                trackedFiles = new TrackedFile[0];
                 statusMessage = "Tracked files cleared";
+                yield return StartCoroutine(RefreshRulesSettingsAndFilesAsync());
             }
             else
             {
@@ -497,9 +583,6 @@ namespace HS2SandboxPlugin
             {
                 apiAvailable = true;
                 statusMessage = "Connection to CopyScript established.";
-
-                // Load initial settings and tracked files once the API becomes available
-                yield return StartCoroutine(LoadSettingsAsync());
                 yield return StartCoroutine(RefreshTrackedFilesAsync());
             }
         }
@@ -519,7 +602,6 @@ namespace HS2SandboxPlugin
             if (healthOk)
             {
                 statusMessage = "Connection established.";
-                yield return StartCoroutine(LoadSettingsAsync());
                 yield return StartCoroutine(RefreshTrackedFilesAsync());
             }
             else
@@ -527,6 +609,150 @@ namespace HS2SandboxPlugin
                 statusMessage = "Could not reach CopyScript API. Make sure the CopyScript manager is running.";
             }
 
+            isLoading = false;
+        }
+
+        private static readonly string[] RuleTypeOptions = ["counter", "list", "batch"];
+
+        private void DrawAddRuleRow()
+        {
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
+            GUILayout.Label("Tag:", GUILayout.Width(28), GUILayout.Height(18));
+            newRuleTagName = GUILayout.TextField(newRuleTagName, GUILayout.Width(120), GUILayout.Height(18));
+            GUILayout.Label("Type:", GUILayout.Width(32), GUILayout.Height(18));
+            newRuleTypeIndex = GUILayout.SelectionGrid(newRuleTypeIndex, RuleTypeOptions, 3, GUILayout.Width(180), GUILayout.Height(20));
+            if (GUILayout.Button("Apply", GUILayout.Width(50), GUILayout.Height(20)))
+            {
+                string tag = (newRuleTagName ?? "").Trim();
+                if (string.IsNullOrEmpty(tag))
+                {
+                    statusMessage = "Enter a tag name";
+                }
+                else
+                {
+                    StartCoroutine(CreateRuleAsync(tag, newRuleTypeIndex));
+                }
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawRuleRow(int i)
+        {
+            if (rules == null || i < 0 || i >= rules.Length) return;
+            var rule = rules[i];
+            string typeLabel = string.IsNullOrEmpty(rule.type) ? "?" : rule.type;
+            string tagLabel = string.IsNullOrEmpty(rule.tag_name) ? "?" : "{" + rule.tag_name + "}";
+
+            GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
+
+            GUILayout.Label(typeLabel, GUILayout.Width(52), GUILayout.Height(18));
+            GUILayout.Label(tagLabel, GUILayout.Width(48), GUILayout.Height(18));
+
+            if (rule.type == "list")
+            {
+                string valuesStr = rule.values != null ? string.Join(", ", rule.values) : "";
+                float valuesMaxWidth = Mathf.Max(120f, windowRect.width - 220f);
+                valuesStr = GUILayout.TextArea(valuesStr, GUILayout.ExpandWidth(true), GUILayout.MinHeight(36), GUILayout.MaxWidth(valuesMaxWidth));
+                if (valuesStr != null)
+                {
+                    var parts = valuesStr.Split(',');
+                    rule.values = new string[parts.Length];
+                    for (int j = 0; j < parts.Length; j++)
+                        rule.values[j] = parts[j].Trim();
+                }
+                GUILayout.Label("Step", GUILayout.Width(28), GUILayout.Height(18));
+                string stepStr = GUILayout.TextField(rule.step.ToString(), GUILayout.Width(28), GUILayout.Height(18));
+                if (int.TryParse(stepStr, out int stepVal) && stepVal >= 0)
+                    rule.step = stepVal;
+            }
+            else if (rule.type == "counter" || rule.type == "batch")
+            {
+                GUILayout.Label("Start", GUILayout.Width(32), GUILayout.Height(18));
+                string startStr = GUILayout.TextField(rule.start_value.ToString(), GUILayout.Width(40), GUILayout.Height(18));
+                if (int.TryParse(startStr, out int startVal))
+                    rule.start_value = startVal;
+                GUILayout.Label("Inc", GUILayout.Width(22), GUILayout.Height(18));
+                string incStr = GUILayout.TextField(rule.increment.ToString(), GUILayout.Width(32), GUILayout.Height(18));
+                if (int.TryParse(incStr, out int incVal))
+                    rule.increment = incVal;
+                GUILayout.Label("Step", GUILayout.Width(28), GUILayout.Height(18));
+                string stepStr = GUILayout.TextField(rule.step.ToString(), GUILayout.Width(28), GUILayout.Height(18));
+                if (int.TryParse(stepStr, out int stepVal) && stepVal >= 0)
+                    rule.step = stepVal;
+                rule.use_max_value = GUILayout.Toggle(rule.use_max_value, "Max", GUILayout.Width(28), GUILayout.Height(18));
+                if (rule.use_max_value)
+                {
+                    string maxStr = GUILayout.TextField(rule.max_value.ToString(), GUILayout.Width(40), GUILayout.Height(18));
+                    if (int.TryParse(maxStr, out int maxVal))
+                        rule.max_value = maxVal;
+                }
+            }
+
+            if (GUILayout.Button("Set", GUILayout.Width(36), GUILayout.Height(18)))
+            {
+                string urlTag = i < ruleTagKeys.Length ? ruleTagKeys[i] : rule.tag_name;
+                if (!string.IsNullOrEmpty(urlTag))
+                    StartCoroutine(SetRuleAsync(urlTag, rule));
+            }
+
+            GUILayout.EndHorizontal();
+        }
+
+        private IEnumerator CreateRuleAsync(string tagName, int typeIndex)
+        {
+            if (apiClient == null) yield break;
+            if (typeIndex < 0 || typeIndex >= RuleTypeOptions.Length) yield break;
+
+            var rule = new CopyScriptRule
+            {
+                tag_name = tagName,
+                type = RuleTypeOptions[typeIndex]
+            };
+            if (rule.type == "list")
+            {
+                rule.values = [];
+                rule.step = 1;
+            }
+            else
+            {
+                rule.start_value = 0;
+                rule.increment = 1;
+                rule.step = 1;
+                rule.use_max_value = false;
+            }
+
+            isLoading = true;
+            bool success = false;
+            yield return StartCoroutine(apiClient.CreateRuleAsync(rule, (result) => { success = result; }));
+            if (success)
+            {
+                statusMessage = "Rule created";
+                showAddRuleUI = false;
+                newRuleTagName = "";
+                yield return StartCoroutine(LoadRulesAsync());
+            }
+            else
+            {
+                statusMessage = "Failed to create rule (tag may already exist)";
+            }
+            isLoading = false;
+        }
+
+        private IEnumerator SetRuleAsync(string urlTagName, CopyScriptRule rule)
+        {
+            if (apiClient == null) yield break;
+            isLoading = true;
+            bool success = false;
+            yield return StartCoroutine(apiClient.UpdateRuleAsync(urlTagName, rule, (result) => { success = result; }));
+            if (success)
+            {
+                statusMessage = "Rule updated";
+                yield return StartCoroutine(LoadRulesAsync());
+            }
+            else
+            {
+                statusMessage = "Failed to update rule";
+            }
             isLoading = false;
         }
 

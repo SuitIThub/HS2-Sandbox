@@ -19,6 +19,7 @@ namespace HS2SandboxPlugin
         private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
         private const uint MOUSEEVENTF_MIDDLEDOWN = 0x0020;
         private const uint MOUSEEVENTF_MIDDLEUP = 0x0040;
+        private const uint MOUSEEVENTF_WHEEL = 0x0800;
 
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
@@ -96,6 +97,15 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>
+        /// Simulate mouse wheel scroll at the current cursor position.
+        /// delta: positive = scroll up (away from user), negative = scroll down. One notch = 120.
+        /// </summary>
+        public static void SimulateScroll(int delta)
+        {
+            mouse_event(MOUSEEVENTF_WHEEL, 0, 0, (uint)delta, UIntPtr.Zero);
+        }
+
+        /// <summary>
         /// Convert Unity KeyCode to Windows virtual key code (VK). Returns 0 if no mapping.
         /// </summary>
         public static byte KeyCodeToVk(KeyCode key)
@@ -137,8 +147,40 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>
+        /// Parses multiple key combinations separated by commas (e.g. "Ctrl+A, F5, Escape").
+        /// Returns a list of VK arrays and whether every combo parsed successfully.
+        /// Empty or whitespace-only segments are skipped. Empty input yields empty list and valid=true.
+        /// </summary>
+        public static (List<byte[]> combos, bool allValid) ParseMultipleKeyCombos(string? text)
+        {
+            var combos = new List<byte[]>();
+            if (string.IsNullOrWhiteSpace(text)) return (combos, true);
+            string[] parts = text!.Split(',');
+            foreach (string part in parts)
+            {
+                string trimmed = part.Trim();
+                if (trimmed.Length == 0) continue;
+                byte[]? vks = ParseKeyCombo(trimmed);
+                if (vks == null) return (combos, false);
+                combos.Add(vks);
+            }
+            return (combos, true);
+        }
+
+        /// <summary>
+        /// Returns true only if every non-empty comma-separated key combo in text parses successfully.
+        /// </summary>
+        public static bool ValidateKeyCombos(string? text)
+        {
+            var (_, allValid) = ParseMultipleKeyCombos(text);
+            return allValid;
+        }
+
+        /// <summary>
         /// Parse a key combination string like "Ctrl+A", "Ctrl+Shift+K", "F5", "Escape" into Windows VK codes.
         /// Format: parts separated by '+', case-insensitive. Modifiers: Ctrl, Control, Shift, Alt. Keys: A-Z, 0-9, F1-F12, Enter, Escape, Tab, Space, Backspace.
+        /// Arrow: Left, Up, Right, Down. Navigation: Home/Pos1, End, Insert, Delete, PageUp/PgUp, PageDown/PgDown.
+        /// Numpad: Numpad0-Numpad9 (or Num0-Num9), Numpad*, Numpad+, Numpad-, Numpad., Numpad/ (and Num* etc.).
         /// Returns null if parsing fails or string is empty.
         /// </summary>
         public static byte[]? ParseKeyCombo(string? combo)
@@ -196,6 +238,35 @@ namespace HS2SandboxPlugin
                 case "F10": return 0x79;
                 case "F11": return 0x7A;
                 case "F12": return 0x7B;
+                // Numpad 0-9 (VK 0x60-0x69)
+                case "NUMPAD0": case "NUM0": return 0x60;
+                case "NUMPAD1": case "NUM1": return 0x61;
+                case "NUMPAD2": case "NUM2": return 0x62;
+                case "NUMPAD3": case "NUM3": return 0x63;
+                case "NUMPAD4": case "NUM4": return 0x64;
+                case "NUMPAD5": case "NUM5": return 0x65;
+                case "NUMPAD6": case "NUM6": return 0x66;
+                case "NUMPAD7": case "NUM7": return 0x67;
+                case "NUMPAD8": case "NUM8": return 0x68;
+                case "NUMPAD9": case "NUM9": return 0x69;
+                // Numpad operators
+                case "NUMPAD*": case "NUMPADMULTIPLY": case "NUMMULTIPLY": case "NUM*": return 0x6A;
+                case "NUMPAD+": case "NUMPADADD": case "NUMADD": case "NUM+": return 0x6B;
+                case "NUMPAD-": case "NUMPADSUBTRACT": case "NUMSUBTRACT": case "NUM-": return 0x6D;
+                case "NUMPAD.": case "NUMPADDECIMAL": case "NUMDECIMAL": case "NUM.": return 0x6E;
+                case "NUMPAD/": case "NUMPADDIVIDE": case "NUMDIVIDE": case "NUM/": return 0x6F;
+                // Arrow keys
+                case "LEFT": return 0x25;
+                case "UP": return 0x26;
+                case "RIGHT": return 0x27;
+                case "DOWN": return 0x28;
+                // Navigation
+                case "HOME": case "POS1": return 0x24;
+                case "END": return 0x23;
+                case "INSERT": return 0x2D;
+                case "DELETE": return 0x2E;
+                case "PAGEUP": case "PGUP": return 0x21;
+                case "PAGEDOWN": case "PGDN": return 0x22;
                 default: return null;
             }
         }

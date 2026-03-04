@@ -31,6 +31,15 @@ namespace HS2SandboxPlugin
         /// <summary>When set by a Resolve on issue command (and issues were detected), the UI shows Resolve; when clicked, this callback is invoked then cleared.</summary>
         public Action? PendingResolveCallback { get; set; }
 
+        /// <summary>When set by a config command after API failure, the UI shows Retry; when clicked, this callback is invoked then cleared (typically re-runs the command).</summary>
+        public Action? PendingRetryCallback { get; set; }
+
+        /// <summary>Variables (string and int) for this timeline run. Fresh instance per run.</summary>
+        public TimelineVariableStore Variables { get; } = new TimelineVariableStore();
+
+        /// <summary>Per-variable current index for List commands (variable name -> next index into that list).</summary>
+        public Dictionary<string, int> ListIndices { get; } = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         public void SetJumpTarget(string checkpointName)
         {
             if (CheckpointIndices.TryGetValue(checkpointName, out int idx))

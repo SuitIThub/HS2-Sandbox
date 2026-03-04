@@ -36,31 +36,39 @@ namespace HS2SandboxPlugin
             return $"Loop ({current + 1})";
         }
 
+        private string _repeatCountText = "1";
+
         public override void DrawInlineConfig(InlineDrawContext ctx)
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label("Target:", GUILayout.Width(40));
             _checkpointName = GUILayout.TextField(_checkpointName, GUILayout.ExpandWidth(true));
             GUILayout.Label("×", GUILayout.Width(12));
-            string countStr = GUILayout.TextField(_repeatCount.ToString(), GUILayout.Width(36));
-            if (int.TryParse(countStr, out int c) && c >= 0)
+            _repeatCountText = GUILayout.TextField(_repeatCountText, GUILayout.Width(36));
+            if (int.TryParse(_repeatCountText, out int c) && c >= 0)
                 _repeatCount = c;
             GUILayout.EndHorizontal();
         }
 
         public override void Execute(TimelineContext ctx, Action onComplete)
         {
-            string key = _checkpointName.Trim();
+            string key = ctx.Variables.Interpolate(_checkpointName ?? "").Trim();
             if (string.IsNullOrEmpty(key))
             {
                 onComplete();
                 return;
             }
+            if (!ctx.Variables.TryResolveIntOperand(_repeatCountText ?? "1", out int repeatCountVal))
+            {
+                ctx.PendingResolveCallback = () => Execute(ctx, onComplete);
+                return;
+            }
+            int repeatCount = Mathf.Max(0, repeatCountVal);
             int current = ctx.LoopCounts.TryGetValue(key, out int n) ? n : 0;
-            if (current < _repeatCount - 1)
+            if (current < repeatCount - 1)
             {
                 ctx.LoopCounts[key] = current + 1;
-                ctx.SetJumpTarget(_checkpointName);
+                ctx.SetJumpTarget(key);
             }
             else
             {
@@ -71,23 +79,33 @@ namespace HS2SandboxPlugin
 
         public override string SerializePayload()
         {
-            return _checkpointName + "|" + _repeatCount;
+            return _checkpointName + "|" + _repeatCountText;
         }
 
         public override void DeserializePayload(string payload)
         {
             _checkpointName = "";
             _repeatCount = 1;
+            _repeatCountText = "1";
             if (string.IsNullOrWhiteSpace(payload)) return;
             int sep = payload.IndexOf('|');
             if (sep >= 0)
             {
                 _checkpointName = payload.Substring(0, sep).Trim();
-                if (int.TryParse(payload.Substring(sep + 1).Trim(), out int c) && c >= 0)
+                _repeatCountText = payload.Substring(sep + 1).Trim();
+                if (int.TryParse(_repeatCountText, out int c) && c >= 0)
                     _repeatCount = c;
             }
             else
                 _checkpointName = payload.Trim();
+        }
+
+        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        {
+            if (variablesAtThisIndex == null) return false;
+            if (!variablesAtThisIndex.IsValidInterpolation(_checkpointName ?? "")) return true;
+            if (!string.IsNullOrWhiteSpace(_repeatCountText) && !variablesAtThisIndex.IsValidIntOperand(_repeatCountText)) return true;
+            return false;
         }
     }
 }

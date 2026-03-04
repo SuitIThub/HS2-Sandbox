@@ -13,6 +13,7 @@ namespace HS2SandboxPlugin
     {
         public override string TypeId => "resolve_on_count";
         private int _expectedCount;
+        private string _expectedCountText = "0";
 
         public int ExpectedCount
         {
@@ -26,8 +27,8 @@ namespace HS2SandboxPlugin
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label("Expected count:", GUILayout.Width(95));
-            string s = GUILayout.TextField(_expectedCount.ToString(), GUILayout.Width(50));
-            if (int.TryParse(s, out int n) && n >= 0)
+            _expectedCountText = GUILayout.TextField(_expectedCountText, GUILayout.Width(50));
+            if (int.TryParse(_expectedCountText, out int n) && n >= 0)
                 _expectedCount = n;
             GUILayout.EndHorizontal();
         }
@@ -39,10 +40,16 @@ namespace HS2SandboxPlugin
                 onComplete();
                 return;
             }
-            ctx.Runner.StartCoroutine(CheckCountThenWaitIfNeeded(ctx, onComplete));
+            if (!ctx.Variables.TryResolveIntOperand(_expectedCountText, out int expectedVal))
+            {
+                ctx.PendingResolveCallback = () => Execute(ctx, onComplete);
+                return;
+            }
+            int expected = Mathf.Max(0, expectedVal);
+            ctx.Runner.StartCoroutine(CheckCountThenWaitIfNeeded(ctx, expected, onComplete));
         }
 
-        private IEnumerator CheckCountThenWaitIfNeeded(TimelineContext ctx, Action onComplete)
+        private IEnumerator CheckCountThenWaitIfNeeded(TimelineContext ctx, int expected, Action onComplete)
         {
             TrackedFilesResponse? result = null;
             yield return ctx.ApiClient!.GetTrackedFilesAsync(r => result = r);
@@ -51,7 +58,7 @@ namespace HS2SandboxPlugin
                 onComplete();
                 yield break;
             }
-            if (result.total_count == _expectedCount)
+            if (result.total_count == expected)
             {
                 onComplete();
                 yield break;
@@ -63,12 +70,20 @@ namespace HS2SandboxPlugin
             };
         }
 
-        public override string SerializePayload() => _expectedCount.ToString();
+        public override string SerializePayload() => _expectedCountText;
 
         public override void DeserializePayload(string payload)
         {
-            if (int.TryParse(payload?.Trim(), out int n) && n >= 0)
+            _expectedCountText = payload?.Trim() ?? "0";
+            if (int.TryParse(_expectedCountText, out int n) && n >= 0)
                 _expectedCount = n;
+        }
+
+        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        {
+            if (variablesAtThisIndex == null) return false;
+            if (string.IsNullOrWhiteSpace(_expectedCountText)) return true;
+            return !variablesAtThisIndex.IsValidIntOperand(_expectedCountText);
         }
     }
 }

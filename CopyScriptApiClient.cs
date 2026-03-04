@@ -391,6 +391,251 @@ namespace HS2SandboxPlugin
             }
         }
 
+        // Get all rules
+        public IEnumerator GetRulesAsync(Action<RulesListResponse?> callback)
+        {
+            using (UnityWebRequest request = UnityWebRequest.Get($"{_baseUrl}/api/rules"))
+            {
+                yield return request.SendWebRequest();
+                if (!request.isNetworkError && !request.isHttpError)
+                {
+                    string rawJson = request.downloadHandler.text;
+                    var result = new RulesListResponse { success = true };
+                    try
+                    {
+                        result.rules = ParseRulesArrayFromJson(rawJson);
+                        result.count = result.rules != null ? result.rules.Length : 0;
+                    }
+                    catch (Exception ex)
+                    {
+                        HS2SandboxPlugin.Log.LogError($"Failed to parse rules response: {ex.Message}");
+                        result.rules = new CopyScriptRule[0];
+                    }
+                    callback(result);
+                }
+                else
+                {
+                    HS2SandboxPlugin.Log.LogError($"Get rules failed: {request.error}");
+                    callback(null);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Parses the "rules" array from GET /api/rules. Each rule can be counter, list, or batch.
+        /// </summary>
+        private static CopyScriptRule[] ParseRulesArrayFromJson(string json)
+        {
+            int rulesKey = json.IndexOf("\"rules\"", StringComparison.OrdinalIgnoreCase);
+            if (rulesKey < 0) return new CopyScriptRule[0];
+            int arrayStart = json.IndexOf('[', rulesKey);
+            if (arrayStart < 0) return new CopyScriptRule[0];
+            int arrayEnd = IndexOfMatchingBracket(json, arrayStart, '[', ']');
+            if (arrayEnd < 0) return new CopyScriptRule[0];
+            string arrayContent = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1).Trim();
+            if (arrayContent.Length == 0) return new CopyScriptRule[0];
+            var list = new List<CopyScriptRule>();
+            int pos = 0;
+            while (pos < arrayContent.Length)
+            {
+                int objStart = arrayContent.IndexOf('{', pos);
+                if (objStart < 0) break;
+                int objEnd = IndexOfMatchingBracket(arrayContent, objStart, '{', '}');
+                if (objEnd < 0) break;
+                string objJson = arrayContent.Substring(objStart, objEnd - objStart + 1);
+                var rule = ParseSingleRule(objJson);
+                if (rule != null) list.Add(rule);
+                pos = objEnd + 1;
+            }
+            return list.ToArray();
+        }
+
+        private static CopyScriptRule? ParseSingleRule(string objJson)
+        {
+            var type = GetJsonString(objJson, "type");
+            var tagName = GetJsonString(objJson, "tag_name");
+            if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(tagName)) return null;
+
+            var rule = new CopyScriptRule { type = type, tag_name = tagName };
+
+            if (type == "counter" || type == "batch")
+            {
+                rule.start_value = GetJsonInt(objJson, "start_value", 0);
+                rule.increment = GetJsonInt(objJson, "increment", 1);
+                rule.step = GetJsonInt(objJson, "step", 1);
+                int maxVal;
+                if (TryGetJsonInt(objJson, "max_value", out maxVal))
+                    rule.max_value = maxVal;
+                else
+                    rule.use_max_value = false; // API sent null or omitted
+            }
+            else if (type == "list")
+            {
+                rule.step = GetJsonInt(objJson, "step", 1);
+                rule.values = GetJsonStringArray(objJson, "values");
+            }
+            return rule;
+        }
+
+        private static string GetJsonString(string json, string key)
+        {
+            string quoted = "\"" + key + "\"";
+            int keyIdx = json.IndexOf(quoted, StringComparison.OrdinalIgnoreCase);
+            if (keyIdx < 0) return "";
+            int colon = json.IndexOf(':', keyIdx);
+            if (colon < 0) return "";
+            int valueStart = json.IndexOf('"', colon);
+            if (valueStart < 0) return "";
+            int valueEnd = json.IndexOf('"', valueStart + 1);
+            if (valueEnd < 0) return "";
+            return json.Substring(valueStart + 1, valueEnd - valueStart - 1).Replace("\\\"", "\"");
+        }
+
+        private static int GetJsonInt(string json, string key, int defaultValue)
+        {
+            int val;
+            return TryGetJsonInt(json, key, out val) ? val : defaultValue;
+        }
+
+        private static bool TryGetJsonInt(string json, string key, out int value)
+        {
+            value = 0;
+            string quoted = "\"" + key + "\"";
+            int keyIdx = json.IndexOf(quoted, StringComparison.OrdinalIgnoreCase);
+            if (keyIdx < 0) return false;
+            int colon = json.IndexOf(':', keyIdx);
+            if (colon < 0) return false;
+            int numStart = colon + 1;
+            while (numStart < json.Length && (json[numStart] == ' ' || json[numStart] == '\t')) numStart++;
+            if (numStart < json.Length && json[numStart] == 'n')
+            {
+                if (numStart + 4 <= json.Length && json.Substring(numStart, 4) == "null")
+                    return false;
+            }
+            int numEnd = numStart;
+            while (numEnd < json.Length && (char.IsDigit(json[numEnd]) || json[numEnd] == '-' || json[numEnd] == '+')) numEnd++;
+            if (numEnd == numStart) return false;
+            return int.TryParse(json.Substring(numStart, numEnd - numStart), out value);
+        }
+
+        private static string[] GetJsonStringArray(string json, string key)
+        {
+            string quoted = "\"" + key + "\"";
+            int keyIdx = json.IndexOf(quoted, StringComparison.OrdinalIgnoreCase);
+            if (keyIdx < 0) return new string[0];
+            int arrayStart = json.IndexOf('[', keyIdx);
+            if (arrayStart < 0) return new string[0];
+            int arrayEnd = IndexOfMatchingBracket(json, arrayStart, '[', ']');
+            if (arrayEnd < 0) return new string[0];
+            string arrayContent = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
+            var list = new List<string>();
+            int pos = 0;
+            while (pos < arrayContent.Length)
+            {
+                int q = arrayContent.IndexOf('"', pos);
+                if (q < 0) break;
+                int q2 = arrayContent.IndexOf('"', q + 1);
+                if (q2 < 0) break;
+                list.Add(arrayContent.Substring(q + 1, q2 - q - 1).Replace("\\\"", "\""));
+                pos = q2 + 1;
+            }
+            return list.ToArray();
+        }
+
+        /// <summary>
+        /// Builds the JSON body for PUT /api/rules/{tag_name}.
+        /// </summary>
+        private static string BuildRulePutJson(CopyScriptRule rule)
+        {
+            if (rule.type == "list")
+            {
+                var sb = new StringBuilder();
+                sb.Append("{\"type\":\"list\",\"tag_name\":\"").Append(EscapeJson(rule.tag_name)).Append("\",\"values\":[");
+                if (rule.values != null && rule.values.Length > 0)
+                {
+                    for (int i = 0; i < rule.values.Length; i++)
+                    {
+                        if (i > 0) sb.Append(',');
+                        sb.Append('"').Append(EscapeJson(rule.values[i])).Append('"');
+                    }
+                }
+                sb.Append("],\"step\":").Append(rule.step).Append("}");
+                return sb.ToString();
+            }
+            if (rule.type == "counter" || rule.type == "batch")
+            {
+                var sb = new StringBuilder();
+                sb.Append("{\"type\":\"").Append(rule.type).Append("\",\"tag_name\":\"").Append(EscapeJson(rule.tag_name))
+                    .Append("\",\"start_value\":").Append(rule.start_value)
+                    .Append(",\"increment\":").Append(rule.increment)
+                    .Append(",\"step\":").Append(rule.step);
+                if (rule.use_max_value)
+                    sb.Append(",\"max_value\":").Append(rule.max_value);
+                else
+                    sb.Append(",\"max_value\":null");
+                sb.Append("}");
+                return sb.ToString();
+            }
+            return "{}";
+        }
+
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
+        }
+
+        // Create a new rule (POST /api/rules)
+        public IEnumerator CreateRuleAsync(CopyScriptRule rule, Action<bool> callback)
+        {
+            string json = BuildRulePutJson(rule);
+            using (UnityWebRequest request = new UnityWebRequest($"{_baseUrl}/api/rules", "POST"))
+            {
+                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                yield return request.SendWebRequest();
+                if (!request.isNetworkError && !request.isHttpError)
+                {
+                    string responseText = request.downloadHandler?.text ?? "{}";
+                    var result = JsonUtility.FromJson<ApiResponse>(responseText);
+                    callback(result != null && result.success);
+                }
+                else
+                {
+                    HS2SandboxPlugin.Log.LogError($"Create rule failed: {request.error}");
+                    callback(false);
+                }
+            }
+        }
+
+        // Update rule by tag_name
+        public IEnumerator UpdateRuleAsync(string tagName, CopyScriptRule rule, Action<bool> callback)
+        {
+            string json = BuildRulePutJson(rule);
+            string encoded = Uri.EscapeDataString(tagName);
+            using (UnityWebRequest request = new UnityWebRequest($"{_baseUrl}/api/rules/{encoded}", "PUT"))
+            {
+                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                yield return request.SendWebRequest();
+                if (!request.isNetworkError && !request.isHttpError)
+                {
+                    string responseText = request.downloadHandler?.text ?? "{}";
+                    var result = JsonUtility.FromJson<ApiResponse>(responseText);
+                    callback(result != null && result.success);
+                }
+                else
+                {
+                    HS2SandboxPlugin.Log.LogError($"Update rule failed: {request.error}");
+                    callback(false);
+                }
+            }
+        }
+
         // Get status
         public IEnumerator GetStatusAsync(Action<StatusResponse?> callback)
         {
@@ -525,6 +770,32 @@ namespace HS2SandboxPlugin
         public string source_path = "";
         public string destination_path = "";
         public string name_pattern = "";
+    }
+
+    /// <summary>
+    /// One rule (counter, list, or batch) for display and edit. type-specific fields:
+    /// counter/batch: start_value, increment, step, max_value, use_max_value.
+    /// list: values (string[]), step.
+    /// </summary>
+    [Serializable]
+    public class CopyScriptRule
+    {
+        public string type = "";       // "counter", "list", "batch"
+        public string tag_name = "";
+        public int start_value;
+        public int increment = 1;
+        public int step = 1;
+        public int max_value;
+        public bool use_max_value = true;  // when false, API expects max_value null
+        public string[] values = new string[0];  // for list type
+    }
+
+    [Serializable]
+    public class RulesListResponse
+    {
+        public bool success;
+        public CopyScriptRule[] rules = new CopyScriptRule[0];
+        public int count;
     }
 }
 

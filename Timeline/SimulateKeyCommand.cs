@@ -16,6 +16,16 @@ namespace HS2SandboxPlugin
 
         public override string GetDisplayLabel() => "Simulate Key";
 
+        public override bool HasInvalidConfiguration() => !WindowsInput.ValidateKeyCombos(_keyCombo);
+
+        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        {
+            if (variablesAtThisIndex == null) return HasInvalidConfiguration();
+            if (!variablesAtThisIndex.IsValidInterpolation(_keyCombo ?? "")) return true;
+            string resolved = variablesAtThisIndex.Interpolate(_keyCombo ?? "");
+            return !WindowsInput.ValidateKeyCombos(resolved);
+        }
+
         public override void DrawInlineConfig(InlineDrawContext ctx)
         {
             _keyCombo = GUILayout.TextField(_keyCombo, GUILayout.ExpandWidth(true), GUILayout.MinWidth(80));
@@ -23,9 +33,16 @@ namespace HS2SandboxPlugin
 
         public override void Execute(TimelineContext ctx, Action onComplete)
         {
-            byte[]? vks = WindowsInput.ParseKeyCombo(_keyCombo);
-            if (vks != null && vks.Length > 0)
-                WindowsInput.SimulateKeyCombination(vks);
+            string resolved = ctx.Variables.Interpolate(_keyCombo ?? "");
+            var (combos, allValid) = WindowsInput.ParseMultipleKeyCombos(resolved);
+            if (allValid)
+            {
+                foreach (byte[] vks in combos)
+                {
+                    if (vks != null && vks.Length > 0)
+                        WindowsInput.SimulateKeyCombination(vks);
+                }
+            }
             onComplete();
         }
 

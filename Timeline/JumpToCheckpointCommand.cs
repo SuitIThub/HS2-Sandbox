@@ -26,8 +26,14 @@ namespace HS2SandboxPlugin
 
         public override void Execute(TimelineContext ctx, Action onComplete)
         {
-            ctx.SetJumpTarget(_checkpointName);
+            ctx.SetJumpTarget(ctx.Variables.Interpolate(_checkpointName ?? ""));
             onComplete();
+        }
+
+        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        {
+            if (variablesAtThisIndex == null) return false;
+            return !variablesAtThisIndex.IsValidInterpolation(_checkpointName ?? "");
         }
 
         public override string SerializePayload() => _checkpointName ?? "";

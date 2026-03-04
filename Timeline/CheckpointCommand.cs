@@ -29,11 +29,20 @@ namespace HS2SandboxPlugin
             onComplete();
         }
 
+        /// <summary>Interpolated checkpoint name; used by runner to register this checkpoint at execution time.</summary>
+        public string GetCheckpointName(TimelineContext ctx) => ctx.Variables.Interpolate(_name ?? "").Trim();
+
         public override string SerializePayload() => _name ?? "";
 
         public override void DeserializePayload(string payload)
         {
             _name = string.IsNullOrWhiteSpace(payload) ? "Checkpoint" : payload.Trim();
+        }
+
+        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        {
+            if (variablesAtThisIndex == null) return false;
+            return !variablesAtThisIndex.IsValidInterpolation(_name ?? "");
         }
     }
 }

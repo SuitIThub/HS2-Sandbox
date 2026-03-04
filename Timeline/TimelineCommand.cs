@@ -10,6 +10,8 @@ namespace HS2SandboxPlugin
     {
         public Action? RecordKeys { get; set; }
         public Action? RecordMouse { get; set; }
+        /// <summary>When set by ActionTimeline, opens the list editor window. getValues: current list, setValues: apply edited list.</summary>
+        public Action<Func<string[]>, Action<string[]>>? OpenListEditor { get; set; }
     }
 
     /// <summary>
@@ -24,6 +26,12 @@ namespace HS2SandboxPlugin
         public abstract string GetDisplayLabel();
         /// <summary>Optional run context (e.g. when timeline is running) for commands that show iteration/state in the label.</summary>
         public virtual string GetDisplayLabel(TimelineContext? runContext) => GetDisplayLabel();
+        /// <summary>When true, the timeline row is drawn with a red highlight (e.g. invalid key shortcuts).</summary>
+        public virtual bool HasInvalidConfiguration() => false;
+        /// <summary>Same as HasInvalidConfiguration() but with variable store for validation (interpolation / number field vars). Null = skip variable checks.</summary>
+        public virtual bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex) => HasInvalidConfiguration();
+        /// <summary>Apply this command's variable effects to the store (for simulating state at a given index). Only SetString/SetInteger/Calc override.</summary>
+        public virtual void SimulateVariableEffects(TimelineVariableStore store) { }
         public abstract void DrawInlineConfig(InlineDrawContext ctx);
         public abstract void Execute(TimelineContext ctx, Action onComplete);
         public abstract string SerializePayload();
