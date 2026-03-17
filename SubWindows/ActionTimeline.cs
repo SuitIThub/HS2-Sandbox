@@ -276,7 +276,8 @@ namespace HS2SandboxPlugin
                 foreach (string line in lines)
                 {
                     string t = line.Trim();
-                    trimmed.Add(t);
+                    if (t.Length > 0)
+                        trimmed.Add(t);
                 }
                 _listEditorOnApply?.Invoke(trimmed.ToArray());
                 _listEditorOpen = false;
@@ -597,12 +598,16 @@ namespace HS2SandboxPlugin
                 GUILayout.Space(4);
                 if (_isPaused)
                 {
+                    bool hadInvalid = HasAnyInvalidCommands();
+                    bool prevEnabled = GUI.enabled;
+                    GUI.enabled = !hadInvalid;
                     if (GUILayout.Button("Resume", GUILayout.Width(58), GUILayout.Height(26)))
                     {
                         _totalPausedDuration += Time.realtimeSinceStartup - _pauseStartTime;
                         _pauseStartTime = 0f;
                         _isPaused = false;
                     }
+                    GUI.enabled = prevEnabled;
                 }
                 else if (GUILayout.Button("Pause", GUILayout.Width(58), GUILayout.Height(26)))
                 {
@@ -610,8 +615,15 @@ namespace HS2SandboxPlugin
                     _isPaused = true;
                 }
             }
-            else if (GUILayout.Button("Start", GUILayout.Width(58), GUILayout.Height(26)))
-                StartTimeline(0);
+            else
+            {
+                bool hadInvalid = HasAnyInvalidCommands();
+                bool prevEnabled = GUI.enabled;
+                GUI.enabled = !hadInvalid;
+                if (GUILayout.Button("Start", GUILayout.Width(58), GUILayout.Height(26)))
+                    StartTimeline(0);
+                GUI.enabled = prevEnabled;
+            }
             GUILayout.Space(4);
             bool showCrosses = GUILayout.Toggle(_showMousePositions, "Crosses", GUILayout.Width(62), GUILayout.Height(26));
             if (showCrosses != _showMousePositions)
@@ -699,23 +711,14 @@ namespace HS2SandboxPlugin
                         GUI.color = Color.white;
                     }
                 }
-                if (isCurrent && Event.current.type == EventType.Repaint)
-                {
-                    var rowRect = new Rect(rowStartRect.xMin, rowStartRect.yMin, savedRowW, ListRowHeight);
-                    GUI.DrawTexture(rowRect, GetCurrentRowHighlightTexture());
-                }
+                bool isInvalid = cmd.HasInvalidConfiguration(GetVariablesAtIndex(i));
+                GUIStyle rowStyle = GUIStyle.none;
                 if (isCurrent)
-                {
-                    GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.Height(ListRowHeight));
-                    GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
-                }
-                else if (cmd.HasInvalidConfiguration(GetVariablesAtIndex(i)))
-                {
-                    GUILayout.BeginVertical(GetInvalidRowHighlightStyle(), GUILayout.ExpandWidth(true), GUILayout.Height(ListRowHeight));
-                    GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
-                }
-                else
-                    GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
+                    rowStyle = GetCurrentRowHighlightStyle();
+                else if (isInvalid)
+                    rowStyle = GetInvalidRowHighlightStyle();
+                GUILayout.BeginVertical(rowStyle, GUILayout.ExpandWidth(true), GUILayout.Height(ListRowHeight));
+                GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
                 Color? labelRowContentColor = (cmd is LabelCommand) ? (Color?)GUI.contentColor : null;
                 if (cmd is LabelCommand)
                     GUI.contentColor = Color.white;
@@ -814,13 +817,8 @@ namespace HS2SandboxPlugin
                 }
                 if (labelRowContentColor.HasValue)
                     GUI.contentColor = labelRowContentColor.Value;
-                if (isCurrent || cmd.HasInvalidConfiguration(GetVariablesAtIndex(i)))
-                {
-                    GUILayout.EndHorizontal();
-                    GUILayout.EndVertical();
-                }
-                else
-                    GUILayout.EndHorizontal();
+                GUILayout.EndHorizontal();
+                GUILayout.EndVertical();
                 Rect rowEndRect = GUILayoutUtility.GetLastRect();
                 savedRowW = rowEndRect.xMax - rowStartX;
             }
@@ -830,6 +828,7 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button("Close", GUILayout.Height(24)))
             {
                 SetVisible(false);
+                HS2SandboxPlugin._timelineToolbarToggle.Value = false;
                 var sandboxGUI = FindObjectOfType<SandboxGUI>();
                 if (sandboxGUI != null)
                     sandboxGUI.SetSubwindowState("Window2", false);
@@ -934,6 +933,22 @@ namespace HS2SandboxPlugin
             return store;
         }
 
+        /// <summary>
+        /// Returns true if any enabled command is currently marked as invalid
+        /// (based on simulated variables at each index).
+        /// </summary>
+        private bool HasAnyInvalidCommands()
+        {
+            for (int i = 0; i < _commands.Count; i++)
+            {
+                var cmd = _commands[i];
+                if (!cmd.Enabled) continue;
+                if (cmd.HasInvalidConfiguration(GetVariablesAtIndex(i)))
+                    return true;
+            }
+            return false;
+        }
+
         private void StartRecordMouse(TimelineCommand cmd)
         {
             _recordingMouseFor = cmd;
@@ -966,6 +981,12 @@ namespace HS2SandboxPlugin
         private void StartTimeline(int startFrom = 0)
         {
             if (_commands.Count == 0) return;
+            // Do not allow starting when any enabled command is invalid.
+            if (HasAnyInvalidCommands())
+            {
+                HS2SandboxPlugin.Log.LogWarning("Cannot start timeline: at least one command is marked as invalid.");
+                return;
+            }
             _startFromIndex = Mathf.Clamp(startFrom, 0, _commands.Count - 1);
             _isRunning = true;
             _timelineStartTime = Time.realtimeSinceStartup;
@@ -1006,6 +1027,21 @@ namespace HS2SandboxPlugin
                 {
                     index++;
                     continue;
+                }
+
+                // If the current command is (now) invalid, pause the timeline and wait until it is fixed.
+                if (cmd.HasInvalidConfiguration(ctx.Variables))
+                {
+                    if (!_isPaused)
+                    {
+                        _pauseStartTime = Time.realtimeSinceStartup;
+                        _isPaused = true;
+                        HS2SandboxPlugin.Log.LogWarning($"Timeline paused: command at index {index + 1} is marked invalid.");
+                    }
+                    // Wait here until the command becomes valid again or stop is requested.
+                    while (!_stopRequested && cmd.HasInvalidConfiguration(ctx.Variables))
+                        yield return null;
+                    if (_stopRequested) break;
                 }
                 _runningIndex = index;
                 ctx.NextIndex = null;

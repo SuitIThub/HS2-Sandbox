@@ -74,6 +74,20 @@ if scenesavestate._sc is None:
     /// <summary>Load scene by index. Calls SceneConsole.loadSceneByIndex(index).</summary>
     public static void LoadSceneByIndex(int index) => ExecSSS($"scenesavestate._sc.loadSceneByIndex({index})");
 
+    /// <summary>Get maximum valid scene index from vnge.</summary>
+    public static int GetMaxSceneIndex()
+    {
+        var eng = GetEngine();
+        var code = @"
+import scenesavestate
+from vngameengine import vnge_game
+if scenesavestate._sc is None:
+    scenesavestate.autorun_start(vnge_game)
+scenesavestate._sc.getMaxSceneIndex()
+";
+        return eng.Execute<int>(code);
+    }
+
     public static void Exec(string code)
     {
         var eng = GetEngine();

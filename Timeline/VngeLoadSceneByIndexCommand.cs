@@ -10,7 +10,7 @@ namespace HS2SandboxPlugin
     {
         public override string TypeId => "vnge_load_scene";
 
-        private string _indexText = "0";
+        private string _indexText = "1";
 
         public override string GetDisplayLabel() => "Load scene by index";
 
@@ -18,18 +18,18 @@ namespace HS2SandboxPlugin
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label("Index", GUILayout.Width(48));
-            _indexText = GUILayout.TextField(_indexText ?? "0", GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
+            _indexText = GUILayout.TextField(_indexText ?? "1", GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
             GUILayout.EndHorizontal();
         }
 
         public override void Execute(TimelineContext ctx, Action onComplete)
         {
-            if (!ctx.Variables.TryResolveIntOperand(_indexText ?? "0", out int index))
+            if (!ctx.Variables.TryResolveIntOperand(_indexText ?? "1", out int index))
             {
                 ctx.PendingResolveCallback = () => Execute(ctx, onComplete);
                 return;
             }
-            VngePython.LoadSceneByIndex(index);
+            VngePython.LoadSceneByIndex(index - 1);
             onComplete();
         }
 
@@ -38,11 +38,17 @@ namespace HS2SandboxPlugin
             if (base.HasInvalidConfiguration(variablesAtThisIndex)) return true;
             if (variablesAtThisIndex == null) return false;
             if (string.IsNullOrWhiteSpace(_indexText)) return true;
-            return !variablesAtThisIndex.IsValidIntOperand(_indexText);
+            if (!variablesAtThisIndex.IsValidIntOperand(_indexText)) return true;
+
+            // Check that the resolved index is within [1, maxSceneIndex + 1]
+            if (!variablesAtThisIndex.TryResolveIntOperand(_indexText, out var index)) return true;
+
+            var maxSceneIndexInclusive = VngePython.GetMaxSceneIndex() + 1;
+            return index < 1 || index > maxSceneIndexInclusive;
         }
 
-        public override string SerializePayload() => _indexText ?? "0";
+        public override string SerializePayload() => _indexText ?? "1";
 
-        public override void DeserializePayload(string payload) => _indexText = payload ?? "0";
+        public override void DeserializePayload(string payload) => _indexText = payload ?? "1";
     }
 }

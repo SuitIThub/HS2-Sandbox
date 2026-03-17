@@ -226,6 +226,7 @@ namespace HS2SandboxPlugin
                 if (GUILayout.Button("Close", GUILayout.Height(22)))
                 {
                     SetVisible(false);
+                    HS2SandboxPlugin._copyToolbarToggle.Value = false;
                     var sandboxGUI = UnityEngine.Object.FindObjectOfType<SandboxGUI>();
                     if (sandboxGUI != null)
                     {

@@ -34,5 +34,10 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="copy-icon.png" CopyToOutputDirectory="Always" />
+    <Content Include="timeline-icon.png" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
 </Project>
 
