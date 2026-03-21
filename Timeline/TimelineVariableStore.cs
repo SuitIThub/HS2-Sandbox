@@ -5,9 +5,10 @@ using System.Text.RegularExpressions;
 namespace HS2SandboxPlugin
 {
     /// <summary>
-    /// Central store for timeline variables (string and integer). One instance per timeline run.
+    /// Central store for timeline variables (string, integer, list, dictionary). One instance per timeline run.
     /// Variable names are case-insensitive. Variables are created on first set.
     /// String fields support interpolation: [varName] is replaced by the variable's value (string or int).
+    /// Dictionary values are stored as strings internally; cast to int on read where requested.
     /// </summary>
     public class TimelineVariableStore
     {
@@ -16,6 +17,7 @@ namespace HS2SandboxPlugin
         private readonly Dictionary<string, string> _strings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, int> _ints = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<string>> _lists = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<string, string>> _dicts = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
 
         public void SetString(string name, string value)
         {
@@ -77,7 +79,73 @@ namespace HS2SandboxPlugin
             return _lists.ContainsKey(name.Trim());
         }
 
-        /// <summary>Removes a variable from all types (string, int, list). No-op if name is empty.</summary>
+        // ── Dict ────────────────────────────────────────────────────────────────
+
+        /// <summary>Replaces the entire dictionary variable with the given contents (shallow-copied). Creates it if absent.</summary>
+        public void SetDict(string name, Dictionary<string, string> value)
+        {
+            if (string.IsNullOrEmpty(name)) return;
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (value != null)
+                foreach (var kv in value)
+                    dict[kv.Key ?? ""] = kv.Value ?? "";
+            _dicts[name.Trim()] = dict;
+        }
+
+        /// <summary>Sets a single key inside a dictionary variable. The dictionary is created if it does not exist.</summary>
+        public void SetDictValue(string name, string key, string value)
+        {
+            if (string.IsNullOrEmpty(name)) return;
+            string trimmedName = name.Trim();
+            if (!_dicts.TryGetValue(trimmedName, out var dict))
+            {
+                dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                _dicts[trimmedName] = dict;
+            }
+            dict[key ?? ""] = value ?? "";
+        }
+
+        /// <summary>Returns the raw string value for the given key, or empty string if the dict or key is absent.</summary>
+        public string GetDictValue(string name, string key)
+        {
+            TryGetDictValue(name, key, out string v);
+            return v;
+        }
+
+        /// <summary>Tries to read a key from a dictionary variable. Returns false when the dict or key is absent.</summary>
+        public bool TryGetDictValue(string name, string key, out string value)
+        {
+            value = "";
+            if (string.IsNullOrEmpty(name)) return false;
+            if (!_dicts.TryGetValue(name.Trim(), out var dict)) return false;
+            return dict.TryGetValue(key ?? "", out value!);
+        }
+
+        /// <summary>Returns a shallow copy of the dictionary variable, or an empty dictionary if absent.</summary>
+        public Dictionary<string, string> GetDict(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            return _dicts.TryGetValue(name.Trim(), out var d)
+                ? new Dictionary<string, string>(d, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        public bool HasDict(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            return _dicts.ContainsKey(name.Trim());
+        }
+
+        public IEnumerable<(string name, Dictionary<string, string> value)> GetAllDicts()
+        {
+            foreach (var kv in _dicts)
+                yield return (kv.Key, new Dictionary<string, string>(kv.Value, StringComparer.OrdinalIgnoreCase));
+        }
+
+        // ── Lifecycle ────────────────────────────────────────────────────────────
+
+        /// <summary>Removes a variable from all types (string, int, list, dict). No-op if name is empty.</summary>
         public void Remove(string name)
         {
             if (string.IsNullOrEmpty(name)) return;
@@ -85,14 +153,16 @@ namespace HS2SandboxPlugin
             _strings.Remove(key);
             _ints.Remove(key);
             _lists.Remove(key);
+            _dicts.Remove(key);
         }
 
-        /// <summary>Removes all variables (strings, ints, lists).</summary>
+        /// <summary>Removes all variables (strings, ints, lists, dicts).</summary>
         public void Clear()
         {
             _strings.Clear();
             _ints.Clear();
             _lists.Clear();
+            _dicts.Clear();
         }
 
         /// <summary>Copies all variables from another store into this one (overwrites same names).</summary>
@@ -105,6 +175,8 @@ namespace HS2SandboxPlugin
                 SetInt(n, v);
             foreach (var (n, list) in other.GetAllLists())
                 SetList(n, list);
+            foreach (var (n, dict) in other.GetAllDicts())
+                SetDict(n, dict);
         }
 
         public IEnumerable<(string name, string value)> GetAllStrings()
@@ -195,7 +267,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>
-        /// Returns all variables for display: (name, "string" or "int" or "list", value as string). Order: strings first, then ints, then lists, by name.
+        /// Returns all variables for display: (name, type label, value summary). Order: strings, ints, lists, dicts — sorted by name within each group.
         /// </summary>
         public List<(string name, string type, string value)> GetSnapshotForDisplay()
         {
@@ -210,6 +282,12 @@ namespace HS2SandboxPlugin
                 string value = n == 0 ? "(empty)" : n == 1 ? kv.Value![0] : $"{n} items";
                 if (value.Length > 80) value = value.Substring(0, 77) + "...";
                 list.Add((kv.Key, "list", value));
+            }
+            foreach (var kv in _dicts)
+            {
+                int n = kv.Value?.Count ?? 0;
+                string value = n == 0 ? "(empty)" : $"{n} entries";
+                list.Add((kv.Key, "dict", value));
             }
             list.Sort((a, b) => string.Compare(a.Item1, b.Item1, StringComparison.OrdinalIgnoreCase));
             return list;

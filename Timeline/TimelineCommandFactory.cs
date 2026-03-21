@@ -53,6 +53,14 @@ namespace HS2SandboxPlugin
                 "if" => new IfCommand(),
                 "list" => new ListCommand(),
                 "label" => new LabelCommand(),
+                "video_record" => new VideoRecordCommand(),
+                "set_camera_by_name" => new SetCameraByNameCommand(),
+                "select_object_by_name" => new SelectObjectByNameCommand(),
+                "dict_set" => new DictSetCommand(),
+                "dict_get" => new DictGetCommand(),
+                "list_apply_dict" => new ListApplyDictCommand(),
+                "list_insert" => new ListInsertCommand(),
+                "get_fashion" => new GetFashionCommand(),
                 _ => throw new ArgumentException($"Unknown timeline command type: {typeId}", nameof(typeId))
             };
         }
