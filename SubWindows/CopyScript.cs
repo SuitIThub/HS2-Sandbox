@@ -28,14 +28,33 @@ namespace HS2SandboxPlugin
         private float lastHealthCheckTime = 0f;
         private const float HEALTHCHECK_INTERVAL = 5f; // Health check every 5 seconds when unavailable
         private bool isRefreshingTrackedFiles = false;
+        private float connectionAttemptStartTime = 0f;
+        private bool gaveUpOnConnection = false;
+        private const float CONNECTION_TIMEOUT = 120f; // Give up auto-reconnect after 2 minutes
 
         private const float WindowMinWidth = 506f;
         private const float WindowMaxWidth = 706f;
+
+        // List editor window state
+        private bool _listEditorOpen;
+        private string _listEditorText = "";
+        private Action<string[]>? _listEditorOnApply;
+        private Rect _listEditorWindowRect;
+        private const int ListEditorWindowID = 2007;
 
         public override void DrawWindow()
         {
             base.DrawWindow();
             windowRect.width = Mathf.Clamp(windowRect.width, WindowMinWidth, WindowMaxWidth);
+
+            if (_listEditorOpen && isVisible)
+            {
+                float margin = 8f;
+                _listEditorWindowRect = GUILayout.Window(ListEditorWindowID, _listEditorWindowRect, DrawListEditorWindowContent, "Edit list",
+                    GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(500f));
+                _listEditorWindowRect.x = Mathf.Clamp(_listEditorWindowRect.x, margin, Mathf.Max(margin, Screen.width - _listEditorWindowRect.width - margin));
+                _listEditorWindowRect.y = Mathf.Clamp(_listEditorWindowRect.y, margin, Mathf.Max(margin, Screen.height - _listEditorWindowRect.height - margin));
+            }
         }
 
         protected override void Start()
@@ -66,6 +85,8 @@ namespace HS2SandboxPlugin
             if (apiClient == null) yield break;
 
             isLoading = true;
+            connectionAttemptStartTime = Time.time;
+            gaveUpOnConnection = false;
 
             bool healthOk = false;
             yield return StartCoroutine(apiClient.HealthCheckAsync(result => { healthOk = result; }));
@@ -78,7 +99,7 @@ namespace HS2SandboxPlugin
             }
             else
             {
-                statusMessage = "CopyScript API is not reachable. Please start the CopyScript manager.";
+                statusMessage = "Trying to connect to CopyScript API...";
             }
 
             isLoading = false;
@@ -136,10 +157,6 @@ namespace HS2SandboxPlugin
             if (filesResult != null && filesResult.success)
             {
                 trackedFiles = filesResult.files ?? [];
-                if (filesResult.files == null && filesResult.total_count > 0)
-                {
-                    HS2SandboxPlugin.Log.LogWarning("Tracked files response had success but null files array (total_count=" + filesResult.total_count + "). Check API response format.");
-                }
             }
         }
 
@@ -181,10 +198,17 @@ namespace HS2SandboxPlugin
                     StartCoroutine(RefreshTrackedFilesAsync());
                 }
             }
-            // When API is not available, periodically try a lightweight health check
-            else
+            // When API is not available and we haven't given up yet, periodically try a lightweight health check
+            else if (!gaveUpOnConnection)
             {
-                if (Time.time - lastHealthCheckTime > HEALTHCHECK_INTERVAL)
+                // Check if we've exceeded the 2 minute timeout
+                if (Time.time - connectionAttemptStartTime > CONNECTION_TIMEOUT)
+                {
+                    gaveUpOnConnection = true;
+                    statusMessage = "CopyScript API is not reachable. Please start the CopyScript manager and use 'Try reconnect'.";
+                    HS2SandboxPlugin.Log.LogError("Failed to connect to CopyScript API after 2 minutes. Manual reconnect required.");
+                }
+                else if (Time.time - lastHealthCheckTime > HEALTHCHECK_INTERVAL)
                 {
                     lastHealthCheckTime = Time.time;
                     StartCoroutine(HealthCheckOnlyAsync());
@@ -583,8 +607,15 @@ namespace HS2SandboxPlugin
             if (healthOk && !apiAvailable)
             {
                 apiAvailable = true;
+                gaveUpOnConnection = false;
                 statusMessage = "Connection to CopyScript established.";
                 yield return StartCoroutine(RefreshTrackedFilesAsync());
+            }
+            else if (!healthOk && !gaveUpOnConnection)
+            {
+                float elapsedSeconds = Time.time - connectionAttemptStartTime;
+                int remainingSeconds = Mathf.Max(0, (int)(CONNECTION_TIMEOUT - elapsedSeconds));
+                statusMessage = $"Trying to connect to CopyScript API... ({remainingSeconds}s remaining)";
             }
         }
 
@@ -594,6 +625,10 @@ namespace HS2SandboxPlugin
 
             isLoading = true;
             statusMessage = "Trying to reconnect to CopyScript API...";
+            
+            // Reset connection attempt tracking for manual reconnect
+            connectionAttemptStartTime = Time.time;
+            gaveUpOnConnection = false;
 
             bool healthOk = false;
             yield return StartCoroutine(apiClient.HealthCheckAsync(result => { healthOk = result; }));
@@ -607,7 +642,7 @@ namespace HS2SandboxPlugin
             }
             else
             {
-                statusMessage = "Could not reach CopyScript API. Make sure the CopyScript manager is running.";
+                statusMessage = "Could not reach CopyScript API. Will keep trying for 2 minutes...";
             }
 
             isLoading = false;
@@ -637,6 +672,43 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
         }
 
+        private void DrawListEditorWindowContent(int id)
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.Label("One value per line:", GUILayout.ExpandWidth(false));
+            _listEditorText = GUILayout.TextArea(_listEditorText ?? "", GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Done", GUILayout.Width(80)))
+            {
+                string[] lines = (_listEditorText ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.None);
+                var trimmed = new System.Collections.Generic.List<string>();
+                foreach (string line in lines)
+                {
+                    string t = line.Trim();
+                    if (t.Length > 0)
+                        trimmed.Add(t);
+                }
+                _listEditorOnApply?.Invoke(trimmed.ToArray());
+                _listEditorOpen = false;
+            }
+            if (GUILayout.Button("Cancel", GUILayout.Width(80)))
+            {
+                _listEditorOpen = false;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+            GUI.DragWindow(new Rect(0, 0, _listEditorWindowRect.width, 20));
+            IMGUIUtils.EatInputInRect(_listEditorWindowRect);
+        }
+
+        private static string GetValuesPreview(string[]? values, int maxLength = 40)
+        {
+            if (values == null || values.Length == 0) return "(empty)";
+            string joined = string.Join("; ", values);
+            if (joined.Length <= maxLength) return joined;
+            return joined.Substring(0, maxLength - 3) + "...";
+        }
+
         private void DrawRuleRow(int i)
         {
             if (rules == null || i < 0 || i >= rules.Length) return;
@@ -651,16 +723,20 @@ namespace HS2SandboxPlugin
 
             if (rule.type == "list")
             {
-                string valuesStr = rule.values != null ? string.Join(", ", rule.values) : "";
-                float valuesMaxWidth = Mathf.Max(120f, windowRect.width - 220f);
-                valuesStr = GUILayout.TextArea(valuesStr, GUILayout.ExpandWidth(true), GUILayout.MinHeight(36), GUILayout.MaxWidth(valuesMaxWidth));
-                if (valuesStr != null)
+                int ruleIndex = i;
+                if (GUILayout.Button("Edit list...", GUILayout.Width(70), GUILayout.Height(18)))
                 {
-                    var parts = valuesStr.Split(',');
-                    rule.values = new string[parts.Length];
-                    for (int j = 0; j < parts.Length; j++)
-                        rule.values[j] = parts[j].Trim();
+                    _listEditorText = rule.values != null ? string.Join("\n", rule.values) : "";
+                    _listEditorOnApply = arr =>
+                    {
+                        if (ruleIndex >= 0 && ruleIndex < rules.Length)
+                            rules[ruleIndex].values = arr ?? [];
+                    };
+                    _listEditorWindowRect = new Rect(windowRect.xMax + 10f, windowRect.yMin, 320f, 280f);
+                    _listEditorOpen = true;
                 }
+                string preview = GetValuesPreview(rule.values, 30);
+                GUILayout.Label(preview, GUILayout.ExpandWidth(true), GUILayout.Height(18));
                 GUILayout.Label("Step", GUILayout.Width(28), GUILayout.Height(18));
                 string stepStr = GUILayout.TextField(rule.step.ToString(), GUILayout.Width(28), GUILayout.Height(18));
                 if (int.TryParse(stepStr, out int stepVal) && stepVal >= 0)
@@ -778,7 +854,11 @@ namespace HS2SandboxPlugin
                 };
 
                 Process.Start(startInfo);
-                statusMessage = "CopyScript start command executed. After it has started, click 'Try reconnect'.";
+                
+                // Reset connection tracking to start auto-retry for the new process
+                connectionAttemptStartTime = Time.time;
+                gaveUpOnConnection = false;
+                statusMessage = "CopyScript start command executed. Attempting to connect...";
             }
             catch (Exception ex)
             {
