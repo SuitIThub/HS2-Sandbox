@@ -25,15 +25,36 @@ namespace HS2SandboxPlugin
         private const int VariablesWindowID = 2004;
         /// <summary>Persistent variables when timeline is not running. Seeded into run when timeline starts.</summary>
         private readonly TimelineVariableStore _designTimeVariables = new TimelineVariableStore();
-        private int _newVarType; // 0=string, 1=int, 2=list
+        private int _newVarType; // 0=string, 1=int, 2=list, 3=dict
         private string _newVarName = "";
         private string _newVarValue = "";
         private readonly List<string> _newVarList = new List<string>();
+        private readonly Dictionary<string, string> _newVarDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private bool _listEditorOpen;
         private string _listEditorText = "";
         private Action<string[]>? _listEditorOnApply;
         private Rect _listEditorWindowRect;
         private const int ListEditorWindowID = 2005;
+        private bool _dictEditorOpen;
+        private string _dictEditorText = "";
+        private Action<Dictionary<string, string>>? _dictEditorOnApply;
+        private Rect _dictEditorWindowRect;
+        private const int DictEditorWindowID = 2007;
+        // ── Persistent variables ─────────────────────────────────────────────
+        private string _persistVarsPath = "";
+        private readonly TimelineVariableStore _persistentVariables = new TimelineVariableStore();
+        private bool _showPersistentVarsWindow;
+        private Rect _persistentVarsWindowRect;
+        private Vector2 _persistentVarsScrollPosition;
+        private const int PersistentVarsWindowID = 2008;
+        private int _newPVarType; // 0=string, 1=int, 2=list, 3=dict
+        private string _newPVarName = "";
+        private string _newPVarValue = "";
+        private readonly List<string> _newPVarList = new List<string>();
+        private readonly Dictionary<string, string> _newPVarDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private bool _persistentVarsDirty;
+        private float _persistentVarsDirtyTime;
+        private const float PersistentVarsSaveDelay = 3f;
         private TimelineCommand? _recordingMouseFor;
         private CopyScriptApiClient? _apiClient;
         private float _timelineStartTime; // realtimeSinceStartup when timeline started
@@ -41,7 +62,7 @@ namespace HS2SandboxPlugin
         private float _pauseStartTime; // realtimeSinceStartup when current pause started (0 if not paused)
         private float _lastRunElapsedSeconds = -1f; // last run duration to show after stop (-1 = none)
         private int _startFromIndex; // when starting, begin at this command index
-        private static readonly string[] CategoryNames = { "CopyScript Controls", "CopyScript Checks", "CopyScript Config", "Input", "VNGE", "Studio", "Variables", "Misc" };
+        private static readonly string[] CategoryNames = { "CopyScript Controls", "CopyScript Checks", "CopyScript Config", "Input", "VNGE", "Studio", "Variables", "Misc", "Video", "FashionLine" };
         private int _selectedCategory;
         private bool _categoryWindowVisible;
         private Rect _categoryWindowRect;
@@ -83,9 +104,13 @@ namespace HS2SandboxPlugin
             ["pose_library"] = new Color(0.35f, 0.8f, 0.75f),
             ["clothing_state"] = new Color(0.4f, 0.75f, 0.7f),
             ["accessory_state"] = new Color(0.45f, 0.78f, 0.72f),
-            ["outfit_rotate"] = new Color(0.38f, 0.85f, 0.78f),
-            ["outfit_by_name"] = new Color(0.36f, 0.82f, 0.76f),
             ["screenshot"] = new Color(0.42f, 0.7f, 0.72f),
+            ["set_camera_by_name"] = new Color(0.3f, 0.88f, 0.9f),
+            ["select_object_by_name"] = new Color(0.32f, 0.84f, 0.88f),
+            // FashionLine (mint/spring green)
+            ["outfit_rotate"] = new Color(0.3f, 0.9f, 0.55f),
+            ["outfit_by_name"] = new Color(0.28f, 0.86f, 0.52f),
+            ["get_fashion"] = new Color(0.25f, 0.92f, 0.6f),
             // Variables (slate / blue-gray)
             ["set_string"] = new Color(0.5f, 0.6f, 0.85f),
             ["set_integer"] = new Color(0.45f, 0.58f, 0.88f),
@@ -93,6 +118,10 @@ namespace HS2SandboxPlugin
             ["calc"] = new Color(0.55f, 0.62f, 0.9f),
             ["if"] = new Color(0.52f, 0.58f, 0.88f),
             ["list"] = new Color(0.48f, 0.6f, 0.86f),
+            ["dict_set"] = new Color(0.42f, 0.55f, 0.78f),
+            ["dict_get"] = new Color(0.38f, 0.52f, 0.75f),
+            ["list_apply_dict"] = new Color(0.44f, 0.57f, 0.80f),
+            ["list_insert"] = new Color(0.46f, 0.62f, 0.84f),
             // Misc (warm orange/brown)
             ["checkpoint"] = new Color(0.85f, 0.55f, 0.3f),
             ["jump"] = new Color(0.82f, 0.5f, 0.35f),
@@ -100,6 +129,8 @@ namespace HS2SandboxPlugin
             ["pause"] = new Color(0.9f, 0.58f, 0.32f),
             ["sound"] = new Color(0.86f, 0.52f, 0.4f),
             ["label"] = Color.black,
+            // Video (cinematic red/burgundy)
+            ["video_record"] = new Color(0.8f, 0.2f, 0.3f),
         };
 
         private static Color GetCommandColor(string typeId)
@@ -108,7 +139,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>Representative typeId per category for category color (same order as CategoryNames).</summary>
-        private static readonly string[] CategoryRepresentativeTypeIds = { "start_tracking", "wait_screenshot", "set_source_path", "simulate_key", "vnge_scene_next", "pose_library", "set_string", "checkpoint" };
+        private static readonly string[] CategoryRepresentativeTypeIds = { "start_tracking", "wait_screenshot", "set_source_path", "simulate_key", "vnge_scene_next", "pose_library", "set_string", "checkpoint", "video_record", "outfit_rotate" };
 
         private static Color GetCategoryColor(int categoryIndex)
         {
@@ -168,8 +199,10 @@ namespace HS2SandboxPlugin
             windowTitle = "Action Timeline";
             windowRect = new Rect(400, 50, 806, 420);
             _persistPath = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "timeline.json");
+            _persistVarsPath = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "persistent_vars.json");
             _apiClient = new CopyScriptApiClient();
             LoadTimeline();
+            LoadPersistentVars();
         }
 
         private const float WindowMinWidth = 606f;
@@ -190,6 +223,7 @@ namespace HS2SandboxPlugin
         private void OnDisable()
         {
             SaveTimeline();
+            SavePersistentVars();
         }
 
         protected override void OnVisibilityChanged(bool visible)
@@ -232,6 +266,22 @@ namespace HS2SandboxPlugin
                         GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(500f));
                     _listEditorWindowRect.x = Mathf.Clamp(_listEditorWindowRect.x, margin, Mathf.Max(margin, Screen.width - _listEditorWindowRect.width - margin));
                     _listEditorWindowRect.y = Mathf.Clamp(_listEditorWindowRect.y, margin, Mathf.Max(margin, Screen.height - _listEditorWindowRect.height - margin));
+                }
+
+                if (_dictEditorOpen)
+                {
+                    _dictEditorWindowRect = GUILayout.Window(DictEditorWindowID, _dictEditorWindowRect, DrawDictEditorWindowContent, "Edit dict",
+                        GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(500f));
+                    _dictEditorWindowRect.x = Mathf.Clamp(_dictEditorWindowRect.x, margin, Mathf.Max(margin, Screen.width - _dictEditorWindowRect.width - margin));
+                    _dictEditorWindowRect.y = Mathf.Clamp(_dictEditorWindowRect.y, margin, Mathf.Max(margin, Screen.height - _dictEditorWindowRect.height - margin));
+                }
+
+                if (_showPersistentVarsWindow)
+                {
+                    _persistentVarsWindowRect = GUILayout.Window(PersistentVarsWindowID, _persistentVarsWindowRect, DrawPersistentVarsWindowContent, "Global Variables",
+                        GUILayout.MinWidth(280f), GUILayout.MinHeight(180f), GUILayout.MaxHeight(750f));
+                    _persistentVarsWindowRect.x = Mathf.Clamp(_persistentVarsWindowRect.x, margin, Mathf.Max(margin, Screen.width - _persistentVarsWindowRect.width - margin));
+                    _persistentVarsWindowRect.y = Mathf.Clamp(_persistentVarsWindowRect.y, margin, Mathf.Max(margin, Screen.height - _persistentVarsWindowRect.height - margin));
                 }
 
                 if (_categoryWindowVisible)
@@ -292,6 +342,54 @@ namespace HS2SandboxPlugin
             IMGUIUtils.EatInputInRect(_listEditorWindowRect);
         }
 
+        private void DrawDictEditorWindowContent(int id)
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.Label("One key=value per line:", GUILayout.ExpandWidth(false));
+            _dictEditorText = GUILayout.TextArea(_dictEditorText ?? "", GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Done", GUILayout.Width(80)))
+            {
+                _dictEditorOnApply?.Invoke(ParseDictEditorText(_dictEditorText));
+                _dictEditorOpen = false;
+            }
+            if (GUILayout.Button("Cancel", GUILayout.Width(80)))
+                _dictEditorOpen = false;
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+            GUI.DragWindow(new Rect(0, 0, _dictEditorWindowRect.width, 20));
+            IMGUIUtils.EatInputInRect(_dictEditorWindowRect);
+        }
+
+        private static Dictionary<string, string> ParseDictEditorText(string text)
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(text)) return dict;
+            foreach (string line in text.Split(new[] { '\r', '\n' }, StringSplitOptions.None))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.Length == 0) continue;
+                int eq = trimmed.IndexOf('=');
+                if (eq < 0) continue;
+                string k = trimmed.Substring(0, eq).Trim();
+                string v = trimmed.Substring(eq + 1);
+                if (k.Length > 0) dict[k] = v;
+            }
+            return dict;
+        }
+
+        private static string SerializeDictEditorText(Dictionary<string, string> dict)
+        {
+            if (dict == null || dict.Count == 0) return "";
+            var lines = new System.Text.StringBuilder();
+            foreach (var kv in dict)
+            {
+                if (lines.Length > 0) lines.Append('\n');
+                lines.Append(kv.Key).Append('=').Append(kv.Value);
+            }
+            return lines.ToString();
+        }
+
         private Vector2 _variablesScrollPosition;
 
         private void DrawVariablesWindowContent(int id)
@@ -333,7 +431,7 @@ namespace HS2SandboxPlugin
                     if (int.TryParse(s, out int nVal))
                         store.SetInt(n, nVal);
                 }
-                else
+                else if (type == "list")
                 {
                     string displayValue = value.Length > 60 ? value.Substring(0, 57) + "..." : value;
                     GUILayout.Label(displayValue ?? "", GUILayout.ExpandWidth(true));
@@ -342,12 +440,23 @@ namespace HS2SandboxPlugin
                         _listEditorText = string.Join("\n", store.GetList(n));
                         string captureName = n;
                         TimelineVariableStore captureStore = store;
-                        _listEditorOnApply = arr =>
-                        {
-                            captureStore.SetList(captureName, arr);
-                        };
+                        _listEditorOnApply = arr => captureStore.SetList(captureName, arr);
                         _listEditorWindowRect = new Rect(_variablesWindowRect.xMax + 8f, _variablesWindowRect.yMin, 320f, 280f);
                         _listEditorOpen = true;
+                    }
+                }
+                else if (type == "dict")
+                {
+                    string displayValue = value.Length > 60 ? value.Substring(0, 57) + "..." : value;
+                    GUILayout.Label(displayValue ?? "", GUILayout.ExpandWidth(true));
+                    if (GUILayout.Button("Edit", GUILayout.Width(36)))
+                    {
+                        _dictEditorText = SerializeDictEditorText(store.GetDict(n));
+                        string captureName = n;
+                        TimelineVariableStore captureStore = store;
+                        _dictEditorOnApply = d => captureStore.SetDict(captureName, d);
+                        _dictEditorWindowRect = new Rect(_variablesWindowRect.xMax + 8f, _variablesWindowRect.yMin, 320f, 280f);
+                        _dictEditorOpen = true;
                     }
                 }
                 if (GUILayout.Button("X", GUILayout.Width(24)))
@@ -360,7 +469,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6);
             GUILayout.Label("Add variable:", GUILayout.ExpandWidth(false));
             GUILayout.BeginHorizontal();
-            _newVarType = GUILayout.Toolbar(_newVarType, new[] { "String", "Int", "List" }, GUILayout.ExpandWidth(false));
+            _newVarType = GUILayout.Toolbar(_newVarType, new[] { "String", "Int", "List", "Dict" }, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             GUILayout.Label("Name", GUILayout.Width(36));
@@ -375,7 +484,7 @@ namespace HS2SandboxPlugin
                 GUILayout.Label("Value", GUILayout.Width(32));
                 _newVarValue = GUILayout.TextField(_newVarValue ?? "", GUILayout.ExpandWidth(true));
             }
-            else
+            else if (_newVarType == 2)
             {
                 if (GUILayout.Button("Edit list...", GUILayout.Width(72)))
                 {
@@ -391,6 +500,22 @@ namespace HS2SandboxPlugin
                 }
                 GUILayout.Label(_newVarList.Count > 0 ? $"{_newVarList.Count} items" : "(empty)", GUILayout.MinWidth(50));
             }
+            else
+            {
+                if (GUILayout.Button("Edit dict...", GUILayout.Width(72)))
+                {
+                    _dictEditorText = SerializeDictEditorText(_newVarDict);
+                    _dictEditorOnApply = d =>
+                    {
+                        _newVarDict.Clear();
+                        foreach (var kv in d)
+                            _newVarDict[kv.Key] = kv.Value;
+                    };
+                    _dictEditorWindowRect = new Rect(_variablesWindowRect.xMax + 8f, _variablesWindowRect.yMin, 320f, 280f);
+                    _dictEditorOpen = true;
+                }
+                GUILayout.Label(_newVarDict.Count > 0 ? $"{_newVarDict.Count} entries" : "(empty)", GUILayout.MinWidth(50));
+            }
             if (GUILayout.Button("Add", GUILayout.Width(40)))
             {
                 string name = (_newVarName ?? "").Trim();
@@ -400,11 +525,14 @@ namespace HS2SandboxPlugin
                         store.SetString(name, _newVarValue ?? "");
                     else if (_newVarType == 1)
                         store.SetInt(name, int.TryParse(_newVarValue, out int n) ? n : 0);
-                    else
+                    else if (_newVarType == 2)
                         store.SetList(name, _newVarList);
+                    else
+                        store.SetDict(name, _newVarDict);
                     _newVarName = "";
                     _newVarValue = "";
                     _newVarList.Clear();
+                    _newVarDict.Clear();
                 }
             }
             GUILayout.EndHorizontal();
@@ -416,8 +544,19 @@ namespace HS2SandboxPlugin
 
         private const float ListRowHeight = 28f;
 
+        private void MarkPersistentVarsDirty()
+        {
+            _persistentVarsDirty = true;
+            _persistentVarsDirtyTime = Time.realtimeSinceStartup;
+        }
+
         private void Update()
         {
+            if (_persistentVarsDirty && Time.realtimeSinceStartup - _persistentVarsDirtyTime >= PersistentVarsSaveDelay)
+            {
+                _persistentVarsDirty = false;
+                SavePersistentVars();
+            }
             if (_isRunning && _autoscrollDuringRun && _runningIndex >= 0 && _runningIndex < _commands.Count)
             {
                 // Same formula as DrawWindowContent: scroll view height = window - overhead
@@ -533,13 +672,13 @@ namespace HS2SandboxPlugin
                     GUILayout.Space(2);
                     DrawAddButton("Clothing", "clothing_state", btnW, btnH);
                     GUILayout.Space(2);
-                    DrawAddButton("Outfit", "outfit_rotate", btnW, btnH);
-                    GUILayout.Space(2);
-                    DrawAddButton("Outfit name", "outfit_by_name", btnW, btnH);
-                    GUILayout.Space(2);
                     DrawAddButton("Accessory", "accessory_state", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Screenshot", "screenshot", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Camera", "set_camera_by_name", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Sel Object", "select_object_by_name", btnW, btnH);
                     break;
                 case 6: // Variables
                     DrawAddButton("Set Str", "set_string", btnW, btnH);
@@ -553,8 +692,16 @@ namespace HS2SandboxPlugin
                     DrawAddButton("If", "if", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("List", "list", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Dict Set", "dict_set", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Dict Get", "dict_get", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("List+Dict", "list_apply_dict", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("List Insert", "list_insert", btnW, btnH);
                     break;
-                default: // Misc
+                case 7: // Misc
                     DrawAddButton("Check", "checkpoint", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Jump", "jump", btnW, btnH);
@@ -566,6 +713,16 @@ namespace HS2SandboxPlugin
                     DrawAddButton("Sound", "sound", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Label", "label", btnW, btnH);
+                    break;
+                case 8: // Video
+                    DrawAddButton("Record", "video_record", btnW, btnH);
+                    break;
+                default: // FashionLine
+                    DrawAddButton("Outfit", "outfit_rotate", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Outfit name", "outfit_by_name", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Get Fashion", "get_fashion", btnW, btnH);
                     break;
             }
             GUILayout.FlexibleSpace();
@@ -635,6 +792,14 @@ namespace HS2SandboxPlugin
                 _showVariablesWindow = showVars;
                 if (_showVariablesWindow)
                     _variablesWindowRect = new Rect(windowRect.xMax + 10f, windowRect.yMin, 320f, 420f);
+            }
+            GUILayout.Space(4);
+            bool showPersist = GUILayout.Toggle(_showPersistentVarsWindow, "Globals", GUILayout.Width(60), GUILayout.Height(26));
+            if (showPersist != _showPersistentVarsWindow)
+            {
+                _showPersistentVarsWindow = showPersist;
+                if (_showPersistentVarsWindow)
+                    _persistentVarsWindowRect = new Rect(windowRect.xMax + 10f, windowRect.yMin + 440f, 320f, 420f);
             }
             GUILayout.Space(4);
             bool autoscroll = GUILayout.Toggle(_autoscrollDuringRun, "Autoscroll", GUILayout.Width(72), GUILayout.Height(26));
@@ -927,6 +1092,7 @@ namespace HS2SandboxPlugin
         private TimelineVariableStore GetVariablesAtIndex(int index)
         {
             var store = new TimelineVariableStore();
+            store.CopyFrom(_persistentVariables);
             store.CopyFrom(_designTimeVariables);
             for (int j = 0; j < index && j < _commands.Count; j++)
                 _commands[j].SimulateVariableEffects(store);
@@ -1009,6 +1175,7 @@ namespace HS2SandboxPlugin
                 Runner = this
             };
             var ctx = _runContext;
+            ctx.Variables.CopyFrom(_persistentVariables);
             ctx.Variables.CopyFrom(_designTimeVariables);
 
             if (_apiClient != null)
@@ -1077,6 +1244,171 @@ namespace HS2SandboxPlugin
             }
         }
 
+        // ── Persistent variable window ────────────────────────────────────────
+
+        private void DrawPersistentVarsWindowContent(int id)
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+            GUILayout.Label("Saved to disk — visible to all timelines as read-only seeds.", GUILayout.ExpandWidth(false));
+
+            var snapshot = _persistentVariables.GetSnapshotForDisplay();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Name", GUILayout.Width(72));
+            GUILayout.Label("Type", GUILayout.Width(36));
+            GUILayout.Label("Value", GUILayout.ExpandWidth(true));
+            GUILayout.Space(4);
+            GUILayout.Label("", GUILayout.Width(24));
+            GUILayout.EndHorizontal();
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            _persistentVarsScrollPosition = GUILayout.BeginScrollView(_persistentVarsScrollPosition, GUILayout.ExpandWidth(true));
+            foreach (var (name, type, value) in snapshot)
+            {
+                string n = name ?? "";
+                if (string.IsNullOrEmpty(n)) continue;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(n, GUILayout.Width(72));
+                GUILayout.Label(type ?? "", GUILayout.Width(36));
+                if (type == "string")
+                {
+                    string current = _persistentVariables.GetString(n);
+                    string newVal = GUILayout.TextField(current ?? "", GUILayout.ExpandWidth(true));
+                    if (newVal != current) { _persistentVariables.SetString(n, newVal); MarkPersistentVarsDirty(); }
+                }
+                else if (type == "int")
+                {
+                    int current = _persistentVariables.GetInt(n);
+                    string s = GUILayout.TextField(current.ToString(), GUILayout.ExpandWidth(true));
+                    if (int.TryParse(s, out int nVal) && nVal != current) { _persistentVariables.SetInt(n, nVal); MarkPersistentVarsDirty(); }
+                }
+                else if (type == "list")
+                {
+                    string displayValue = value.Length > 60 ? value.Substring(0, 57) + "..." : value;
+                    GUILayout.Label(displayValue ?? "", GUILayout.ExpandWidth(true));
+                    if (GUILayout.Button("Edit", GUILayout.Width(36)))
+                    {
+                        _listEditorText = string.Join("\n", _persistentVariables.GetList(n));
+                        string captureName = n;
+                        _listEditorOnApply = arr => { _persistentVariables.SetList(captureName, arr); MarkPersistentVarsDirty(); };
+                        _listEditorWindowRect = new Rect(_persistentVarsWindowRect.xMax + 8f, _persistentVarsWindowRect.yMin, 320f, 280f);
+                        _listEditorOpen = true;
+                    }
+                }
+                else if (type == "dict")
+                {
+                    string displayValue = value.Length > 60 ? value.Substring(0, 57) + "..." : value;
+                    GUILayout.Label(displayValue ?? "", GUILayout.ExpandWidth(true));
+                    if (GUILayout.Button("Edit", GUILayout.Width(36)))
+                    {
+                        _dictEditorText = SerializeDictEditorText(_persistentVariables.GetDict(n));
+                        string captureName = n;
+                        _dictEditorOnApply = d => { _persistentVariables.SetDict(captureName, d); MarkPersistentVarsDirty(); };
+                        _dictEditorWindowRect = new Rect(_persistentVarsWindowRect.xMax + 8f, _persistentVarsWindowRect.yMin, 320f, 280f);
+                        _dictEditorOpen = true;
+                    }
+                }
+                if (GUILayout.Button("X", GUILayout.Width(24))) { _persistentVariables.Remove(n); MarkPersistentVarsDirty(); }
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.EndScrollView();
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6);
+            GUILayout.Label("Add global variable:", GUILayout.ExpandWidth(false));
+            GUILayout.BeginHorizontal();
+            _newPVarType = GUILayout.Toolbar(_newPVarType, new[] { "String", "Int", "List", "Dict" }, GUILayout.ExpandWidth(false));
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Name", GUILayout.Width(36));
+            _newPVarName = GUILayout.TextField(_newPVarName ?? "", GUILayout.Width(100));
+            if (_newPVarType == 0)
+            {
+                GUILayout.Label("Value", GUILayout.Width(32));
+                _newPVarValue = GUILayout.TextField(_newPVarValue ?? "", GUILayout.ExpandWidth(true));
+            }
+            else if (_newPVarType == 1)
+            {
+                GUILayout.Label("Value", GUILayout.Width(32));
+                _newPVarValue = GUILayout.TextField(_newPVarValue ?? "", GUILayout.ExpandWidth(true));
+            }
+            else if (_newPVarType == 2)
+            {
+                if (GUILayout.Button("Edit list...", GUILayout.Width(72)))
+                {
+                    _listEditorText = string.Join("\n", _newPVarList);
+                    _listEditorOnApply = arr => { _newPVarList.Clear(); if (arr != null) _newPVarList.AddRange(arr); };
+                    _listEditorWindowRect = new Rect(_persistentVarsWindowRect.xMax + 8f, _persistentVarsWindowRect.yMin, 320f, 280f);
+                    _listEditorOpen = true;
+                }
+                GUILayout.Label(_newPVarList.Count > 0 ? $"{_newPVarList.Count} items" : "(empty)", GUILayout.MinWidth(50));
+            }
+            else
+            {
+                if (GUILayout.Button("Edit dict...", GUILayout.Width(72)))
+                {
+                    _dictEditorText = SerializeDictEditorText(_newPVarDict);
+                    _dictEditorOnApply = d => { _newPVarDict.Clear(); foreach (var kv in d) _newPVarDict[kv.Key] = kv.Value; };
+                    _dictEditorWindowRect = new Rect(_persistentVarsWindowRect.xMax + 8f, _persistentVarsWindowRect.yMin, 320f, 280f);
+                    _dictEditorOpen = true;
+                }
+                GUILayout.Label(_newPVarDict.Count > 0 ? $"{_newPVarDict.Count} entries" : "(empty)", GUILayout.MinWidth(50));
+            }
+            if (GUILayout.Button("Add", GUILayout.Width(40)))
+            {
+                string pname = (_newPVarName ?? "").Trim();
+                if (pname.Length > 0)
+                {
+                    if (_newPVarType == 0)        _persistentVariables.SetString(pname, _newPVarValue ?? "");
+                    else if (_newPVarType == 1)   _persistentVariables.SetInt(pname, int.TryParse(_newPVarValue, out int nv) ? nv : 0);
+                    else if (_newPVarType == 2)   _persistentVariables.SetList(pname, _newPVarList);
+                    else                          _persistentVariables.SetDict(pname, _newPVarDict);
+                    MarkPersistentVarsDirty();
+                    _newPVarName = "";
+                    _newPVarValue = "";
+                    _newPVarList.Clear();
+                    _newPVarDict.Clear();
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndVertical();
+            GUI.DragWindow(new Rect(0, 0, _persistentVarsWindowRect.width, 20));
+            IMGUIUtils.EatInputInRect(_persistentVarsWindowRect);
+        }
+
+        private void SavePersistentVars()
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(_persistVarsPath) ?? "";
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                var variables = BuildVariablesList(_persistentVariables);
+                string json = BuildTimelineJson(Array.Empty<SavedTimelineEntry>(), variables);
+                File.WriteAllText(_persistVarsPath, json);
+            }
+            catch (Exception ex)
+            {
+                HS2SandboxPlugin.Log.LogError($"Save persistent vars failed: {ex.Message}");
+            }
+        }
+
+        private void LoadPersistentVars()
+        {
+            try
+            {
+                if (!File.Exists(_persistVarsPath)) return;
+                string json = File.ReadAllText(_persistVarsPath);
+                _persistentVariables.Clear();
+                ApplySavedVariables(json, replace: true, target: _persistentVariables);
+            }
+            catch (Exception ex)
+            {
+                HS2SandboxPlugin.Log.LogError($"Load persistent vars failed: {ex.Message}");
+            }
+        }
+
+        // ── Timeline save / load ─────────────────────────────────────────────
+
         private void SaveTimeline()
         {
             try
@@ -1120,6 +1452,7 @@ namespace HS2SandboxPlugin
         }
 
         private const char SavedVariablesListSeparator = '\u0002';
+        private const char SavedVariablesDictKvSeparator = '\u0003';
 
         private static string BuildTimelineJson(SavedTimelineEntry[] entries, List<(string name, string type, string value)>? variables = null)
         {
@@ -1160,6 +1493,18 @@ namespace HS2SandboxPlugin
                 list.Add((n, "int", v.ToString()));
             foreach (var (n, listVal) in store.GetAllLists())
                 list.Add((n, "list", string.Join(SavedVariablesListSeparator.ToString(), listVal ?? new List<string>())));
+            foreach (var (n, dict) in store.GetAllDicts())
+            {
+                var parts = new System.Text.StringBuilder();
+                foreach (var kv in dict)
+                {
+                    if (parts.Length > 0) parts.Append(SavedVariablesListSeparator);
+                    parts.Append(kv.Key.Replace(SavedVariablesDictKvSeparator.ToString(), ""))
+                         .Append(SavedVariablesDictKvSeparator)
+                         .Append(kv.Value);
+                }
+                list.Add((n, "dict", parts.ToString()));
+            }
             return list;
         }
 
@@ -1200,6 +1545,7 @@ namespace HS2SandboxPlugin
             {
                 foreach (SavedTimelineEntry e in entries)
                 {
+                    if (string.IsNullOrEmpty(e.typeId)) continue;
                     try
                     {
                         string typeId = e.typeId;
@@ -1223,6 +1569,7 @@ namespace HS2SandboxPlugin
             {
                 foreach (SavedTimelineEntry e in wrapper.entries)
                 {
+                    if (string.IsNullOrEmpty(e.typeId)) continue;
                     try
                     {
                         string typeId = e.typeId;
@@ -1242,8 +1589,9 @@ namespace HS2SandboxPlugin
             ApplySavedVariables(json, replace);
         }
 
-        private void ApplySavedVariables(string json, bool replace)
+        private void ApplySavedVariables(string json, bool replace, TimelineVariableStore? target = null)
         {
+            target ??= _designTimeVariables;
             if (!TryParseVariablesJson(json, out List<(string name, string type, string value)>? variables) || variables == null || variables.Count == 0)
                 return;
             foreach (var (name, type, value) in variables)
@@ -1252,13 +1600,13 @@ namespace HS2SandboxPlugin
                 string n = name.Trim();
                 if (!replace)
                 {
-                    if (_designTimeVariables.HasString(n) || _designTimeVariables.HasInt(n) || _designTimeVariables.HasList(n))
+                    if (target.HasString(n) || target.HasInt(n) || target.HasList(n) || target.HasDict(n))
                         continue;
                 }
                 if (type == "string")
-                    _designTimeVariables.SetString(n, value ?? "");
+                    target.SetString(n, value ?? "");
                 else if (type == "int")
-                    _designTimeVariables.SetInt(n, int.TryParse(value, out int iv) ? iv : 0);
+                    target.SetInt(n, int.TryParse(value, out int iv) ? iv : 0);
                 else if (type == "list")
                 {
                     var list = new List<string>();
@@ -1267,7 +1615,23 @@ namespace HS2SandboxPlugin
                         foreach (string part in value.Split(SavedVariablesListSeparator))
                             list.Add(part ?? "");
                     }
-                    _designTimeVariables.SetList(n, list);
+                    target.SetList(n, list);
+                }
+                else if (type == "dict")
+                {
+                    var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    if (!string.IsNullOrEmpty(value))
+                    {
+                        foreach (string entry in value.Split(SavedVariablesListSeparator))
+                        {
+                            int sep = entry.IndexOf(SavedVariablesDictKvSeparator);
+                            if (sep < 0) continue;
+                            string k = entry.Substring(0, sep).Trim();
+                            string v = entry.Substring(sep + 1);
+                            if (k.Length > 0) dict[k] = v;
+                        }
+                    }
+                    target.SetDict(n, dict);
                 }
             }
         }
