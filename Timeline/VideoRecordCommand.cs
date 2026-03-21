@@ -32,10 +32,12 @@ namespace HS2SandboxPlugin
 
         public override string GetDisplayLabel() => "Video Record";
 
-        public override bool HasInvalidConfiguration()
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
             EnsurePluginLookup();
-            return _videoExportPlugin == null;
+            if (_videoExportPlugin == null)
+                return "VideoExport plugin not loaded";
+            return null;
         }
 
         public override void DrawInlineConfig(InlineDrawContext ctx)

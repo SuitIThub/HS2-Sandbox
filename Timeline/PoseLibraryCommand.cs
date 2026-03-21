@@ -39,13 +39,13 @@ namespace HS2SandboxPlugin
             onComplete();
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (!variablesAtThisIndex.IsValidInterpolation(_name ?? "")) return true;
-            if (!variablesAtThisIndex.IsValidInterpolation(_grp ?? "")) return true;
-            if (!variablesAtThisIndex.IsValidInterpolation(_target ?? "")) return true;
-            return false;
+            if (vars == null) return null;
+            if (!vars.IsValidInterpolation(_name ?? "")) return "Unknown variable in name";
+            if (!vars.IsValidInterpolation(_grp ?? "")) return "Unknown variable in group";
+            if (!vars.IsValidInterpolation(_target ?? "")) return "Unknown variable in target";
+            return null;
         }
 
         private static void ApplyPoseFromLib(string name, string grp, string target)

@@ -140,15 +140,15 @@ namespace HS2SandboxPlugin
             if (p.Length >= 6) { _maxText = p[5] ?? "0"; int.TryParse(_maxText, out _maxValue); }
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (!variablesAtThisIndex.IsValidInterpolation(_tagName ?? "")) return true;
-            if (!string.IsNullOrWhiteSpace(_startText) && !variablesAtThisIndex.IsValidIntOperand(_startText)) return true;
-            if (!string.IsNullOrWhiteSpace(_incrementText) && !variablesAtThisIndex.IsValidIntOperand(_incrementText)) return true;
-            if (!string.IsNullOrWhiteSpace(_stepText) && !variablesAtThisIndex.IsValidIntOperand(_stepText)) return true;
-            if (_useMaxValue && !string.IsNullOrWhiteSpace(_maxText) && !variablesAtThisIndex.IsValidIntOperand(_maxText)) return true;
-            return false;
+            if (vars == null) return null;
+            if (!vars.IsValidInterpolation(_tagName ?? "")) return "Unknown variable in tag name";
+            if (!string.IsNullOrWhiteSpace(_startText) && !vars.IsValidIntOperand(_startText)) return "Invalid start value";
+            if (!string.IsNullOrWhiteSpace(_incrementText) && !vars.IsValidIntOperand(_incrementText)) return "Invalid increment value";
+            if (!string.IsNullOrWhiteSpace(_stepText) && !vars.IsValidIntOperand(_stepText)) return "Invalid step value";
+            if (_useMaxValue && !string.IsNullOrWhiteSpace(_maxText) && !vars.IsValidIntOperand(_maxText)) return "Invalid max value";
+            return null;
         }
     }
 }

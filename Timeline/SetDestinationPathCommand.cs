@@ -63,10 +63,11 @@ namespace HS2SandboxPlugin
 
         public override void DeserializePayload(string payload) => _path = payload ?? "";
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            return !variablesAtThisIndex.IsValidInterpolation(_path ?? "");
+            if (vars != null && !vars.IsValidInterpolation(_path ?? ""))
+                return "Unknown variable in path";
+            return null;
         }
     }
 }

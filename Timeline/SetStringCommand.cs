@@ -42,11 +42,11 @@ namespace HS2SandboxPlugin
             store.SetString(_variableName.Trim(), _value ?? "");
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (base.HasInvalidConfiguration(variablesAtThisIndex)) return true;
-            if (variablesAtThisIndex == null) return false;
-            return !variablesAtThisIndex.IsValidInterpolation(_value ?? "");
+            if (vars != null && !vars.IsValidInterpolation(_value ?? ""))
+                return "Unknown variable in value";
+            return null;
         }
 
         public override string SerializePayload()

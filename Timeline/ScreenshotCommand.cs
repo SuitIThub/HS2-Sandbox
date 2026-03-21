@@ -61,10 +61,12 @@ namespace HS2SandboxPlugin
             GUILayout.Label(" ", GUILayout.ExpandWidth(true));
         }
 
-        public override bool HasInvalidConfiguration()
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
             ResolveScreenshotManager();
-            return _takeRenderScreenshotMethod == null;
+            if (_takeRenderScreenshotMethod == null)
+                return "ScreenshotManager plugin not loaded";
+            return null;
         }
 
         private static IEnumerator RunScreenshotThenComplete(IEnumerator screenshotRoutine, Action onComplete)

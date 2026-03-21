@@ -30,10 +30,11 @@ namespace HS2SandboxPlugin
             onComplete();
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            return !variablesAtThisIndex.IsValidInterpolation(_checkpointName ?? "");
+            if (vars != null && !vars.IsValidInterpolation(_checkpointName ?? ""))
+                return "Unknown variable in checkpoint name";
+            return null;
         }
 
         public override string SerializePayload() => _checkpointName ?? "";

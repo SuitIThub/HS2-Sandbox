@@ -93,11 +93,12 @@ namespace HS2SandboxPlugin
             store.SetList(targetList, result);
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            return string.IsNullOrWhiteSpace(_sourceList)
-                || string.IsNullOrWhiteSpace(_dictName)
-                || string.IsNullOrWhiteSpace(_targetList);
+            if (string.IsNullOrWhiteSpace(_sourceList)) return "Source list name is empty";
+            if (string.IsNullOrWhiteSpace(_dictName)) return "Dict name is empty";
+            if (string.IsNullOrWhiteSpace(_targetList)) return "Target list name is empty";
+            return null;
         }
 
         public override string SerializePayload()

@@ -16,14 +16,14 @@ namespace HS2SandboxPlugin
 
         public override string GetDisplayLabel() => "Simulate Key";
 
-        public override bool HasInvalidConfiguration() => !WindowsInput.ValidateKeyCombos(_keyCombo);
-
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return HasInvalidConfiguration();
-            if (!variablesAtThisIndex.IsValidInterpolation(_keyCombo ?? "")) return true;
-            string resolved = variablesAtThisIndex.Interpolate(_keyCombo ?? "");
-            return !WindowsInput.ValidateKeyCombos(resolved);
+            if (vars != null && !vars.IsValidInterpolation(_keyCombo ?? ""))
+                return "Unknown variable in key combination";
+            string resolved = vars?.Interpolate(_keyCombo ?? "") ?? _keyCombo ?? "";
+            if (!WindowsInput.ValidateKeyCombos(resolved))
+                return "Invalid key combination";
+            return null;
         }
 
         public override void DrawInlineConfig(InlineDrawContext ctx)

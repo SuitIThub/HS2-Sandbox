@@ -48,12 +48,11 @@ namespace HS2SandboxPlugin
             store.SetInt(_variableName.Trim(), value);
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (base.HasInvalidConfiguration(variablesAtThisIndex)) return true;
-            if (variablesAtThisIndex == null) return false;
-            if (string.IsNullOrWhiteSpace(_valueText)) return true;
-            return !variablesAtThisIndex.IsValidIntOperand(_valueText);
+            if (string.IsNullOrWhiteSpace(_valueText)) return "Value is empty";
+            if (vars != null && !vars.IsValidIntOperand(_valueText)) return "Invalid value";
+            return null;
         }
 
         public override string SerializePayload()

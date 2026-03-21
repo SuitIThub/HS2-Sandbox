@@ -62,7 +62,7 @@ namespace HS2SandboxPlugin
         private float _pauseStartTime; // realtimeSinceStartup when current pause started (0 if not paused)
         private float _lastRunElapsedSeconds = -1f; // last run duration to show after stop (-1 = none)
         private int _startFromIndex; // when starting, begin at this command index
-        private static readonly string[] CategoryNames = { "CopyScript Controls", "CopyScript Checks", "CopyScript Config", "Input", "VNGE", "Studio", "Variables", "Misc", "Video", "FashionLine" };
+        private static readonly string[] CategoryNames = { "CopyScript Controls", "CopyScript Checks", "CopyScript Config", "Input", "VNGE", "Studio", "Simple Variables", "Advanced Variables", "Misc", "Video", "FashionLine" };
         private int _selectedCategory;
         private bool _categoryWindowVisible;
         private Rect _categoryWindowRect;
@@ -113,6 +113,7 @@ namespace HS2SandboxPlugin
             ["get_fashion"] = new Color(0.25f, 0.92f, 0.6f),
             // Variables (slate / blue-gray)
             ["set_string"] = new Color(0.5f, 0.6f, 0.85f),
+            ["str_replace"] = new Color(0.52f, 0.63f, 0.87f),
             ["set_integer"] = new Color(0.45f, 0.58f, 0.88f),
             ["set_list"] = new Color(0.48f, 0.58f, 0.82f),
             ["calc"] = new Color(0.55f, 0.62f, 0.9f),
@@ -122,6 +123,7 @@ namespace HS2SandboxPlugin
             ["dict_get"] = new Color(0.38f, 0.52f, 0.75f),
             ["list_apply_dict"] = new Color(0.44f, 0.57f, 0.80f),
             ["list_insert"] = new Color(0.46f, 0.62f, 0.84f),
+            ["list_remove"] = new Color(0.50f, 0.58f, 0.80f),
             // Misc (warm orange/brown)
             ["checkpoint"] = new Color(0.85f, 0.55f, 0.3f),
             ["jump"] = new Color(0.82f, 0.5f, 0.35f),
@@ -139,7 +141,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>Representative typeId per category for category color (same order as CategoryNames).</summary>
-        private static readonly string[] CategoryRepresentativeTypeIds = { "start_tracking", "wait_screenshot", "set_source_path", "simulate_key", "vnge_scene_next", "pose_library", "set_string", "checkpoint", "video_record", "outfit_rotate" };
+        private static readonly string[] CategoryRepresentativeTypeIds = { "start_tracking", "wait_screenshot", "set_source_path", "simulate_key", "vnge_scene_next", "pose_library", "set_string", "set_list", "checkpoint", "video_record", "outfit_rotate" };
 
         private static Color GetCategoryColor(int categoryIndex)
         {
@@ -680,28 +682,33 @@ namespace HS2SandboxPlugin
                     GUILayout.Space(2);
                     DrawAddButton("Sel Object", "select_object_by_name", btnW, btnH);
                     break;
-                case 6: // Variables
+                case 6: // Simple Variables
                     DrawAddButton("Set Str", "set_string", btnW, btnH);
                     GUILayout.Space(2);
-                    DrawAddButton("Set Int", "set_integer", btnW, btnH);
+                    DrawAddButton("Str Repl", "str_replace", btnW, btnH);
                     GUILayout.Space(2);
-                    DrawAddButton("Set List", "set_list", btnW, btnH);
+                    DrawAddButton("Set Int", "set_integer", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Calc", "calc", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("If", "if", btnW, btnH);
+                    break;
+                case 7: // Advanced Variables
+                    DrawAddButton("Set List", "set_list", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("List", "list", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("List Insert", "list_insert", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("List Remove", "list_remove", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Dict Set", "dict_set", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Dict Get", "dict_get", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("List+Dict", "list_apply_dict", btnW, btnH);
-                    GUILayout.Space(2);
-                    DrawAddButton("List Insert", "list_insert", btnW, btnH);
                     break;
-                case 7: // Misc
+                case 8: // Misc
                     DrawAddButton("Check", "checkpoint", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Jump", "jump", btnW, btnH);
@@ -714,7 +721,7 @@ namespace HS2SandboxPlugin
                     GUILayout.Space(2);
                     DrawAddButton("Label", "label", btnW, btnH);
                     break;
-                case 8: // Video
+                case 9: // Video
                     DrawAddButton("Record", "video_record", btnW, btnH);
                     break;
                 default: // FashionLine
@@ -876,7 +883,9 @@ namespace HS2SandboxPlugin
                         GUI.color = Color.white;
                     }
                 }
-                bool isInvalid = cmd.HasInvalidConfiguration(GetVariablesAtIndex(i));
+                var varsAtIndex = GetVariablesAtIndex(i);
+                string? validationError = cmd.GetValidationError(varsAtIndex);
+                bool isInvalid = validationError != null || cmd.HasInvalidConfiguration();
                 GUIStyle rowStyle = GUIStyle.none;
                 if (isCurrent)
                     rowStyle = GetCurrentRowHighlightStyle();
@@ -930,18 +939,20 @@ namespace HS2SandboxPlugin
                     GUI.enabled = prevEnabled;
                 }
                 string label = cmd.GetDisplayLabel(_runContext);
+                string tipText = isInvalid ? (validationError ?? "Invalid configuration") : "";
+                var labelContent = new GUIContent(label, tipText);
                 if (_showMousePositions && mouseColorIndex.HasValue && mouseColorIndex.Value < CrossColors.Length)
                 {
                     Color prevContent = GUI.contentColor;
                     GUI.contentColor = CrossColors[mouseColorIndex.Value];
-                    GUILayout.Label(label, GUILayout.Width(120));
+                    GUILayout.Label(labelContent, GUILayout.Width(120));
                     GUI.contentColor = prevContent;
                 }
                 else
                 {
                     Color prevContent = GUI.contentColor;
                     GUI.contentColor = Color.white;
-                    GUILayout.Label(label, GUILayout.Width(120));
+                    GUILayout.Label(labelContent, GUILayout.Width(120));
                     GUI.contentColor = prevContent;
                 }
                 if (_isRunning && isCurrent && cmd is ConfirmCommand && _runContext?.PendingConfirmCallback != null)
@@ -988,6 +999,9 @@ namespace HS2SandboxPlugin
                 savedRowW = rowEndRect.xMax - rowStartX;
             }
             GUILayout.EndScrollView();
+
+            if (GUI.tooltip != "")
+                DrawValidationTooltip(GUI.tooltip, windowRect);
 
             GUILayout.Space(6);
             if (GUILayout.Button("Close", GUILayout.Height(24)))
@@ -1047,6 +1061,36 @@ namespace HS2SandboxPlugin
                 active = { background = tex }
             };
             return _invalidRowHighlightStyle;
+        }
+
+        private static GUIStyle? _tooltipStyle;
+
+        private static void DrawValidationTooltip(string text, Rect windowRect)
+        {
+            if (_tooltipStyle == null)
+            {
+                var bg = new Texture2D(1, 1);
+                bg.SetPixel(0, 0, new Color(0.12f, 0.12f, 0.12f, 0.95f));
+                bg.Apply();
+                _tooltipStyle = new GUIStyle(GUI.skin.label)
+                {
+                    normal = { background = bg, textColor = new Color(1f, 0.82f, 0.82f) },
+                    padding = new RectOffset(6, 6, 4, 4),
+                    wordWrap = true,
+                    fontSize = 11,
+                    richText = false
+                };
+            }
+
+            Vector2 size = _tooltipStyle.CalcSize(new GUIContent(text));
+            size.x = Mathf.Min(size.x + 12f, 300f);
+            size.y += 8f;
+
+            // Position the box just above the mouse cursor, clamped inside the window
+            Vector2 mouse = Event.current.mousePosition;
+            float x = Mathf.Clamp(mouse.x, 0f, windowRect.width - size.x);
+            float y = Mathf.Clamp(mouse.y - size.y - 4f, 0f, windowRect.height - size.y);
+            GUI.Label(new Rect(x, y, size.x, size.y), text, _tooltipStyle);
         }
 
         private static Texture2D GetCrossTexture()

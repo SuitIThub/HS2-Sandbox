@@ -100,10 +100,10 @@ namespace HS2SandboxPlugin
                 _variableName = payload;
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            return string.IsNullOrWhiteSpace(_variableName);
+            if (string.IsNullOrWhiteSpace(_variableName)) return "Variable name is empty";
+            return null;
         }
     }
 }

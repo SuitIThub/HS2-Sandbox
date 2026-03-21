@@ -100,12 +100,13 @@ namespace HS2SandboxPlugin
                 _checkpointName = payload.Trim();
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (!variablesAtThisIndex.IsValidInterpolation(_checkpointName ?? "")) return true;
-            if (!string.IsNullOrWhiteSpace(_repeatCountText) && !variablesAtThisIndex.IsValidIntOperand(_repeatCountText)) return true;
-            return false;
+            if (vars == null) return null;
+            if (!vars.IsValidInterpolation(_checkpointName ?? "")) return "Unknown variable in target checkpoint";
+            if (!string.IsNullOrWhiteSpace(_repeatCountText) && !vars.IsValidIntOperand(_repeatCountText))
+                return "Invalid repeat count";
+            return null;
         }
     }
 }

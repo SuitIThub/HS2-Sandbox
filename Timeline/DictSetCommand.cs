@@ -58,9 +58,10 @@ namespace HS2SandboxPlugin
             store.SetDictValue(dictName, _key ?? "", _value ?? "");
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            return string.IsNullOrWhiteSpace(_dictName);
+            if (string.IsNullOrWhiteSpace(_dictName)) return "Dict name is empty";
+            return null;
         }
 
         public override string SerializePayload()

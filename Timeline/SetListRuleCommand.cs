@@ -152,21 +152,21 @@ namespace HS2SandboxPlugin
             if (p.Length >= 5) _listVariableName = p[4] ?? "";
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (!variablesAtThisIndex.IsValidInterpolation(_tagName ?? "")) return true;
+            if (vars == null) return null;
+            if (!vars.IsValidInterpolation(_tagName ?? "")) return "Unknown variable in tag name";
             if (_useListVariable)
             {
-                string listVar = (variablesAtThisIndex.Interpolate(_listVariableName ?? "") ?? "").Trim();
-                if (string.IsNullOrEmpty(listVar) || !variablesAtThisIndex.HasList(listVar)) return true;
+                string listVar = (vars.Interpolate(_listVariableName ?? "") ?? "").Trim();
+                if (string.IsNullOrEmpty(listVar)) return "List variable name is empty";
+                if (!vars.HasList(listVar)) return $"List variable \"{listVar}\" not found";
             }
-            else
-            {
-                if (!variablesAtThisIndex.IsValidInterpolation(_valuesStr ?? "")) return true;
-            }
-            if (!string.IsNullOrWhiteSpace(_stepText) && !variablesAtThisIndex.IsValidIntOperand(_stepText)) return true;
-            return false;
+            else if (!vars.IsValidInterpolation(_valuesStr ?? ""))
+                return "Unknown variable in values";
+            if (!string.IsNullOrWhiteSpace(_stepText) && !vars.IsValidIntOperand(_stepText))
+                return "Invalid step value";
+            return null;
         }
     }
 }

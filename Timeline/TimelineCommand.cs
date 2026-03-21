@@ -29,7 +29,14 @@ namespace HS2SandboxPlugin
         /// <summary>When true, the timeline row is drawn with a red highlight (e.g. invalid key shortcuts).</summary>
         public virtual bool HasInvalidConfiguration() => false;
         /// <summary>Same as HasInvalidConfiguration() but with variable store for validation (interpolation / number field vars). Null = skip variable checks.</summary>
-        public virtual bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex) => HasInvalidConfiguration();
+        public virtual bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex) =>
+            GetValidationError(variablesAtThisIndex) != null || HasInvalidConfiguration();
+        /// <summary>
+        /// Returns a short human-readable description of why this command is invalid, or null when valid.
+        /// Override this (instead of HasInvalidConfiguration) when you want to show an error tooltip on the row.
+        /// The base HasInvalidConfiguration implementation automatically calls this.
+        /// </summary>
+        public virtual string? GetValidationError(TimelineVariableStore? vars) => null;
         /// <summary>Apply this command's variable effects to the store (for simulating state at a given index). Only SetString/SetInteger/Calc override.</summary>
         public virtual void SimulateVariableEffects(TimelineVariableStore store) { }
         public abstract void DrawInlineConfig(InlineDrawContext ctx);

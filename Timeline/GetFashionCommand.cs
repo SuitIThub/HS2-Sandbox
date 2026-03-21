@@ -93,6 +93,13 @@ namespace HS2SandboxPlugin
             return null;
         }
 
+        public override void SimulateVariableEffects(TimelineVariableStore store)
+        {
+            string targetVar = (_variableName ?? "").Trim();
+            if (!string.IsNullOrEmpty(targetVar))
+                store.SetList(targetVar, new List<string>());
+        }
+
         public override string SerializePayload() => _variableName ?? "";
 
         public override void DeserializePayload(string payload)

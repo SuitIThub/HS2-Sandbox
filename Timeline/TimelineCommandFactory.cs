@@ -47,6 +47,7 @@ namespace HS2SandboxPlugin
                 "outfit_rotate" => new OutfitRotateCommand(),
                 "outfit_by_name" => new OutfitByNameCommand(),
                 "set_string" => new SetStringCommand(),
+                "str_replace" => new StrReplaceCommand(),
                 "set_integer" => new SetIntegerCommand(),
                 "set_list" => new SetListCommand(),
                 "calc" => new CalcCommand(),
@@ -60,6 +61,7 @@ namespace HS2SandboxPlugin
                 "dict_get" => new DictGetCommand(),
                 "list_apply_dict" => new ListApplyDictCommand(),
                 "list_insert" => new ListInsertCommand(),
+                "list_remove" => new ListRemoveCommand(),
                 "get_fashion" => new GetFashionCommand(),
                 _ => throw new ArgumentException($"Unknown timeline command type: {typeId}", nameof(typeId))
             };

@@ -59,11 +59,12 @@ namespace HS2SandboxPlugin
             }
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (string.IsNullOrWhiteSpace(_millisecondsText)) return true;
-            return !variablesAtThisIndex.IsValidIntOperand(_millisecondsText);
+            if (string.IsNullOrWhiteSpace(_millisecondsText)) return "Milliseconds value is empty";
+            if (vars != null && !vars.IsValidIntOperand(_millisecondsText))
+                return "Invalid milliseconds value";
+            return null;
         }
     }
 }

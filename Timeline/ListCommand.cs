@@ -130,16 +130,17 @@ namespace HS2SandboxPlugin
             if (p.Length >= 4) _listVariableName = p[3] ?? "";
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (string.IsNullOrWhiteSpace(_variableName)) return true;
+            if (string.IsNullOrWhiteSpace(_variableName)) return "Variable name is empty";
             if (_useListVariable)
             {
-                string listVar = (variablesAtThisIndex.Interpolate(_listVariableName ?? "") ?? "").Trim();
-                return string.IsNullOrEmpty(listVar) || !variablesAtThisIndex.HasList(listVar);
+                string listVar = (vars?.Interpolate(_listVariableName ?? "") ?? "").Trim();
+                if (string.IsNullOrEmpty(listVar)) return "List variable name is empty";
+                if (vars != null && !vars.HasList(listVar)) return $"List variable \"{listVar}\" not found";
             }
-            return _values.Count == 0;
+            else if (_values.Count == 0) return "Values list is empty";
+            return null;
         }
     }
 }

@@ -16,7 +16,7 @@ namespace HS2SandboxPlugin
         private const char PayloadSeparator = '\u0001';
 
         public override string TypeId => "outfit_by_name";
-        public override string GetDisplayLabel() => string.IsNullOrWhiteSpace(_name) ? "Outfit by name" : $"Outfit: {_name}";
+        public override string GetDisplayLabel() => "Outfit by name";
 
         private string _name = "";
         private bool _isFile = true;

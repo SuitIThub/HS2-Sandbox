@@ -31,7 +31,7 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Value", GUILayout.Width(32));
+            GUILayout.Label("Value", GUILayout.Width(36));
             _value = GUILayout.TextField(_value ?? "", GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
             GUILayout.EndHorizontal();
 
@@ -110,13 +110,12 @@ namespace HS2SandboxPlugin
             store.SetList(listName, list);
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (string.IsNullOrWhiteSpace(_listName)) return true;
-            if (_mode == 0 && variablesAtThisIndex != null && !string.IsNullOrWhiteSpace(_index)
-                && !variablesAtThisIndex.IsValidIntOperand(_index))
-                return true;
-            return false;
+            if (string.IsNullOrWhiteSpace(_listName)) return "List name is empty";
+            if (_mode == 0 && vars != null && !string.IsNullOrWhiteSpace(_index) && !vars.IsValidIntOperand(_index))
+                return "Invalid index";
+            return null;
         }
 
         public override string SerializePayload()

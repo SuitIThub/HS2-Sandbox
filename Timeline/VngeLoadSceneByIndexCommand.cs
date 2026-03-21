@@ -33,18 +33,15 @@ namespace HS2SandboxPlugin
             onComplete();
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (base.HasInvalidConfiguration(variablesAtThisIndex)) return true;
-            if (variablesAtThisIndex == null) return false;
-            if (string.IsNullOrWhiteSpace(_indexText)) return true;
-            if (!variablesAtThisIndex.IsValidIntOperand(_indexText)) return true;
-
-            // Check that the resolved index is within [1, maxSceneIndex + 1]
-            if (!variablesAtThisIndex.TryResolveIntOperand(_indexText, out var index)) return true;
-
-            var maxSceneIndexInclusive = VngePython.GetMaxSceneIndex() + 1;
-            return index < 1 || index > maxSceneIndexInclusive;
+            if (string.IsNullOrWhiteSpace(_indexText)) return "Index is empty";
+            if (vars == null) return null;
+            if (!vars.IsValidIntOperand(_indexText)) return "Invalid scene index";
+            if (!vars.TryResolveIntOperand(_indexText, out int index)) return "Invalid scene index";
+            int max = VngePython.GetMaxSceneIndex() + 1;
+            if (index < 1 || index > max) return $"Scene index {index} out of range (1–{max})";
+            return null;
         }
 
         public override string SerializePayload() => _indexText ?? "1";

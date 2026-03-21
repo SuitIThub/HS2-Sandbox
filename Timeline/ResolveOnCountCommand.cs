@@ -79,11 +79,12 @@ namespace HS2SandboxPlugin
                 _expectedCount = n;
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (string.IsNullOrWhiteSpace(_expectedCountText)) return true;
-            return !variablesAtThisIndex.IsValidIntOperand(_expectedCountText);
+            if (string.IsNullOrWhiteSpace(_expectedCountText)) return "Expected count is empty";
+            if (vars != null && !vars.IsValidIntOperand(_expectedCountText))
+                return "Invalid expected count";
+            return null;
         }
     }
 }

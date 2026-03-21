@@ -157,13 +157,24 @@ namespace HS2SandboxPlugin
             if (p.Length >= 5) _negate = p[4] == "1";
         }
 
-        public override bool HasInvalidConfiguration(TimelineVariableStore? variablesAtThisIndex)
+        public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (variablesAtThisIndex == null) return false;
-            if (!variablesAtThisIndex.IsValidInterpolation(_leftOperand ?? "")) return true;
-            if (!variablesAtThisIndex.IsValidInterpolation(_rightOperand ?? "")) return true;
-            if (!variablesAtThisIndex.IsValidInterpolation(_checkpointName ?? "")) return true;
-            return false;
+            if (vars == null) return null;
+            if (!vars.IsValidInterpolation(_leftOperand ?? ""))
+                return "Unknown variable in left operand";
+            if (_operatorIndex == 6 || _operatorIndex == 7)
+            {
+                string listName = (_rightOperand ?? "").Trim();
+                if (string.IsNullOrEmpty(listName))
+                    return "List variable name is empty";
+                if (!vars.HasList(listName))
+                    return $"List variable \"{listName}\" not found";
+            }
+            else if (!vars.IsValidInterpolation(_rightOperand ?? ""))
+                return "Unknown variable in right operand";
+            if (!vars.IsValidInterpolation(_checkpointName ?? ""))
+                return "Unknown variable in jump target";
+            return null;
         }
     }
 }
