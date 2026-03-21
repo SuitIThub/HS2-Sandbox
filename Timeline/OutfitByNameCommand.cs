@@ -104,5 +104,12 @@ namespace HS2SandboxPlugin
             if (parts.Length >= 2) _isFile = parts[1] == "1";
             if (parts.Length >= 3) _reload = parts[2] == "1";
         }
+
+        public override string? GetValidationError(TimelineVariableStore? vars)
+        {
+            if (vars != null && !vars.IsValidInterpolation(_name ?? ""))
+                return "Unknown variable in name";
+            return null;
+        }
     }
 }

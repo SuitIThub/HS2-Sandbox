@@ -88,5 +88,12 @@ namespace HS2SandboxPlugin
         {
             _objectName = payload ?? "";
         }
+
+        public override string? GetValidationError(TimelineVariableStore? vars)
+        {
+            if (vars != null && !vars.IsValidInterpolation(_objectName ?? ""))
+                return "Unknown variable in object name";
+            return null;
+        }
     }
 }

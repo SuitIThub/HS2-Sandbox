@@ -78,5 +78,11 @@ namespace HS2SandboxPlugin
                 _hasValue = true;
             }
         }
+
+        public override string? GetValidationError(TimelineVariableStore? vars)
+        {
+            if (!_hasValue) return "Position not recorded";
+            return null;
+        }
     }
 }

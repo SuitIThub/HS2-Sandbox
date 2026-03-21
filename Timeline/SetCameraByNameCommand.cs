@@ -119,5 +119,12 @@ namespace HS2SandboxPlugin
         {
             _cameraName = payload ?? "";
         }
+
+        public override string? GetValidationError(TimelineVariableStore? vars)
+        {
+            if (vars != null && !vars.IsValidInterpolation(_cameraName ?? ""))
+                return "Unknown variable in camera name";
+            return null;
+        }
     }
 }

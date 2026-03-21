@@ -562,7 +562,7 @@ namespace HS2SandboxPlugin
             if (_isRunning && _autoscrollDuringRun && _runningIndex >= 0 && _runningIndex < _commands.Count)
             {
                 // Same formula as DrawWindowContent: scroll view height = window - overhead
-                float listViewHeight = Mathf.Max(100f, windowRect.height - LayoutFixedHeight - 120f);
+                float listViewHeight = Mathf.Max(100f, windowRect.height - LayoutFixedHeight);
                 float totalListHeight = _commands.Count * ListRowHeight;
                 float maxScrollY = Mathf.Max(0, totalListHeight - listViewHeight);
                 // Center the executing row in the view: scroll so row center aligns with view center
@@ -597,6 +597,28 @@ namespace HS2SandboxPlugin
 
         protected override void DrawWindowContent(int windowID)
         {
+            // Single validation pass — incremental O(n) store simulation shared by the toolbar and every row.
+            // This guarantees the Start/Resume button state and row highlights always agree.
+            if (_frameValidationErrors == null || _frameValidationErrors.Length != _commands.Count)
+                _frameValidationErrors = new string?[_commands.Count];
+            {
+                var vs = new TimelineVariableStore();
+                vs.CopyFrom(_persistentVariables);
+                vs.CopyFrom(_designTimeVariables);
+                _frameAnyInvalidEnabled = false;
+                for (int i = 0; i < _commands.Count; i++)
+                {
+                    var cmd = _commands[i];
+                    string? err = cmd.GetValidationError(vs);
+                    if (err == null && cmd.HasInvalidConfiguration())
+                        err = "Invalid configuration";
+                    _frameValidationErrors[i] = err;
+                    if (cmd.Enabled && err != null)
+                        _frameAnyInvalidEnabled = true;
+                    cmd.SimulateVariableEffects(vs);
+                }
+            }
+
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
 
             // Add command toolbar — category dropdown + buttons for selected category
@@ -762,7 +784,7 @@ namespace HS2SandboxPlugin
                 GUILayout.Space(4);
                 if (_isPaused)
                 {
-                    bool hadInvalid = HasAnyInvalidCommands();
+                    bool hadInvalid = _frameAnyInvalidEnabled;
                     bool prevEnabled = GUI.enabled;
                     GUI.enabled = !hadInvalid;
                     if (GUILayout.Button("Resume", GUILayout.Width(58), GUILayout.Height(26)))
@@ -772,6 +794,13 @@ namespace HS2SandboxPlugin
                         _isPaused = false;
                     }
                     GUI.enabled = prevEnabled;
+                    _startButtonHoverTooltip = "";
+                    if (hadInvalid && Event.current.type == EventType.Repaint)
+                    {
+                        Rect btnRect = GUILayoutUtility.GetLastRect();
+                        if (btnRect.Contains(Event.current.mousePosition))
+                            _startButtonHoverTooltip = CollectValidationErrors();
+                    }
                 }
                 else if (GUILayout.Button("Pause", GUILayout.Width(58), GUILayout.Height(26)))
                 {
@@ -781,12 +810,19 @@ namespace HS2SandboxPlugin
             }
             else
             {
-                bool hadInvalid = HasAnyInvalidCommands();
+                bool hadInvalid = _frameAnyInvalidEnabled;
                 bool prevEnabled = GUI.enabled;
                 GUI.enabled = !hadInvalid;
                 if (GUILayout.Button("Start", GUILayout.Width(58), GUILayout.Height(26)))
                     StartTimeline(0);
                 GUI.enabled = prevEnabled;
+                _startButtonHoverTooltip = "";
+                if (hadInvalid && Event.current.type == EventType.Repaint)
+                {
+                    Rect btnRect = GUILayoutUtility.GetLastRect();
+                    if (btnRect.Contains(Event.current.mousePosition))
+                        _startButtonHoverTooltip = CollectValidationErrors();
+                }
             }
             GUILayout.Space(4);
             bool showCrosses = GUILayout.Toggle(_showMousePositions, "Crosses", GUILayout.Width(62), GUILayout.Height(26));
@@ -866,9 +902,10 @@ namespace HS2SandboxPlugin
                 {
                     Color cmdColor = GetCommandColor(cmd.TypeId);
                     var rowRect = new Rect(rowStartX, rowStartRect.yMin, savedRowW, ListRowHeight);
-                    if (cmd is LabelCommand)
+                    if (cmd is LabelCommand lc)
                     {
-                        GUI.color = Color.black;
+                        float gray = Mathf.Min(0.70f, lc.Level * 0.12f);
+                        GUI.color = new Color(gray, gray, gray);
                         GUI.DrawTexture(rowRect, GetCrossTexture());
                         GUI.DrawTexture(new Rect(rowStartX, rowStartRect.yMin, 5, ListRowHeight), GetCrossTexture());
                         GUI.color = Color.white;
@@ -883,9 +920,8 @@ namespace HS2SandboxPlugin
                         GUI.color = Color.white;
                     }
                 }
-                var varsAtIndex = GetVariablesAtIndex(i);
-                string? validationError = cmd.GetValidationError(varsAtIndex);
-                bool isInvalid = validationError != null || cmd.HasInvalidConfiguration();
+                string? validationError = _frameValidationErrors![i];
+                bool isInvalid = validationError != null;
                 GUIStyle rowStyle = GUIStyle.none;
                 if (isCurrent)
                     rowStyle = GetCurrentRowHighlightStyle();
@@ -1000,8 +1036,9 @@ namespace HS2SandboxPlugin
             }
             GUILayout.EndScrollView();
 
-            if (GUI.tooltip != "")
-                DrawValidationTooltip(GUI.tooltip, windowRect);
+            string activeTooltip = GUI.tooltip != "" ? GUI.tooltip : _startButtonHoverTooltip;
+            if (activeTooltip != "")
+                DrawValidationTooltip(activeTooltip, windowRect);
 
             GUILayout.Space(6);
             if (GUILayout.Button("Close", GUILayout.Height(24)))
@@ -1082,15 +1119,15 @@ namespace HS2SandboxPlugin
                 };
             }
 
-            Vector2 size = _tooltipStyle.CalcSize(new GUIContent(text));
-            size.x = Mathf.Min(size.x + 12f, 300f);
-            size.y += 8f;
+            // CalcSize gives single-line width; CalcHeight correctly handles wrapped multi-line text.
+            float boxW = Mathf.Min(_tooltipStyle.CalcSize(new GUIContent(text)).x + 12f, 300f);
+            float boxH = _tooltipStyle.CalcHeight(new GUIContent(text), boxW) + 8f;
 
-            // Position the box just above the mouse cursor, clamped inside the window
+            // Position just above the cursor, clamped inside the window
             Vector2 mouse = Event.current.mousePosition;
-            float x = Mathf.Clamp(mouse.x, 0f, windowRect.width - size.x);
-            float y = Mathf.Clamp(mouse.y - size.y - 4f, 0f, windowRect.height - size.y);
-            GUI.Label(new Rect(x, y, size.x, size.y), text, _tooltipStyle);
+            float x = Mathf.Clamp(mouse.x, 0f, windowRect.width - boxW);
+            float y = Mathf.Clamp(mouse.y - boxH - 4f, 0f, windowRect.height - boxH);
+            GUI.Label(new Rect(x, y, boxW, boxH), text, _tooltipStyle);
         }
 
         private static Texture2D GetCrossTexture()
@@ -1158,6 +1195,29 @@ namespace HS2SandboxPlugin
             }
             return false;
         }
+
+        /// <summary>
+        /// Builds a multi-line summary of every enabled invalid command from the frame cache,
+        /// in the form "Row N (Label): message". Used as the tooltip on the disabled Start/Resume button.
+        /// </summary>
+        private string CollectValidationErrors()
+        {
+            if (_frameValidationErrors == null) return "";
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < _commands.Count && i < _frameValidationErrors.Length; i++)
+            {
+                if (!_commands[i].Enabled) continue;
+                string? error = _frameValidationErrors[i];
+                if (error != null)
+                    sb.AppendLine($"Row {i + 1} ({_commands[i].GetDisplayLabel()}): {error}");
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>Per-frame validation error per command index (null = valid). Rebuilt at start of DrawWindowContent.</summary>
+        private string?[]? _frameValidationErrors;
+        private bool _frameAnyInvalidEnabled;
+        private string _startButtonHoverTooltip = "";
 
         private void StartRecordMouse(TimelineCommand cmd)
         {

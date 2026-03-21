@@ -96,8 +96,9 @@ namespace HS2SandboxPlugin
             var list = _useListVariable
                 ? store.GetList(store.Interpolate(_listVariableName ?? "").Trim())
                 : new List<string>(_values);
-            if (list.Count == 0) return;
-            store.SetString(_variableName.Trim(), list[0]);
+            // Register the variable even when the list is empty (e.g. sourced from a design-time
+            // placeholder list), so downstream commands don't falsely report it as unknown.
+            store.SetString(_variableName.Trim(), list.Count > 0 ? list[0] : "");
         }
 
         public override string SerializePayload()
