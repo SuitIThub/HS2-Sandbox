@@ -44,7 +44,7 @@ namespace HS2SandboxPlugin
 
             if (string.IsNullOrEmpty(listName))
             {
-                HS2SandboxPlugin.Log.LogWarning("ListRemove: list name is empty.");
+                SandboxServices.Log.LogWarning("ListRemove: list name is empty.");
                 onComplete();
                 return;
             }
@@ -61,13 +61,13 @@ namespace HS2SandboxPlugin
                 if (idx >= 0 && idx < list.Count)
                     list.RemoveAt(idx);
                 else
-                    HS2SandboxPlugin.Log.LogWarning($"ListRemove: index {idx} out of range (list '{listName}' has {list.Count} elements).");
+                    SandboxServices.Log.LogWarning($"ListRemove: index {idx} out of range (list '{listName}' has {list.Count} elements).");
             }
             else // by value
             {
                 string value = ctx.Variables.Interpolate(_operand ?? "");
                 if (!list.Remove(value))
-                    HS2SandboxPlugin.Log.LogWarning($"ListRemove: value \"{value}\" not found in list '{listName}'.");
+                    SandboxServices.Log.LogWarning($"ListRemove: value \"{value}\" not found in list '{listName}'.");
             }
 
             ctx.Variables.SetList(listName, list);

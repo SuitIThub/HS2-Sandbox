@@ -79,7 +79,7 @@ namespace HS2SandboxPlugin
             EnsurePluginLookup();
             if (_videoExportPlugin == null || _recordVideoMethod == null || _getProgressMethod == null)
             {
-                HS2SandboxPlugin.Log.LogError("VideoExport plugin not available");
+                SandboxServices.Log.LogError("VideoExport plugin not available");
                 onComplete();
                 return;
             }
@@ -104,7 +104,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Failed to start recording: {ex.Message}");
+                SandboxServices.Log.LogError($"Failed to start recording: {ex.Message}");
                 _statusText = "Start failed";
                 onComplete();
                 yield break;
@@ -124,7 +124,7 @@ namespace HS2SandboxPlugin
                 }
                 catch (Exception ex)
                 {
-                    HS2SandboxPlugin.Log.LogWarning($"GetRecordingProgress failed: {ex.Message}");
+                    SandboxServices.Log.LogWarning($"GetRecordingProgress failed: {ex.Message}");
                 }
 
                 if (!string.IsNullOrEmpty(progressStr))
@@ -218,14 +218,14 @@ namespace HS2SandboxPlugin
                     _getProgressMethod = type.GetMethod("GetRecordingProgress", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
 
                     if (_recordVideoMethod == null)
-                        HS2SandboxPlugin.Log.LogWarning("VideoExport.RecordVideo method not found");
+                        SandboxServices.Log.LogWarning("VideoExport.RecordVideo method not found");
                     if (_getProgressMethod == null)
-                        HS2SandboxPlugin.Log.LogWarning("VideoExport.GetRecordingProgress method not found");
+                        SandboxServices.Log.LogWarning("VideoExport.GetRecordingProgress method not found");
                 }
             }
             else
             {
-                HS2SandboxPlugin.Log.LogInfo("VideoExport plugin not loaded");
+                SandboxServices.Log.LogInfo("VideoExport plugin not loaded");
             }
         }
 

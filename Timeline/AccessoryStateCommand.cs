@@ -103,13 +103,13 @@ namespace HS2SandboxPlugin
         {
             if (!AccessoryStateCache.IsFetched)
             {
-                HS2SandboxPlugin.Log.LogWarning("Accessory state cache not ready. Open the timeline window first so the UI is loaded.");
+                SandboxServices.Log.LogWarning("Accessory state cache not ready. Open the timeline window first so the UI is loaded.");
                 onComplete();
                 return;
             }
             bool ok = AccessoryStateCache.PressState(_slotKey, _stateIndex);
             if (!ok)
-                HS2SandboxPlugin.Log.LogWarning($"Accessory state: could not press slot '{_slotKey}' state {_stateIndex}.");
+                SandboxServices.Log.LogWarning($"Accessory state: could not press slot '{_slotKey}' state {_stateIndex}.");
             onComplete();
         }
 

@@ -12,6 +12,12 @@ namespace HS2SandboxPlugin
         public Action? RecordMouse { get; set; }
         /// <summary>When set by ActionTimeline, opens the list editor window. getValues: current list, setValues: apply edited list.</summary>
         public Action<Func<string[]>, Action<string[]>>? OpenListEditor { get; set; }
+        /// <summary>When set by ActionTimeline, opens the given subtimeline in the view (push to view stack).</summary>
+        public Action<SubTimelineCommand>? OpenSubTimeline { get; set; }
+        /// <summary>True when the command is being drawn inside a subtimeline view (view stack depth > 0).</summary>
+        public bool IsInSubTimeline { get; set; }
+        /// <summary>Called when the user confirms a subtimeline row rename — used to resolve template references by title.</summary>
+        public Action<SubTimelineCommand>? OnSubTimelineTitleCommitted { get; set; }
     }
 
     /// <summary>
@@ -37,7 +43,7 @@ namespace HS2SandboxPlugin
         /// The base HasInvalidConfiguration implementation automatically calls this.
         /// </summary>
         public virtual string? GetValidationError(TimelineVariableStore? vars) => null;
-        /// <summary>Apply this command's variable effects to the store (for simulating state at a given index). Only SetString/SetInteger/Calc override.</summary>
+        /// <summary>Apply this command's variable effects to the store (for simulating state at a given index). Set, Calc, Get, etc. override.</summary>
         public virtual void SimulateVariableEffects(TimelineVariableStore store) { }
         public abstract void DrawInlineConfig(InlineDrawContext ctx);
         public abstract void Execute(TimelineContext ctx, Action onComplete);
@@ -69,6 +75,18 @@ namespace HS2SandboxPlugin
     [Serializable]
     public class SavedTimelineWrapper
     {
+        public SavedTimelineEntry[] entries = Array.Empty<SavedTimelineEntry>();
+    }
+
+    /// <summary>
+    /// One subtimeline body in the root <c>subtimelines</c> array (flat storage; instances reference by <c>definitionId</c>).
+    /// </summary>
+    [Serializable]
+    public class SavedSubTimelineDefinition
+    {
+        public string id = "";
+        public string title = "";
+        public bool template;
         public SavedTimelineEntry[] entries = Array.Empty<SavedTimelineEntry>();
     }
 }

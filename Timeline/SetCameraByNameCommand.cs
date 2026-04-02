@@ -34,7 +34,7 @@ namespace HS2SandboxPlugin
             GameObject? dropdownGo = GameObject.Find(DropdownPath);
             if (dropdownGo == null)
             {
-                HS2SandboxPlugin.Log.LogWarning($"SetCameraByName: GameObject not found at path '{DropdownPath}'.");
+                SandboxServices.Log.LogWarning($"SetCameraByName: GameObject not found at path '{DropdownPath}'.");
                 onComplete();
                 return;
             }
@@ -42,7 +42,7 @@ namespace HS2SandboxPlugin
             Component[] components = dropdownGo.GetComponents<Component>();
             if (components.Length <= DropdownComponentIndex)
             {
-                HS2SandboxPlugin.Log.LogWarning($"SetCameraByName: Component index {DropdownComponentIndex} out of range (found {components.Length} components).");
+                SandboxServices.Log.LogWarning($"SetCameraByName: Component index {DropdownComponentIndex} out of range (found {components.Length} components).");
                 onComplete();
                 return;
             }
@@ -58,7 +58,7 @@ namespace HS2SandboxPlugin
 
             if (onValueChangedObj == null)
             {
-                HS2SandboxPlugin.Log.LogWarning("SetCameraByName: 'onValueChanged' property not found on dropdown component.");
+                SandboxServices.Log.LogWarning("SetCameraByName: 'onValueChanged' property not found on dropdown component.");
                 onComplete();
                 return;
             }
@@ -66,7 +66,7 @@ namespace HS2SandboxPlugin
             MethodInfo? invokeMethod = onValueChangedObj.GetType().GetMethod("Invoke", [typeof(int)]);
             if (invokeMethod == null)
             {
-                HS2SandboxPlugin.Log.LogWarning("SetCameraByName: 'Invoke(int)' method not found on onValueChanged.");
+                SandboxServices.Log.LogWarning("SetCameraByName: 'Invoke(int)' method not found on onValueChanged.");
                 onComplete();
                 return;
             }
@@ -77,7 +77,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogWarning($"SetCameraByName: Invoke failed. {ex.Message}");
+                SandboxServices.Log.LogWarning($"SetCameraByName: Invoke failed. {ex.Message}");
             }
 
             onComplete();
@@ -91,7 +91,7 @@ namespace HS2SandboxPlugin
 
             if (optionsObj is not IList options)
             {
-                HS2SandboxPlugin.Log.LogWarning("SetCameraByName: Could not retrieve options list from dropdown.");
+                SandboxServices.Log.LogWarning("SetCameraByName: Could not retrieve options list from dropdown.");
                 return 0;
             }
 

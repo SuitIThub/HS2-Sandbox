@@ -32,8 +32,12 @@ namespace HS2SandboxPlugin
 
         public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            if (vars != null && !vars.IsValidInterpolation(_checkpointName ?? ""))
+            if (vars == null) return null;
+            if (!vars.IsValidInterpolation(_checkpointName ?? ""))
                 return "Unknown variable in checkpoint name";
+            string resolved = vars.Interpolate(_checkpointName ?? "").Trim();
+            if (!string.IsNullOrEmpty(resolved) && !vars.HasCheckpoint(resolved))
+                return $"Checkpoint \"{resolved}\" not found";
             return null;
         }
 

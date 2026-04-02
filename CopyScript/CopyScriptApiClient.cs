@@ -39,7 +39,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Start tracking failed: {request.error}");
+                    SandboxServices.Log.LogError($"Start tracking failed: {request.error}");
                     callback(false);
                 }
             }
@@ -58,7 +58,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Stop tracking failed: {request.error}");
+                    SandboxServices.Log.LogError($"Stop tracking failed: {request.error}");
                     callback(false);
                 }
             }
@@ -77,7 +77,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get source path failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get source path failed: {request.error}");
                     callback(string.Empty);
                 }
             }
@@ -101,7 +101,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Set source path failed: {request.error}");
+                    SandboxServices.Log.LogError($"Set source path failed: {request.error}");
                     callback(false);
                 }
             }
@@ -120,7 +120,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get destination path failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get destination path failed: {request.error}");
                     callback(string.Empty);
                 }
             }
@@ -144,7 +144,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Set destination path failed: {request.error}");
+                    SandboxServices.Log.LogError($"Set destination path failed: {request.error}");
                     callback(false);
                 }
             }
@@ -163,7 +163,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get name pattern failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get name pattern failed: {request.error}");
                     callback(string.Empty);
                 }
             }
@@ -187,7 +187,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Set name pattern failed: {request.error}");
+                    SandboxServices.Log.LogError($"Set name pattern failed: {request.error}");
                     callback(false);
                 }
             }
@@ -215,13 +215,13 @@ namespace HS2SandboxPlugin
                     }
                     catch (Exception ex)
                     {
-                        HS2SandboxPlugin.Log.LogError($"Failed to parse tracked files response: {ex.Message}");
+                        SandboxServices.Log.LogError($"Failed to parse tracked files response: {ex.Message}");
                     }
                     callback(result);
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get tracked files failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get tracked files failed: {request.error}");
                     callback(null);
                 }
             }
@@ -253,13 +253,13 @@ namespace HS2SandboxPlugin
                     }
                     catch (Exception ex)
                     {
-                        HS2SandboxPlugin.Log.LogError($"Failed to parse tracked files response: {ex.Message}");
+                        SandboxServices.Log.LogError($"Failed to parse tracked files response: {ex.Message}");
                     }
                     callback(result);
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get tracked files failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get tracked files failed: {request.error}");
                     callback(null);
                 }
             }
@@ -339,13 +339,13 @@ namespace HS2SandboxPlugin
                     }
                     catch (Exception ex)
                     {
-                        HS2SandboxPlugin.Log.LogError($"Failed to parse issues response: {ex.Message}");
+                        SandboxServices.Log.LogError($"Failed to parse issues response: {ex.Message}");
                     }
                     callback(result);
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get issues failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get issues failed: {request.error}");
                     callback(null);
                 }
             }
@@ -366,7 +366,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Clear tracked files failed: {request.error}");
+                    SandboxServices.Log.LogError($"Clear tracked files failed: {request.error}");
                     callback(false);
                 }
             }
@@ -385,7 +385,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Copy and rename failed: {request.error}");
+                    SandboxServices.Log.LogError($"Copy and rename failed: {request.error}");
                     callback(false);
                 }
             }
@@ -408,14 +408,14 @@ namespace HS2SandboxPlugin
                     }
                     catch (Exception ex)
                     {
-                        HS2SandboxPlugin.Log.LogError($"Failed to parse rules response: {ex.Message}");
+                        SandboxServices.Log.LogError($"Failed to parse rules response: {ex.Message}");
                         result.rules = new CopyScriptRule[0];
                     }
                     callback(result);
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get rules failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get rules failed: {request.error}");
                     callback(null);
                 }
             }
@@ -604,7 +604,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Create rule failed: {request.error}");
+                    SandboxServices.Log.LogError($"Create rule failed: {request.error}");
                     callback(false);
                 }
             }
@@ -630,7 +630,7 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Update rule failed: {request.error}");
+                    SandboxServices.Log.LogError($"Update rule failed: {request.error}");
                     callback(false);
                 }
             }
@@ -651,13 +651,13 @@ namespace HS2SandboxPlugin
                     }
                     catch (Exception ex)
                     {
-                        HS2SandboxPlugin.Log.LogError($"Failed to parse status response: {ex.Message}");
+                        SandboxServices.Log.LogError($"Failed to parse status response: {ex.Message}");
                     }
                     callback(result);
                 }
                 else
                 {
-                    HS2SandboxPlugin.Log.LogError($"Get status failed: {request.error}");
+                    SandboxServices.Log.LogError($"Get status failed: {request.error}");
                     callback(null);
                 }
             }
@@ -690,7 +690,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Create directory failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Create directory failed: {ex.Message}");
                 return false;
             }
         }

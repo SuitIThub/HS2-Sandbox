@@ -54,7 +54,7 @@ namespace HS2SandboxPlugin
 
             if (string.IsNullOrEmpty(listName))
             {
-                HS2SandboxPlugin.Log.LogWarning("ListInsert: list name is empty.");
+                SandboxServices.Log.LogWarning("ListInsert: list name is empty.");
                 onComplete();
                 return;
             }

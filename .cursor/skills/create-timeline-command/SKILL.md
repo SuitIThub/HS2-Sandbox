@@ -131,9 +131,10 @@ Use a short label (≤8 chars fits well at `btnW = 74f`). Pick the right categor
 | 5 | Studio |
 | 6 | Simple Variables |
 | 7 | Advanced Variables |
-| 8 | Misc |
-| 9 | Video |
-| 10 | FashionLine |
+| 8 | Nav |
+| 9 | Misc |
+| 10 | Video |
+| 11 | FashionLine |
 
 Optionally register a row color in the `CommandColors` dictionary (same method, near the top of the class):
 

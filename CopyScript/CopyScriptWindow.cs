@@ -206,7 +206,7 @@ namespace HS2SandboxPlugin
                 {
                     gaveUpOnConnection = true;
                     statusMessage = "CopyScript API is not reachable. Please start the CopyScript manager and use 'Try reconnect'.";
-                    HS2SandboxPlugin.Log.LogError("Failed to connect to CopyScript API after 2 minutes. Manual reconnect required.");
+                    SandboxServices.Log.LogError("Failed to connect to CopyScript API after 2 minutes. Manual reconnect required.");
                 }
                 else if (Time.time - lastHealthCheckTime > HEALTHCHECK_INTERVAL)
                 {
@@ -249,13 +249,11 @@ namespace HS2SandboxPlugin
 
                 if (GUILayout.Button("Close", GUILayout.Height(22)))
                 {
-                    SetVisible(false);
-                    HS2SandboxPlugin._copyToolbarToggle.Value = false;
                     var sandboxGUI = UnityEngine.Object.FindObjectOfType<SandboxGUI>();
                     if (sandboxGUI != null)
-                    {
-                        sandboxGUI.SetSubwindowState("Window1", false);
-                    }
+                        sandboxGUI.SetWindowVisible(SandboxWindowKeys.CopyScript, false);
+                    else
+                        SetVisible(false);
                 }
 
                 GUILayout.EndVertical();
@@ -450,12 +448,11 @@ namespace HS2SandboxPlugin
 
             if (GUILayout.Button("Close", GUILayout.Height(22)))
             {
-                SetVisible(false);
                 var sandboxGUI = FindObjectOfType<SandboxGUI>();
                 if (sandboxGUI != null)
-                {
-                    sandboxGUI.SetSubwindowState("Window1", false);
-                }
+                    sandboxGUI.SetWindowVisible(SandboxWindowKeys.CopyScript, false);
+                else
+                    SetVisible(false);
             }
 
             GUILayout.EndVertical();
@@ -842,7 +839,7 @@ namespace HS2SandboxPlugin
                 if (!File.Exists(scriptPath))
                 {
                     statusMessage = "CopyScript start file not found.";
-                    HS2SandboxPlugin.Log.LogError($"CopyScript start file not found at path: {scriptPath}");
+                    SandboxServices.Log.LogError($"CopyScript start file not found at path: {scriptPath}");
                     return;
                 }
 
@@ -863,7 +860,7 @@ namespace HS2SandboxPlugin
             catch (Exception ex)
             {
                 statusMessage = "Failed to start CopyScript script.";
-                HS2SandboxPlugin.Log.LogError($"Failed to start CopyScript script: {ex}");
+                SandboxServices.Log.LogError($"Failed to start CopyScript script: {ex}");
             }
         }
 

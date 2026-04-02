@@ -42,7 +42,7 @@ namespace HS2SandboxPlugin
 
             if (string.IsNullOrEmpty(dictName))
             {
-                HS2SandboxPlugin.Log.LogWarning("DictSet: dict name is empty.");
+                SandboxServices.Log.LogWarning("DictSet: dict name is empty.");
                 onComplete();
                 return;
             }

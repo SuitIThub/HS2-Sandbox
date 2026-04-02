@@ -35,7 +35,7 @@ namespace HS2SandboxPlugin
             object? controller = GetFashionLineController();
             if (controller == null)
             {
-                HS2SandboxPlugin.Log.LogWarning("Fashion Line plugin not found or FashionLineController not in scene. Install/enable prolo.fashionline.");
+                SandboxServices.Log.LogWarning("Fashion Line plugin not found or FashionLineController not in scene. Install/enable prolo.fashionline.");
                 onComplete();
                 return;
             }
@@ -46,7 +46,7 @@ namespace HS2SandboxPlugin
                 null);
             if (method == null)
             {
-                HS2SandboxPlugin.Log.LogWarning($"FashionLineController.{MethodName} not found.");
+                SandboxServices.Log.LogWarning($"FashionLineController.{MethodName} not found.");
                 onComplete();
                 return;
             }
@@ -57,7 +57,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogWarning($"Outfit by name ({nameToUse}): {ex.Message}");
+                SandboxServices.Log.LogWarning($"Outfit by name ({nameToUse}): {ex.Message}");
             }
             onComplete();
         }

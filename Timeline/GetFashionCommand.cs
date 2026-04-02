@@ -31,7 +31,7 @@ namespace HS2SandboxPlugin
             string targetVar = (_variableName ?? "").Trim();
             if (string.IsNullOrEmpty(targetVar))
             {
-                HS2SandboxPlugin.Log.LogWarning("GetFashion: variable name is empty.");
+                SandboxServices.Log.LogWarning("GetFashion: variable name is empty.");
                 onComplete();
                 return;
             }
@@ -39,7 +39,7 @@ namespace HS2SandboxPlugin
             object? controller = GetFashionLineController();
             if (controller == null)
             {
-                HS2SandboxPlugin.Log.LogWarning("GetFashion: FashionLine plugin not found or FashionLineController not in scene. Install/enable prolo.fashionline.");
+                SandboxServices.Log.LogWarning("GetFashion: FashionLine plugin not found or FashionLineController not in scene. Install/enable prolo.fashionline.");
                 onComplete();
                 return;
             }
@@ -48,7 +48,7 @@ namespace HS2SandboxPlugin
                 BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
             if (method == null)
             {
-                HS2SandboxPlugin.Log.LogWarning($"GetFashion: FashionLineController.{MethodName}() not found.");
+                SandboxServices.Log.LogWarning($"GetFashion: FashionLineController.{MethodName}() not found.");
                 onComplete();
                 return;
             }
@@ -60,7 +60,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogWarning($"GetFashion: {MethodName}() threw: {ex.Message}");
+                SandboxServices.Log.LogWarning($"GetFashion: {MethodName}() threw: {ex.Message}");
             }
 
             ctx.Variables.SetList(targetVar, names ?? new List<string>());

@@ -4,6 +4,12 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2SandboxPlugin", "HS2SandboxPlugin.csproj", "{BB629464-3672-2AC7-C653-84126D9717A0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.CopyScript", "Modules\\CopyScript\\HS2Sandbox.CopyScript.csproj", "{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.Timeline", "Modules\\Timeline\\HS2Sandbox.Timeline.csproj", "{6E9D0BBA-59B3-41E4-AE77-A7F9A5D23A44}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.SearchBarManager", "Modules\\SearchBarManager\\HS2Sandbox.SearchBarManager.csproj", "{37B6D0AF-48D1-4E4D-9A3D-1C29A4A7E3D9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +20,18 @@ Global
 		{BB629464-3672-2AC7-C653-84126D9717A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BB629464-3672-2AC7-C653-84126D9717A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BB629464-3672-2AC7-C653-84126D9717A0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E9D0BBA-59B3-41E4-AE77-A7F9A5D23A44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E9D0BBA-59B3-41E4-AE77-A7F9A5D23A44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E9D0BBA-59B3-41E4-AE77-A7F9A5D23A44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E9D0BBA-59B3-41E4-AE77-A7F9A5D23A44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37B6D0AF-48D1-4E4D-9A3D-1C29A4A7E3D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37B6D0AF-48D1-4E4D-9A3D-1C29A4A7E3D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37B6D0AF-48D1-4E4D-9A3D-1C29A4A7E3D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37B6D0AF-48D1-4E4D-9A3D-1C29A4A7E3D9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

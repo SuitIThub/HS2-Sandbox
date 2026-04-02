@@ -42,7 +42,7 @@ namespace HS2SandboxPlugin
                 try { Directory.CreateDirectory(path); }
                 catch (Exception ex)
                 {
-                    HS2SandboxPlugin.Log.LogWarning($"Set destination path: could not create directory: {ex.Message}");
+                    SandboxServices.Log.LogWarning($"Set destination path: could not create directory: {ex.Message}");
                 }
             }
             bool success = false;
@@ -50,7 +50,7 @@ namespace HS2SandboxPlugin
             if (success)
             {
                 yield return new WaitForSeconds(0.5f);
-                UnityEngine.Object.FindObjectOfType<CopyScript>()?.RefreshFromTimeline();
+                CopyScriptInterop.TryRefreshCopyScriptWindow();
                 onComplete();
             }
             else

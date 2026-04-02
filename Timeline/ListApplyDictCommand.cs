@@ -45,19 +45,19 @@ namespace HS2SandboxPlugin
 
             if (string.IsNullOrEmpty(sourceList))
             {
-                HS2SandboxPlugin.Log.LogWarning("ListApplyDict: source list name is empty.");
+                SandboxServices.Log.LogWarning("ListApplyDict: source list name is empty.");
                 onComplete();
                 return;
             }
             if (string.IsNullOrEmpty(dictName))
             {
-                HS2SandboxPlugin.Log.LogWarning("ListApplyDict: dict name is empty.");
+                SandboxServices.Log.LogWarning("ListApplyDict: dict name is empty.");
                 onComplete();
                 return;
             }
             if (string.IsNullOrEmpty(targetList))
             {
-                HS2SandboxPlugin.Log.LogWarning("ListApplyDict: target list name is empty.");
+                SandboxServices.Log.LogWarning("ListApplyDict: target list name is empty.");
                 onComplete();
                 return;
             }

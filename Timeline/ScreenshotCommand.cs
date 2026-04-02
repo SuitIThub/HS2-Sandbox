@@ -1,115 +1,145 @@
 using System;
 using System.Collections;
-using System.Linq;
-using System.Reflection;
 using UnityEngine;
 
 namespace HS2SandboxPlugin
 {
     /// <summary>
     /// Triggers a screenshot via the BepInEx ScreenshotManager plugin (GUID: com.bepis.bepinex.screenshotmanager).
-    /// Calls ScreenshotManager.TakeRenderScreenshot(in3D: false) which performs capture and full handling.
+    /// When the plugin exposes <c>TryConsumeLastCompletedScreenshot</c>, the command waits until that reports a finished
+    /// disk write, or until the user clicks Continue on the row (timeline proceeds without plugin confirmation).
+    /// With Alt path, the save folder is restored after waiting ends (or after Continue).
     /// </summary>
     public class ScreenshotCommand : TimelineCommand
     {
         public override string TypeId => "screenshot";
 
-        private static Type? _screenshotManagerType;
-        private static MethodInfo? _takeRenderScreenshotMethod;
-        private static MethodInfo? _findObjectOfTypeMethod;
-
-        private static void ResolveScreenshotManager()
-        {
-            if (_takeRenderScreenshotMethod != null) return;
-
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                Type[] types;
-                try
-                {
-                    types = asm.GetTypes();
-                }
-                catch (ReflectionTypeLoadException)
-                {
-                    continue;
-                }
-
-                foreach (var t in types)
-                {
-                    if (t.Name != "ScreenshotManager") continue;
-                    var method = t.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public | BindingFlags.Static)
-                        .FirstOrDefault(m => m.Name == "TakeRenderScreenshot"
-                            && m.GetParameters().Length == 1
-                            && m.GetParameters()[0].ParameterType == typeof(bool)
-                            && typeof(IEnumerator).IsAssignableFrom(m.ReturnType));
-                    if (method != null)
-                    {
-                        _screenshotManagerType = t;
-                        _takeRenderScreenshotMethod = method;
-                        _findObjectOfTypeMethod = typeof(UnityEngine.Object).GetMethod("FindObjectOfType", new[] { typeof(Type) });
-                        return;
-                    }
-                }
-            }
-        }
+        private bool _useAltPath;
+        private bool _skipScreenshotDiskCompletionWait;
 
         public override string GetDisplayLabel() => "Screenshot";
 
         public override void DrawInlineConfig(InlineDrawContext ctx)
         {
-            ResolveScreenshotManager();
-            GUILayout.Label(" ", GUILayout.ExpandWidth(true));
+            GUILayout.BeginHorizontal();
+            _useAltPath = GUILayout.Toggle(_useAltPath, "Alt path", GUILayout.Width(72), GUILayout.Height(18));
+            GUILayout.Label($"[{ScreenshotPluginInterop.AltPathVariable.Name}]", GUILayout.ExpandWidth(false));
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
         }
 
         public override string? GetValidationError(TimelineVariableStore? vars)
         {
-            ResolveScreenshotManager();
-            if (_takeRenderScreenshotMethod == null)
+            if (!ScreenshotPluginInterop.IsTakeRenderScreenshotAvailable)
                 return "ScreenshotManager plugin not loaded";
+            if (_useAltPath && !ScreenshotPluginInterop.IsStaticApiAvailable)
+                return "Alt path needs Screenshot plugin path API";
+            if (_useAltPath && vars != null && !vars.HasString(ScreenshotPluginInterop.AltPathVariable.Name))
+                return $"Set [{ScreenshotPluginInterop.AltPathVariable.Name}] first (SS alt path var)";
             return null;
-        }
-
-        private static IEnumerator RunScreenshotThenComplete(IEnumerator screenshotRoutine, Action onComplete)
-        {
-            yield return screenshotRoutine;
-            onComplete();
         }
 
         public override void Execute(TimelineContext ctx, Action onComplete)
         {
-            ResolveScreenshotManager();
-            if (_takeRenderScreenshotMethod == null || _screenshotManagerType == null || _findObjectOfTypeMethod == null)
+            if (!ScreenshotPluginInterop.IsTakeRenderScreenshotAvailable)
             {
-                HS2SandboxPlugin.Log.LogWarning("ScreenshotManager plugin not loaded (GUID: com.bepis.bepinex.screenshotmanager). Skipping screenshot.");
+                SandboxServices.Log.LogWarning("ScreenshotManager plugin not loaded (GUID: com.bepis.bepinex.screenshotmanager). Skipping screenshot.");
                 onComplete();
                 return;
             }
 
-            try
-            {
-                var instance = _findObjectOfTypeMethod.Invoke(null, new object?[] { _screenshotManagerType });
-                if (instance == null)
-                {
-                    HS2SandboxPlugin.Log.LogWarning("ScreenshotManager instance not found in scene. Skipping screenshot.");
-                    onComplete();
-                    return;
-                }
-
-                var enumerator = _takeRenderScreenshotMethod.Invoke(instance, new object?[] { false });
-                if (enumerator is IEnumerator screenshotRoutine)
-                    ctx.Runner.StartCoroutine(RunScreenshotThenComplete(screenshotRoutine, onComplete));
-                else
-                    onComplete();
-            }
-            catch (Exception ex)
-            {
-                HS2SandboxPlugin.Log.LogError($"ScreenshotManager.TakeRenderScreenshot failed: {ex.Message}");
-                onComplete();
-            }
+            ctx.Runner.StartCoroutine(ExecuteScreenshotCoroutine(ctx, onComplete));
         }
 
-        public override string SerializePayload() => "";
+        private IEnumerator ExecuteScreenshotCoroutine(TimelineContext ctx, Action onComplete)
+        {
+            bool swapped = false;
+            string? restorePath = null;
 
-        public override void DeserializePayload(string payload) { }
+            if (_useAltPath && ScreenshotPluginInterop.IsStaticApiAvailable)
+            {
+                string alt = ctx.Variables.GetString(ScreenshotPluginInterop.AltPathVariable.Name).Trim();
+                if (string.IsNullOrEmpty(alt))
+                {
+                    SandboxServices.Log.LogWarning(
+                        $"Screenshot: Alt path enabled but [{ScreenshotPluginInterop.AltPathVariable.Name}] is empty.");
+                }
+                else
+                {
+                    restorePath = ScreenshotPluginInterop.TryGetCurrentScreenshotSaveRelativePath();
+                    if (restorePath == null)
+                    {
+                        SandboxServices.Log.LogWarning("Screenshot: Could not read current save path; alt path not applied.");
+                    }
+                    else if (ScreenshotPluginInterop.TrySetScreenshotSaveRelativePath(alt))
+                    {
+                        swapped = true;
+                    }
+                    else
+                    {
+                        SandboxServices.Log.LogWarning($"Screenshot: SetScreenshotSaveRelativePath failed for alt path \"{alt}\".");
+                    }
+                }
+            }
+
+            IEnumerator? routine = ScreenshotPluginInterop.TryCreateTakeRenderScreenshotRoutine();
+            bool ranCapture = false;
+            if (routine == null)
+            {
+                SandboxServices.Log.LogWarning("ScreenshotManager instance not found in scene. Skipping screenshot.");
+            }
+            else
+            {
+                if (ScreenshotPluginInterop.IsScreenshotCompletionApiAvailable)
+                    ScreenshotPluginInterop.DiscardPendingScreenshotCompletion();
+                yield return routine;
+                ranCapture = true;
+            }
+
+            if (ranCapture && ScreenshotPluginInterop.IsScreenshotCompletionApiAvailable)
+            {
+                yield return null;
+                _skipScreenshotDiskCompletionWait = false;
+                ctx.PendingScreenshotAdvanceCallback = () => { _skipScreenshotDiskCompletionWait = true; };
+                try
+                {
+                    while (!ScreenshotPluginInterop.TryConsumeLastCompletedScreenshot(out _))
+                    {
+                        if (_skipScreenshotDiskCompletionWait)
+                        {
+                            SandboxServices.Log.LogWarning(
+                                "Screenshot: Continuing without plugin disk completion (Continue clicked on row).");
+                            break;
+                        }
+
+                        yield return null;
+                    }
+                }
+                finally
+                {
+                    ctx.PendingScreenshotAdvanceCallback = null;
+                }
+            }
+
+            if (swapped && restorePath != null)
+            {
+                if (!ScreenshotPluginInterop.TrySetScreenshotSaveRelativePath(restorePath))
+                    SandboxServices.Log.LogWarning("Screenshot: Failed to restore previous save path.");
+            }
+
+            onComplete();
+        }
+
+        public override string SerializePayload()
+        {
+            return _useAltPath ? "1" : "0";
+        }
+
+        public override void DeserializePayload(string payload)
+        {
+            _useAltPath = false;
+            if (string.IsNullOrEmpty(payload)) return;
+            _useAltPath = payload.Trim() == "1";
+        }
     }
 }

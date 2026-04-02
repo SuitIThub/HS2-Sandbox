@@ -29,12 +29,23 @@ namespace HS2SandboxPlugin
         {
             Instance = this;
             Log = Logger;
+            SandboxServices.Initialize(Logger, Config);
+            initializeDefaultConfigs();
             Log.LogInfo($"{PluginName} v{PluginVersion} loaded");
+        }
+
+        private void initializeDefaultConfigs() {
+            SandboxConfig.AdditionalSearchBarParentPaths = Config.Bind(
+                "Search Bars",
+                "Additional Parent Paths",
+                "",
+                "Optional extra GameObject paths, one per line. These are added on top of the hard-coded search bar target paths.");
         }
 
         private void Start()
         {
             InitializeSandbox();
+            InitializeSearchBars();
             InitializeToolbarButtons();
         }
 
@@ -42,12 +53,27 @@ namespace HS2SandboxPlugin
         {
             try
             {
-                gameObject.AddComponent<SandboxGUI>();
+                var gui = gameObject.AddComponent<SandboxGUI>();
+                gui.RegisterWindow(SandboxWindowKeys.CopyScript, gameObject.AddComponent<CopyScript>(), initialVisible: false);
+                gui.RegisterWindow(SandboxWindowKeys.Timeline, gameObject.AddComponent<ActionTimeline>(), initialVisible: false);
                 Log.LogInfo("Sandbox GUI initialized");
             }
             catch (Exception ex)
             {
                 Log.LogError($"Error initializing sandbox: {ex.Message}");
+            }
+        }
+
+        private void InitializeSearchBars()
+        {
+            try
+            {
+                gameObject.AddComponent<MultiPathSearchBarManager>();
+                Log.LogInfo("Search bar manager initialized");
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"Error initializing search bar manager: {ex.Message}");
             }
         }
 
@@ -81,6 +107,15 @@ namespace HS2SandboxPlugin
                     });
 
                 _timelineToolbarToggle.Value = gui.IsTimelineVisible;
+
+                // Keep toolbar toggles in sync when windows close themselves.
+                gui.WindowVisibilityChanged += (key, visible) =>
+                {
+                    if (key == SandboxWindowKeys.CopyScript && _copyToolbarToggle != null)
+                        _copyToolbarToggle.Value = visible;
+                    if (key == SandboxWindowKeys.Timeline && _timelineToolbarToggle != null)
+                        _timelineToolbarToggle.Value = visible;
+                };
             }
             catch (Exception ex)
             {

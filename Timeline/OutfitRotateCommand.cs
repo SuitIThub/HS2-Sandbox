@@ -40,7 +40,7 @@ namespace HS2SandboxPlugin
             object? controller = GetFashionLineController();
             if (controller == null)
             {
-                HS2SandboxPlugin.Log.LogWarning("Fashion Line plugin not found or FashionLineController not in scene. Install/enable prolo.fashionline.");
+                SandboxServices.Log.LogWarning("Fashion Line plugin not found or FashionLineController not in scene. Install/enable prolo.fashionline.");
                 onComplete();
                 return;
             }
@@ -48,7 +48,7 @@ namespace HS2SandboxPlugin
             MethodInfo? method = controller.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
             if (method == null)
             {
-                HS2SandboxPlugin.Log.LogWarning($"FashionLineController.{methodName} not found.");
+                SandboxServices.Log.LogWarning($"FashionLineController.{methodName} not found.");
                 onComplete();
                 return;
             }
@@ -58,7 +58,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogWarning($"Outfit rotate ({methodName}): {ex.Message}");
+                SandboxServices.Log.LogWarning($"Outfit rotate ({methodName}): {ex.Message}");
             }
             onComplete();
         }

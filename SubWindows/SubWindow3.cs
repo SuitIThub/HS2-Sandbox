@@ -25,12 +25,8 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button("Close"))
             {
                 SetVisible(false);
-                // Update parent checkbox state
                 var sandboxGUI = FindObjectOfType<SandboxGUI>();
-                if (sandboxGUI != null)
-                {
-                    sandboxGUI.SetSubwindowState("Window3", false);
-                }
+                sandboxGUI?.SetWindowVisible("Window3", false);
             }
 
             GUILayout.EndVertical();

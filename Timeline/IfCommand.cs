@@ -174,6 +174,9 @@ namespace HS2SandboxPlugin
                 return "Unknown variable in right operand";
             if (!vars.IsValidInterpolation(_checkpointName ?? ""))
                 return "Unknown variable in jump target";
+            string resolved = vars.Interpolate(_checkpointName ?? "").Trim();
+            if (!string.IsNullOrEmpty(resolved) && !vars.HasCheckpoint(resolved))
+                return $"Checkpoint \"{resolved}\" not found";
             return null;
         }
     }

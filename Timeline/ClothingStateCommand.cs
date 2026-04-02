@@ -95,7 +95,7 @@ namespace HS2SandboxPlugin
         {
             if (!ClothingStateCache.IsFetched)
             {
-                HS2SandboxPlugin.Log.LogWarning("Clothing state cache not ready. Open the timeline window first so the UI is loaded.");
+                SandboxServices.Log.LogWarning("Clothing state cache not ready. Open the timeline window first so the UI is loaded.");
                 onComplete();
                 return;
             }
@@ -105,7 +105,7 @@ namespace HS2SandboxPlugin
                 indexToPress = 1; // Off in 3-state terms = index 1 for 2-state parts
             bool ok = ClothingStateCache.PressState(_partKey, indexToPress);
             if (!ok)
-                HS2SandboxPlugin.Log.LogWarning($"Clothing state: could not press part '{_partKey}' state {_stateIndex}.");
+                SandboxServices.Log.LogWarning($"Clothing state: could not press part '{_partKey}' state {_stateIndex}.");
             onComplete();
         }
 

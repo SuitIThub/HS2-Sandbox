@@ -106,6 +106,9 @@ namespace HS2SandboxPlugin
             if (!vars.IsValidInterpolation(_checkpointName ?? "")) return "Unknown variable in target checkpoint";
             if (!string.IsNullOrWhiteSpace(_repeatCountText) && !vars.IsValidIntOperand(_repeatCountText))
                 return "Invalid repeat count";
+            string resolved = vars.Interpolate(_checkpointName ?? "").Trim();
+            if (!string.IsNullOrEmpty(resolved) && !vars.HasCheckpoint(resolved))
+                return $"Checkpoint \"{resolved}\" not found";
             return null;
         }
     }

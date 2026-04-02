@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>HS2Sandbox.SearchBarManager</AssemblyName>
+    <RootNamespace>HS2SandboxPlugin</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Shared\**\*.cs" />
+    <Compile Include="..\..\SearchBarManager\MultiPathSearchBarManager.cs" />
+    <Compile Include="SearchBarManagerModulePlugin.cs" />
+  </ItemGroup>
+</Project>
+

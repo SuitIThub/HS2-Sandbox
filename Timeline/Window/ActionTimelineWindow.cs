@@ -9,14 +9,28 @@ using UnityEngine;
 
 namespace HS2SandboxPlugin
 {
-    public class ActionTimeline : SubWindow
+    public class ActionTimeline : SubWindow, IOverlayDrawable
     {
         private readonly List<TimelineCommand> _commands = new();
+        // View stack for subtimeline navigation — _activeCommands is what the UI shows
+        private List<TimelineCommand> _activeCommands = null!; // bound in Awake to root list; sub-view replaces with SubCommands
+        private readonly Stack<(List<TimelineCommand> cmds, string title, SubTimelineCommand? owningSub)> _viewStack = new();
+        /// <summary>Subtimeline row whose inner list is currently shown (null at root). Synced when opening/closing sub views.</summary>
+        private SubTimelineCommand? _currentSubTimelineOwner;
+        /// <summary>Definition id → marked as reusable template (name-based instance linking).</summary>
+        private readonly Dictionary<string, bool> _subTimelineTemplateFlags = new Dictionary<string, bool>(StringComparer.Ordinal);
+        private string _activeTitle = "";
+        /// <summary>Queued from IMGUI during row draw — applied at end of DrawWindowContent so _activeCommands/_frameValidationErrors are not swapped mid-loop.</summary>
+        private SubTimelineCommand? _pendingOpenSubTimeline;
+        private bool _pendingCloseSubTimeline;
+        // Running stack: each level pushed during RunCommandList (cmds=list, idx=current index in that list).
+        // Uses a class so the index can be mutated in-place without popping/repushing.
+        private sealed class RunFrame { public List<TimelineCommand> Cmds = null!; public int Idx; }
+        private readonly List<RunFrame> _runningStack = new();
         private Vector2 _scrollPosition;
         private bool _isRunning;
         private bool _stopRequested;
         private bool _isPaused;
-        private int _runningIndex = -1;
         private TimelineContext? _runContext;
         private bool _showMousePositions;
         private bool _showVariablesWindow;
@@ -25,9 +39,10 @@ namespace HS2SandboxPlugin
         private const int VariablesWindowID = 2004;
         /// <summary>Persistent variables when timeline is not running. Seeded into run when timeline starts.</summary>
         private readonly TimelineVariableStore _designTimeVariables = new TimelineVariableStore();
-        private int _newVarType; // 0=string, 1=int, 2=list, 3=dict
+        private int _newVarType; // 0=string, 1=int, 2=bool, 3=list, 4=dict
         private string _newVarName = "";
         private string _newVarValue = "";
+        private bool _newVarBool;
         private readonly List<string> _newVarList = new List<string>();
         private readonly Dictionary<string, string> _newVarDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private bool _listEditorOpen;
@@ -47,9 +62,10 @@ namespace HS2SandboxPlugin
         private Rect _persistentVarsWindowRect;
         private Vector2 _persistentVarsScrollPosition;
         private const int PersistentVarsWindowID = 2008;
-        private int _newPVarType; // 0=string, 1=int, 2=list, 3=dict
+        private int _newPVarType; // 0=string, 1=int, 2=bool, 3=list, 4=dict
         private string _newPVarName = "";
         private string _newPVarValue = "";
+        private bool _newPVarBool;
         private readonly List<string> _newPVarList = new List<string>();
         private readonly Dictionary<string, string> _newPVarDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private bool _persistentVarsDirty;
@@ -62,7 +78,7 @@ namespace HS2SandboxPlugin
         private float _pauseStartTime; // realtimeSinceStartup when current pause started (0 if not paused)
         private float _lastRunElapsedSeconds = -1f; // last run duration to show after stop (-1 = none)
         private int _startFromIndex; // when starting, begin at this command index
-        private static readonly string[] CategoryNames = { "CopyScript Controls", "CopyScript Checks", "CopyScript Config", "Input", "VNGE", "Studio", "Simple Variables", "Advanced Variables", "Misc", "Video", "FashionLine" };
+        private static readonly string[] CategoryNames = { "CopyScript Controls", "CopyScript Checks", "CopyScript Config", "Input", "VNGE", "Studio", "Screenshot", "Simple Variables", "Advanced Variables", "Nav", "Misc", "Video", "FashionLine" };
         private int _selectedCategory;
         private bool _categoryWindowVisible;
         private Rect _categoryWindowRect;
@@ -105,6 +121,10 @@ namespace HS2SandboxPlugin
             ["clothing_state"] = new Color(0.4f, 0.75f, 0.7f),
             ["accessory_state"] = new Color(0.45f, 0.78f, 0.72f),
             ["screenshot"] = new Color(0.42f, 0.7f, 0.72f),
+            ["screenshot_alpha"] = new Color(0.4f, 0.68f, 0.74f),
+            ["screenshot_resolution"] = new Color(0.4f, 0.68f, 0.74f),
+            ["screenshot_save_path"] = new Color(0.4f, 0.68f, 0.74f),
+            ["screenshot_alt_path_var"] = new Color(0.4f, 0.68f, 0.74f),
             ["set_camera_by_name"] = new Color(0.3f, 0.88f, 0.9f),
             ["select_object_by_name"] = new Color(0.32f, 0.84f, 0.88f),
             // FashionLine (mint/spring green)
@@ -112,9 +132,11 @@ namespace HS2SandboxPlugin
             ["outfit_by_name"] = new Color(0.28f, 0.86f, 0.52f),
             ["get_fashion"] = new Color(0.25f, 0.92f, 0.6f),
             // Variables (slate / blue-gray)
+            ["set"] = new Color(0.5f, 0.6f, 0.85f),
             ["set_string"] = new Color(0.5f, 0.6f, 0.85f),
             ["str_replace"] = new Color(0.52f, 0.63f, 0.87f),
             ["set_integer"] = new Color(0.45f, 0.58f, 0.88f),
+            ["get"] = new Color(0.42f, 0.55f, 0.8f),
             ["set_list"] = new Color(0.48f, 0.58f, 0.82f),
             ["calc"] = new Color(0.55f, 0.62f, 0.9f),
             ["if"] = new Color(0.52f, 0.58f, 0.88f),
@@ -131,6 +153,9 @@ namespace HS2SandboxPlugin
             ["pause"] = new Color(0.9f, 0.58f, 0.32f),
             ["sound"] = new Color(0.86f, 0.52f, 0.4f),
             ["label"] = Color.black,
+            ["sub_timeline"] = new Color(0.25f, 0.38f, 0.65f),
+            ["sub_timeline_param"] = new Color(0.22f, 0.42f, 0.68f),
+            ["return"] = new Color(0.75f, 0.35f, 0.25f),
             // Video (cinematic red/burgundy)
             ["video_record"] = new Color(0.8f, 0.2f, 0.3f),
         };
@@ -141,7 +166,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>Representative typeId per category for category color (same order as CategoryNames).</summary>
-        private static readonly string[] CategoryRepresentativeTypeIds = { "start_tracking", "wait_screenshot", "set_source_path", "simulate_key", "vnge_scene_next", "pose_library", "set_string", "set_list", "checkpoint", "video_record", "outfit_rotate" };
+        private static readonly string[] CategoryRepresentativeTypeIds = { "start_tracking", "wait_screenshot", "set_source_path", "simulate_key", "vnge_scene_next", "pose_library", "screenshot", "set", "set_list", "checkpoint", "pause", "video_record", "outfit_rotate" };
 
         private static Color GetCategoryColor(int categoryIndex)
         {
@@ -194,6 +219,12 @@ namespace HS2SandboxPlugin
         ];
         private string _persistPath = "";
 
+        private void Awake()
+        {
+            // Must run before Start: if Start throws (e.g. API client), we still need a valid list for DrawWindow/Update.
+            _activeCommands = _commands;
+        }
+
         protected override void Start()
         {
             base.Start();
@@ -203,6 +234,7 @@ namespace HS2SandboxPlugin
             _persistPath = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "timeline.json");
             _persistVarsPath = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "persistent_vars.json");
             _apiClient = new CopyScriptApiClient();
+            _activeCommands ??= _commands;
             LoadTimeline();
             LoadPersistentVars();
         }
@@ -213,14 +245,100 @@ namespace HS2SandboxPlugin
         private const float WindowMaxHeight = 1300f;
 
         // Layout heights (must match DrawWindowContent order: toolbar → space → control row → space → scroll → space → close)
-        private const float ToolbarRowHeight = 32f;
+        /// <summary>Toolbar row: matches <c>btnH</c> (28) — horizontal row height is max of children.</summary>
+        private const float ToolbarRowHeight = 28f;
         private const float SpaceAfterToolbar = 6f;
         private const float ControlRowHeight = 26f;
         private const float SpaceAfterControlRow = 6f;
         private const float SpaceBeforeClose = 6f;
-        private const float CloseButtonHeight = 72f;
-        /// <summary>Height of everything except the scroll list (toolbar + control row + space before close + close button). Used for scroll height and desired window height.</summary>
+        /// <summary>Must match <c>GUILayout.Button("Close", GUILayout.Height(24))</c>.</summary>
+        private const float CloseButtonHeight = 24f;
+        /// <summary>Extra px added to auto-sized outer height so IMGUI/scroll rounding doesn’t clip the last row.</summary>
+        private const float LayoutHeightSafetyMargin = 8f;
+        /// <summary>Height of everything except the scroll list (toolbar…close + gaps). Not window title/border.</summary>
         private const float LayoutFixedHeight = ToolbarRowHeight + SpaceAfterToolbar + ControlRowHeight + SpaceAfterControlRow + SpaceBeforeClose + CloseButtonHeight;
+        /// <summary>Cached window chrome (read in DrawWindow). <c>windowRect.height</c> is outer; client = outer − top − bottom.</summary>
+        private float _windowTopInsetCached = 20f;
+        private float _windowBottomInsetCached = 8f;
+        private float _verticalGroupPadCached;
+
+        /// <summary>Top + bottom insets from <c>GUI.skin.window</c> only (title bar + bottom border/padding).</summary>
+        private static void GetWindowVerticalChrome(out float top, out float bottom)
+        {
+            top = 20f;
+            bottom = 8f;
+            try
+            {
+                GUIStyle? s = GUI.skin?.window;
+                if (s != null)
+                {
+                    top = Mathf.Clamp(s.border.top + s.padding.top, 14f, 40f);
+                    bottom = Mathf.Clamp(s.border.bottom + s.padding.bottom, 4f, 28f);
+                }
+            }
+            catch { /* ignored */ }
+        }
+
+        /// <summary><c>GUILayout.BeginVertical</c> skin padding (top+bottom). Older Unity has no <c>GUISkin.verticalGroup</c>.</summary>
+        private static float GetVerticalGroupVerticalPadding()
+        {
+            try
+            {
+                GUIStyle? vg = GUI.skin?.FindStyle("VerticalGroup");
+                if (vg != null)
+                    return vg.padding.top + vg.padding.bottom;
+            }
+            catch { /* ignored */ }
+            return 0f;
+        }
+
+        /// <summary>
+        /// IMGUI inserts this much space between each vertical child. HS2’s Unity build does not expose
+        /// <c>GUISkin.verticalSpacing</c> on the referenced assemblies; default skin is ~3–4px — must match real layout.
+        /// </summary>
+        private const float ImGuiVerticalChildSpacing = 4f;
+
+        private static float GetVerticalGroupSpacing() => ImGuiVerticalChildSpacing;
+
+        /// <summary>Extra vertical padding inside the scroll view client (skin-dependent).</summary>
+        private static float GetScrollViewPaddingVertical()
+        {
+            try
+            {
+                GUIStyle? st = GUI.skin?.FindStyle("scrollView");
+                if (st != null)
+                    return st.padding.top + st.padding.bottom;
+            }
+            catch { /* ignored */ }
+            return 0f;
+        }
+
+        /// <summary>
+        /// Total height of the scrollable command list content. Each row uses a 0-height placeholder <c>Box</c>
+        /// plus a <see cref="ListRowHeight"/> row — IMGUI inserts <see cref="ImGuiVerticalChildSpacing"/> between <b>every</b> child,
+        /// so we need (2·rows − 1) gaps, not (rows − 1).
+        /// </summary>
+        private static float ScrollListContentHeight(int commandCount, int extraBackRows)
+        {
+            int rows = commandCount + extraBackRows;
+            float pad = GetScrollViewPaddingVertical();
+            if (rows <= 0)
+                return pad;
+            float sp = GetVerticalGroupSpacing();
+            int childCount = rows * 2; // placeholder box + row vertical per command/back row
+            return rows * ListRowHeight + (childCount - 1) * sp + pad;
+        }
+
+        /// <summary>Vertical center of row <paramref name="rowIndex"/> (0 = first row in scroll content) for autoscroll.</summary>
+        private static float ScrollListRowCenterY(int rowIndex)
+        {
+            if (rowIndex < 0)
+                return 0f;
+            float sp = GetVerticalGroupSpacing();
+            float h = ListRowHeight;
+            float rowTopY = rowIndex * (h + 2f * sp) + sp;
+            return rowTopY + h * 0.5f;
+        }
 
         private void OnDisable()
         {
@@ -241,14 +359,24 @@ namespace HS2SandboxPlugin
         {
             if (isVisible)
             {
-                float contentHeight = LayoutFixedHeight + _commands.Count * ListRowHeight;
-                float desiredHeight = Mathf.Clamp(contentHeight, WindowMinHeight, WindowMaxHeight);
+                _activeCommands ??= _commands;
+                // +1 row when in sub-view for the Back row at the top of the list
+                int extraRows = _viewStack.Count > 0 ? 1 : 0;
+                GetWindowVerticalChrome(out float winTop, out float winBottom);
+                _windowTopInsetCached = winTop;
+                _windowBottomInsetCached = winBottom;
+                _verticalGroupPadCached = GetVerticalGroupVerticalPadding();
+                // Inner column = fixed rows + scroll rows + GUILayout verticalGroup padding; outer adds window chrome + small safety margin
+                float innerStackHeight = LayoutFixedHeight + ScrollListContentHeight(_activeCommands.Count, extraRows) + _verticalGroupPadCached;
+                float desiredHeight = Mathf.Clamp(
+                    innerStackHeight + _windowTopInsetCached + _windowBottomInsetCached + LayoutHeightSafetyMargin,
+                    WindowMinHeight, WindowMaxHeight);
                 windowRect.height = desiredHeight;
-                windowRect = GUILayout.Window(windowID, windowRect, DrawWindowContent, windowTitle,
-                    GUILayout.MinHeight(desiredHeight), GUILayout.MaxHeight(WindowMaxHeight));
+                // Do not pass Min/MaxHeight on the window — they fight fixed scroll sizing and cause flicker
+                windowRect = GUILayout.Window(windowID, windowRect, DrawWindowContent, windowTitle);
                 windowRect.width = Mathf.Clamp(windowRect.width, WindowMinWidth, WindowMaxWidth);
-                // Keep window at desired height so scroll only appears when content exceeds 1300px
-                windowRect.height = Mathf.Clamp(Mathf.Max(windowRect.height, desiredHeight), WindowMinHeight, WindowMaxHeight);
+                // Snap to computed height so GUILayout return value can't oscillate frame-to-frame
+                windowRect.height = desiredHeight;
                 // Clamp position so window stays on screen
                 float margin = 8f;
                 windowRect.x = Mathf.Clamp(windowRect.x, margin, Mathf.Max(margin, Screen.width - windowRect.width - margin));
@@ -433,6 +561,13 @@ namespace HS2SandboxPlugin
                     if (int.TryParse(s, out int nVal))
                         store.SetInt(n, nVal);
                 }
+                else if (type == "bool")
+                {
+                    bool current = store.GetBool(n);
+                    bool next = GUILayout.Toggle(current, current ? "True" : "False", GUILayout.ExpandWidth(true));
+                    if (next != current)
+                        store.SetBoolExclusive(n, next);
+                }
                 else if (type == "list")
                 {
                     string displayValue = value.Length > 60 ? value.Substring(0, 57) + "..." : value;
@@ -471,7 +606,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6);
             GUILayout.Label("Add variable:", GUILayout.ExpandWidth(false));
             GUILayout.BeginHorizontal();
-            _newVarType = GUILayout.Toolbar(_newVarType, new[] { "String", "Int", "List", "Dict" }, GUILayout.ExpandWidth(false));
+            _newVarType = GUILayout.Toolbar(_newVarType, new[] { "String", "Int", "Bool", "List", "Dict" }, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             GUILayout.Label("Name", GUILayout.Width(36));
@@ -487,6 +622,11 @@ namespace HS2SandboxPlugin
                 _newVarValue = GUILayout.TextField(_newVarValue ?? "", GUILayout.ExpandWidth(true));
             }
             else if (_newVarType == 2)
+            {
+                GUILayout.Label("Value", GUILayout.Width(32));
+                _newVarBool = GUILayout.Toggle(_newVarBool, _newVarBool ? "True" : "False", GUILayout.ExpandWidth(true));
+            }
+            else if (_newVarType == 3)
             {
                 if (GUILayout.Button("Edit list...", GUILayout.Width(72)))
                 {
@@ -528,6 +668,8 @@ namespace HS2SandboxPlugin
                     else if (_newVarType == 1)
                         store.SetInt(name, int.TryParse(_newVarValue, out int n) ? n : 0);
                     else if (_newVarType == 2)
+                        store.SetBoolExclusive(name, _newVarBool);
+                    else if (_newVarType == 3)
                         store.SetList(name, _newVarList);
                     else
                         store.SetDict(name, _newVarDict);
@@ -544,7 +686,8 @@ namespace HS2SandboxPlugin
             IMGUIUtils.EatInputInRect(_variablesWindowRect);
         }
 
-        private const float ListRowHeight = 28f;
+        /// <summary>Must match row <c>GUILayout.Height</c> and background textures; IMGUI rows often need ~30–32px with default skin.</summary>
+        private const float ListRowHeight = 32f;
 
         private void MarkPersistentVarsDirty()
         {
@@ -554,19 +697,25 @@ namespace HS2SandboxPlugin
 
         private void Update()
         {
+            _activeCommands ??= _commands;
             if (_persistentVarsDirty && Time.realtimeSinceStartup - _persistentVarsDirtyTime >= PersistentVarsSaveDelay)
             {
                 _persistentVarsDirty = false;
                 SavePersistentVars();
             }
-            if (_isRunning && _autoscrollDuringRun && _runningIndex >= 0 && _runningIndex < _commands.Count)
+            // Autoscroll: find which index in _activeCommands is currently executing
+            int autoscrollIdx = GetRunningIndexInActiveView();
+            if (_isRunning && _autoscrollDuringRun && autoscrollIdx >= 0 && autoscrollIdx < _activeCommands.Count)
             {
                 // Same formula as DrawWindowContent: scroll view height = window - overhead
-                float listViewHeight = Mathf.Max(100f, windowRect.height - LayoutFixedHeight);
-                float totalListHeight = _commands.Count * ListRowHeight;
+                int backRowOffset = _viewStack.Count > 0 ? 1 : 0; // Back row at top adds one slot
+                float listViewHeight = Mathf.Max(100f,
+                    windowRect.height - LayoutFixedHeight - _windowTopInsetCached - _windowBottomInsetCached
+                    - _verticalGroupPadCached + LayoutHeightSafetyMargin);
+                float totalListHeight = ScrollListContentHeight(_activeCommands.Count, backRowOffset);
                 float maxScrollY = Mathf.Max(0, totalListHeight - listViewHeight);
-                // Center the executing row in the view: scroll so row center aligns with view center
-                float rowCenterY = _runningIndex * ListRowHeight + ListRowHeight * 0.5f;
+                // +backRowOffset shifts the executing row down by one slot to account for the Back row
+                float rowCenterY = ScrollListRowCenterY(autoscrollIdx + backRowOffset);
                 float scrollY = rowCenterY - listViewHeight * 0.5f;
                 _scrollPosition.y = Mathf.Clamp(scrollY, 0, maxScrollY);
             }
@@ -597,18 +746,43 @@ namespace HS2SandboxPlugin
 
         protected override void DrawWindowContent(int windowID)
         {
+            _activeCommands ??= _commands;
+
             // Single validation pass — incremental O(n) store simulation shared by the toolbar and every row.
             // This guarantees the Start/Resume button state and row highlights always agree.
-            if (_frameValidationErrors == null || _frameValidationErrors.Length != _commands.Count)
-                _frameValidationErrors = new string?[_commands.Count];
+            if (_frameValidationErrors == null || _frameValidationErrors.Length != _activeCommands.Count)
+                _frameValidationErrors = new string?[_activeCommands.Count];
             {
                 var vs = new TimelineVariableStore();
                 vs.CopyFrom(_persistentVariables);
                 vs.CopyFrom(_designTimeVariables);
-                _frameAnyInvalidEnabled = false;
-                for (int i = 0; i < _commands.Count; i++)
+                // When inside a subtimeline view, simulate parent commands up to the subtimeline to get correct variable state
+                if (_viewStack.Count > 0)
                 {
-                    var cmd = _commands[i];
+                    foreach (var (parentCmds, _, _) in _viewStack)
+                    {
+                        if (parentCmds == null) continue;
+                        foreach (var parentCmd in parentCmds)
+                        {
+                            if (parentCmd == null) continue;
+                            parentCmd.SimulateVariableEffects(vs);
+                        }
+                    }
+                }
+                // Pre-scan the entire root timeline to register all checkpoint names before
+                // validating any command, so forward jumps (jump → checkpoint later in list)
+                // and cross-subtimeline references all validate correctly.
+                CollectCheckpointNames(_commands, vs);
+                _frameAnyInvalidEnabled = false;
+                for (int i = 0; i < _activeCommands.Count; i++)
+                {
+                    var cmd = _activeCommands[i];
+                    if (cmd == null)
+                    {
+                        _frameValidationErrors[i] = "Invalid row (null command)";
+                        _frameAnyInvalidEnabled = true;
+                        continue;
+                    }
                     string? err = cmd.GetValidationError(vs);
                     if (err == null && cmd.HasInvalidConfiguration())
                         err = "Invalid configuration";
@@ -621,7 +795,23 @@ namespace HS2SandboxPlugin
 
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
 
-            // Add command toolbar — category dropdown + buttons for selected category
+            bool inSubView = _viewStack.Count > 0;
+
+            var subTlFirstByDefId = new Dictionary<string, SubTimelineCommand>(StringComparer.Ordinal);
+            var subTlCountByDefId = new Dictionary<string, int>(StringComparer.Ordinal);
+            {
+                var ordered = new List<SubTimelineCommand>();
+                CollectSubTimelineCommandsRecursive(_commands, ordered);
+                foreach (var st in ordered)
+                {
+                    string id = st.Id;
+                    if (!subTlFirstByDefId.ContainsKey(id))
+                        subTlFirstByDefId[id] = st;
+                    subTlCountByDefId[id] = (subTlCountByDefId.TryGetValue(id, out int n) ? n : 0) + 1;
+                }
+            }
+
+            // Add command toolbar — always visible; adds to _activeCommands (which is the subtimeline list when in sub-view)
             float btnW = 74f;
             float btnH = 28f;
             GUILayout.BeginHorizontal();
@@ -632,7 +822,7 @@ namespace HS2SandboxPlugin
             {
                 _categoryWindowVisible = !_categoryWindowVisible;
                 if (_categoryWindowVisible)
-                    _categoryWindowRect = new Rect(windowRect.xMin + 10f, windowRect.yMin + 40f, 180f, 220f);
+                    _categoryWindowRect = new Rect(windowRect.xMin + 10f, windowRect.yMin + 40f, 180f, 260f);
             }
             GUI.backgroundColor = prevBg;
             GUILayout.Space(8);
@@ -698,24 +888,33 @@ namespace HS2SandboxPlugin
                     GUILayout.Space(2);
                     DrawAddButton("Accessory", "accessory_state", btnW, btnH);
                     GUILayout.Space(2);
-                    DrawAddButton("Screenshot", "screenshot", btnW, btnH);
-                    GUILayout.Space(2);
                     DrawAddButton("Camera", "set_camera_by_name", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Sel Object", "select_object_by_name", btnW, btnH);
                     break;
-                case 6: // Simple Variables
-                    DrawAddButton("Set Str", "set_string", btnW, btnH);
+                case 6: // Screenshot
+                    DrawAddButton("Screenshot", "screenshot", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("SS alpha", "screenshot_alpha", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("SS size", "screenshot_resolution", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("SS path", "screenshot_save_path", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("SS alt var", "screenshot_alt_path_var", btnW, btnH);
+                    break;
+                case 7: // Simple Variables
+                    DrawAddButton("Set", "set", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Get", "get", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Str Repl", "str_replace", btnW, btnH);
-                    GUILayout.Space(2);
-                    DrawAddButton("Set Int", "set_integer", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Calc", "calc", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("If", "if", btnW, btnH);
                     break;
-                case 7: // Advanced Variables
+                case 8: // Advanced Variables
                     DrawAddButton("Set List", "set_list", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("List", "list", btnW, btnH);
@@ -730,23 +929,33 @@ namespace HS2SandboxPlugin
                     GUILayout.Space(2);
                     DrawAddButton("List+Dict", "list_apply_dict", btnW, btnH);
                     break;
-                case 8: // Misc
+                case 9: // Nav
                     DrawAddButton("Check", "checkpoint", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Jump", "jump", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Loop", "loop", btnW, btnH);
-                    GUILayout.Space(2);
+                    break;
+                case 10: // Misc
                     DrawAddButton("Pause", "pause", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Sound", "sound", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Label", "label", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Sub", "sub_timeline", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Return", "return", btnW, btnH);
+                    if (inSubView)
+                    {
+                        GUILayout.Space(2);
+                        DrawAddButton("Param", "sub_timeline_param", btnW, btnH);
+                    }
                     break;
-                case 9: // Video
+                case 11: // Video
                     DrawAddButton("Record", "video_record", btnW, btnH);
                     break;
-                default: // FashionLine
+                case 12: // FashionLine
                     DrawAddButton("Outfit", "outfit_rotate", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Outfit name", "outfit_by_name", btnW, btnH);
@@ -754,17 +963,19 @@ namespace HS2SandboxPlugin
                     DrawAddButton("Get Fashion", "get_fashion", btnW, btnH);
                     break;
             }
+            
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
-
             GUILayout.Space(6);
 
             // Control buttons (Clear, Save, Load, Import, Start/Stop)
             GUILayout.BeginHorizontal();
             GUILayout.Space(4);
+            bool prevEnabledCtrl = GUI.enabled;
+            if (inSubView) GUI.enabled = false; // Clear/Save/Load/Import disabled in subtimeline view
             if (GUILayout.Button("Clear", GUILayout.Width(58), GUILayout.Height(26)))
             {
-                _commands.Clear();
+                _activeCommands.Clear();
                 SaveTimeline();
             }
             GUILayout.Space(4);
@@ -776,6 +987,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4);
             if (GUILayout.Button("Import", GUILayout.Width(58), GUILayout.Height(26)))
                 ImportTimeline();
+            GUI.enabled = prevEnabledCtrl;
             GUILayout.Space(8);
             if (_isRunning)
             {
@@ -795,7 +1007,7 @@ namespace HS2SandboxPlugin
                     }
                     GUI.enabled = prevEnabled;
                     _startButtonHoverTooltip = "";
-                    if (hadInvalid && Event.current.type == EventType.Repaint)
+                    if (hadInvalid && Event.current != null && Event.current.type == EventType.Repaint)
                     {
                         Rect btnRect = GUILayoutUtility.GetLastRect();
                         if (btnRect.Contains(Event.current.mousePosition))
@@ -810,14 +1022,14 @@ namespace HS2SandboxPlugin
             }
             else
             {
-                bool hadInvalid = _frameAnyInvalidEnabled;
+                bool hadInvalid = _frameAnyInvalidEnabled || inSubView;
                 bool prevEnabled = GUI.enabled;
                 GUI.enabled = !hadInvalid;
                 if (GUILayout.Button("Start", GUILayout.Width(58), GUILayout.Height(26)))
                     StartTimeline(0);
                 GUI.enabled = prevEnabled;
                 _startButtonHoverTooltip = "";
-                if (hadInvalid && Event.current.type == EventType.Repaint)
+                if (hadInvalid && !inSubView && Event.current != null && Event.current.type == EventType.Repaint)
                 {
                     Rect btnRect = GUILayoutUtility.GetLastRect();
                     if (btnRect.Contains(Event.current.mousePosition))
@@ -863,7 +1075,10 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6);
 
             // List — use fixed height so scroll math in Update matches the actual visible area
-            float listViewHeight = Mathf.Max(100f, windowRect.height - LayoutFixedHeight);
+            // Outer − window chrome − verticalGroup padding − fixed chrome = scroll (must match DrawWindow / Update)
+            float listViewHeight = Mathf.Max(100f,
+                windowRect.height - LayoutFixedHeight - _windowTopInsetCached - _windowBottomInsetCached
+                - _verticalGroupPadCached + LayoutHeightSafetyMargin);
             _scrollPosition = GUILayout.BeginScrollView(_scrollPosition, GUILayout.ExpandWidth(true), GUILayout.Height(listViewHeight));
             var ctx = new InlineDrawContext
             {
@@ -877,14 +1092,73 @@ namespace HS2SandboxPlugin
                     };
                     _listEditorWindowRect = new Rect(windowRect.xMin + 20f, windowRect.yMin + 40f, 320f, 280f);
                     _listEditorOpen = true;
-                }
+                },
+                // Allow opening nested views while running; execution does not depend on the editor view.
+                OpenSubTimeline = sub => { if (sub != null) _pendingOpenSubTimeline = sub; },
+                IsInSubTimeline = inSubView,
+                OnSubTimelineTitleCommitted = TryResolveSubTimelineTemplateByTitle
             };
             int mouseCommandColorIndex = 0;
             float savedRowW = 2000f; // first row uses large width; updated from actual layout after each row
-            for (int i = 0; i < _commands.Count; i++)
+            int currentRunningIdx = GetRunningIndexInActiveView();
+
+            // Back row — first item in the list when inside a subtimeline view
+            if (inSubView)
             {
-                TimelineCommand cmd = _commands[i];
-                bool isCurrent = _isRunning && i == _runningIndex;
+                GUILayout.Box("", GUIStyle.none, GUILayout.Width(0), GUILayout.Height(0));
+                Rect backRowStartRect = GUILayoutUtility.GetLastRect();
+                if (Event.current != null && Event.current.type == EventType.Repaint)
+                {
+                    GUI.color = new Color(0.15f, 0.22f, 0.38f);
+                    GUI.DrawTexture(new Rect(backRowStartRect.xMin, backRowStartRect.yMin, savedRowW, ListRowHeight), GetCrossTexture());
+                    GUI.color = Color.white;
+                }
+                GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.Height(ListRowHeight));
+                GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
+                GUI.contentColor = Color.white;
+                if (GUILayout.Button("\u2190 Back", GUILayout.Width(58), GUILayout.Height(22)))
+                    _pendingCloseSubTimeline = true;
+                var backTitleStyle = new GUIStyle(GuiSkinHelper.SafeLabelStyle()) { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft, fontSize = 13 };
+                GUILayout.Label(BuildActivePathLabel(), backTitleStyle, GUILayout.ExpandWidth(true));
+                GUILayout.FlexibleSpace();
+                if (_currentSubTimelineOwner != null)
+                {
+                    bool isTpl = _subTimelineTemplateFlags.TryGetValue(_currentSubTimelineOwner.Id, out bool tpl) && tpl;
+                    bool newTpl = GUILayout.Toggle(isTpl, "Template", GUILayout.Width(78), GUILayout.Height(22));
+                    if (newTpl != isTpl)
+                    {
+                        _subTimelineTemplateFlags[_currentSubTimelineOwner.Id] = newTpl;
+                        SaveTimeline();
+                    }
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.EndVertical();
+                Rect backRowEndRect = GUILayoutUtility.GetLastRect();
+                savedRowW = backRowEndRect.xMax - backRowStartRect.xMin;
+            }
+
+            // Re-check size: toolbar buttons above may have added commands to _activeCommands
+            if (_frameValidationErrors == null || _frameValidationErrors.Length != _activeCommands.Count)
+                _frameValidationErrors = new string?[_activeCommands.Count];
+
+            for (int i = 0; i < _activeCommands.Count; i++)
+            {
+                TimelineCommand cmd = _activeCommands[i];
+                if (cmd == null)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label($"{i + 1}.", GUILayout.Width(30));
+                    GUILayout.Label("(null row)", GUILayout.ExpandWidth(true));
+                    if (!_isRunning && GUILayout.Button("X", GUILayout.Width(22)))
+                    {
+                        _activeCommands.RemoveAt(i);
+                        SaveTimeline();
+                        i--;
+                    }
+                    GUILayout.EndHorizontal();
+                    continue;
+                }
+                bool isCurrent = _isRunning && i == currentRunningIdx;
                 int? mouseColorIndex = null;
                 if (cmd is SimulateMouseCommand mouseCmd && mouseCmd.HasValue)
                 {
@@ -898,7 +1172,8 @@ namespace HS2SandboxPlugin
                 GUILayout.Box("", GUIStyle.none, GUILayout.Width(0), GUILayout.Height(0));
                 Rect rowStartRect = GUILayoutUtility.GetLastRect();
                 float rowStartX = rowStartRect.xMin;
-                if (Event.current.type == EventType.Repaint)
+                bool isLabelLike = cmd is LabelCommand || cmd is SubTimelineCommand;
+                if (Event.current != null && Event.current.type == EventType.Repaint)
                 {
                     Color cmdColor = GetCommandColor(cmd.TypeId);
                     var rowRect = new Rect(rowStartX, rowStartRect.yMin, savedRowW, ListRowHeight);
@@ -908,6 +1183,13 @@ namespace HS2SandboxPlugin
                         GUI.color = new Color(gray, gray, gray);
                         GUI.DrawTexture(rowRect, GetCrossTexture());
                         GUI.DrawTexture(new Rect(rowStartX, rowStartRect.yMin, 5, ListRowHeight), GetCrossTexture());
+                        GUI.color = Color.white;
+                    }
+                    else if (cmd is SubTimelineCommand)
+                    {
+                        // Solid dark blue-gray fill — similar to label but distinct
+                        GUI.color = new Color(0.15f, 0.22f, 0.38f);
+                        GUI.DrawTexture(rowRect, GetCrossTexture());
                         GUI.color = Color.white;
                     }
                     else
@@ -920,7 +1202,9 @@ namespace HS2SandboxPlugin
                         GUI.color = Color.white;
                     }
                 }
-                string? validationError = _frameValidationErrors![i];
+                string? validationError = (_frameValidationErrors != null && i < _frameValidationErrors.Length)
+                    ? _frameValidationErrors[i]
+                    : null;
                 bool isInvalid = validationError != null;
                 GUIStyle rowStyle = GUIStyle.none;
                 if (isCurrent)
@@ -929,8 +1213,8 @@ namespace HS2SandboxPlugin
                     rowStyle = GetInvalidRowHighlightStyle();
                 GUILayout.BeginVertical(rowStyle, GUILayout.ExpandWidth(true), GUILayout.Height(ListRowHeight));
                 GUILayout.BeginHorizontal(GUILayout.ExpandWidth(true));
-                Color? labelRowContentColor = (cmd is LabelCommand) ? (Color?)GUI.contentColor : null;
-                if (cmd is LabelCommand)
+                Color? labelRowContentColor = isLabelLike ? (Color?)GUI.contentColor : null;
+                if (isLabelLike)
                     GUI.contentColor = Color.white;
                 bool newEnabled = GUILayout.Toggle(cmd.Enabled, "", GUILayout.Width(18));
                 if (newEnabled != cmd.Enabled)
@@ -939,7 +1223,7 @@ namespace HS2SandboxPlugin
                     SaveTimeline();
                 }
                 GUILayout.Label($"{i + 1}.", GUILayout.Width(30));
-                if (!_isRunning && GUILayout.Button("\u25b6", GUILayout.Width(20)))
+                if (!_isRunning && !inSubView && GUILayout.Button("\u25b6", GUILayout.Width(20)))
                 {
                     StartTimeline(i);
                 }
@@ -949,26 +1233,26 @@ namespace HS2SandboxPlugin
                     GUI.enabled = i > 0;
                     if (GUILayout.Button("\u25b2", GUILayout.Width(20)))
                     {
-                        int step = Event.current.shift ? 5 : (Event.current.control ? 10 : 1);
+                        int step = GetMoveStepFromEvent();
                         int newIndex = Mathf.Max(0, i - step);
                         if (newIndex != i)
                         {
-                            var moved = _commands[i];
-                            _commands.RemoveAt(i);
-                            _commands.Insert(newIndex, moved);
+                            var moved = _activeCommands[i];
+                            _activeCommands.RemoveAt(i);
+                            _activeCommands.Insert(newIndex, moved);
                             SaveTimeline();
                         }
                     }
-                    GUI.enabled = i < _commands.Count - 1;
+                    GUI.enabled = i < _activeCommands.Count - 1;
                     if (GUILayout.Button("\u25bc", GUILayout.Width(20)))
                     {
-                        int step = Event.current.shift ? 5 : (Event.current.control ? 10 : 1);
-                        int newIndex = Mathf.Min(_commands.Count - 1, i + step);
+                        int step = GetMoveStepFromEvent();
+                        int newIndex = Mathf.Min(_activeCommands.Count - 1, i + step);
                         if (newIndex != i)
                         {
-                            var moved = _commands[i];
-                            _commands.RemoveAt(i);
-                            _commands.Insert(newIndex, moved);
+                            var moved = _activeCommands[i];
+                            _activeCommands.RemoveAt(i);
+                            _activeCommands.Insert(newIndex, moved);
                             SaveTimeline();
                         }
                     }
@@ -991,30 +1275,51 @@ namespace HS2SandboxPlugin
                     GUILayout.Label(labelContent, GUILayout.Width(120));
                     GUI.contentColor = prevContent;
                 }
-                if (_isRunning && isCurrent && cmd is ConfirmCommand && _runContext?.PendingConfirmCallback != null)
+                if (cmd is SubTimelineCommand stBadges)
+                    DrawSubTimelineSharingBadges(stBadges, subTlFirstByDefId, subTlCountByDefId);
+                if (cmd is SubTimelineCommand stParam)
+                    DrawSubTimelineParamStrip(stParam);
+
+                var rtc = _runContext;
+                bool pendingOnAncestorSub = cmd is SubTimelineCommand stPending && RunningLeafIsInsideSubTimeline(stPending);
+
+                if (_isRunning && rtc?.PendingConfirmCallback != null)
                 {
-                    if (GUILayout.Button("Confirm", GUILayout.Width(60)))
+                    bool showConfirm = (isCurrent && cmd is ConfirmCommand) || pendingOnAncestorSub;
+                    if (showConfirm && GUILayout.Button("Confirm", GUILayout.Width(60)))
                     {
-                        var cb = _runContext.PendingConfirmCallback;
-                        _runContext.PendingConfirmCallback = null;
+                        var cb = rtc.PendingConfirmCallback;
+                        rtc.PendingConfirmCallback = null;
                         cb?.Invoke();
                     }
                 }
-                if (_isRunning && isCurrent && _runContext?.PendingResolveCallback != null)
+                if (_isRunning && rtc?.PendingScreenshotAdvanceCallback != null)
                 {
-                    if (GUILayout.Button("Resolve", GUILayout.Width(60)))
+                    bool showScreenshotContinue = (isCurrent && cmd is ScreenshotCommand) || pendingOnAncestorSub;
+                    if (showScreenshotContinue && GUILayout.Button("Continue", GUILayout.Width(60)))
                     {
-                        var cb = _runContext.PendingResolveCallback;
-                        _runContext.PendingResolveCallback = null;
+                        var cb = rtc.PendingScreenshotAdvanceCallback;
+                        rtc.PendingScreenshotAdvanceCallback = null;
                         cb?.Invoke();
                     }
                 }
-                if (_isRunning && isCurrent && _runContext?.PendingRetryCallback != null)
+                if (_isRunning && rtc?.PendingResolveCallback != null)
                 {
-                    if (GUILayout.Button("Retry", GUILayout.Width(50)))
+                    bool showResolve = isCurrent || pendingOnAncestorSub;
+                    if (showResolve && GUILayout.Button("Resolve", GUILayout.Width(60)))
                     {
-                        var cb = _runContext.PendingRetryCallback;
-                        _runContext.PendingRetryCallback = null;
+                        var cb = rtc.PendingResolveCallback;
+                        rtc.PendingResolveCallback = null;
+                        cb?.Invoke();
+                    }
+                }
+                if (_isRunning && rtc?.PendingRetryCallback != null)
+                {
+                    bool showRetry = isCurrent || pendingOnAncestorSub;
+                    if (showRetry && GUILayout.Button("Retry", GUILayout.Width(50)))
+                    {
+                        var cb = rtc.PendingRetryCallback;
+                        rtc.PendingRetryCallback = null;
                         cb?.Invoke();
                     }
                 }
@@ -1022,7 +1327,7 @@ namespace HS2SandboxPlugin
                 cmd.DrawInlineConfig(ctx);
                 if (!_isRunning && GUILayout.Button("X", GUILayout.Width(22)))
                 {
-                    _commands.RemoveAt(i);
+                    _activeCommands.RemoveAt(i);
                     SaveTimeline();
                     if (_recordingMouseFor == cmd) _recordingMouseFor = null;
                     i--;
@@ -1043,14 +1348,16 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6);
             if (GUILayout.Button("Close", GUILayout.Height(24)))
             {
-                SetVisible(false);
-                HS2SandboxPlugin._timelineToolbarToggle.Value = false;
                 var sandboxGUI = FindObjectOfType<SandboxGUI>();
                 if (sandboxGUI != null)
-                    sandboxGUI.SetSubwindowState("Window2", false);
+                    sandboxGUI.SetWindowVisible(SandboxWindowKeys.Timeline, false);
+                else
+                    SetVisible(false);
             }
 
             GUILayout.EndVertical();
+
+            FlushPendingSubTimelineNavigation();
 
             GUI.DragWindow(new Rect(0, 0, windowRect.width, windowRect.height));
             IMGUIUtils.EatInputInRect(windowRect);
@@ -1060,6 +1367,18 @@ namespace HS2SandboxPlugin
         private static Texture2D? _currentRowHighlightTexture;
         private static GUIStyle? _currentRowHighlightStyle;
         private static GUIStyle? _invalidRowHighlightStyle;
+        private static GUIStyle? _subTimelineParamLabelStyle;
+
+        private static GUIStyle GetSubTimelineParamLabelStyle()
+        {
+            if (_subTimelineParamLabelStyle != null) return _subTimelineParamLabelStyle;
+            _subTimelineParamLabelStyle = new GUIStyle(GuiSkinHelper.SafeLabelStyle())
+            {
+                fontSize = 11,
+                alignment = TextAnchor.MiddleLeft
+            };
+            return _subTimelineParamLabelStyle;
+        }
 
         private static Texture2D GetCurrentRowHighlightTexture()
         {
@@ -1102,6 +1421,16 @@ namespace HS2SandboxPlugin
 
         private static GUIStyle? _tooltipStyle;
 
+        private static int GetMoveStepFromEvent()
+        {
+            Event? e = Event.current;
+            if (e == null) return 1;
+            if (e.shift) return 5;
+            if (e.control) return 10;
+            return 1;
+        }
+
+        /// <summary>GUI.skin can be null on some frames / early IMGUI; avoid NRE in window chrome.</summary>
         private static void DrawValidationTooltip(string text, Rect windowRect)
         {
             if (_tooltipStyle == null)
@@ -1109,7 +1438,7 @@ namespace HS2SandboxPlugin
                 var bg = new Texture2D(1, 1);
                 bg.SetPixel(0, 0, new Color(0.12f, 0.12f, 0.12f, 0.95f));
                 bg.Apply();
-                _tooltipStyle = new GUIStyle(GUI.skin.label)
+                _tooltipStyle = new GUIStyle(GuiSkinHelper.SafeLabelStyle())
                 {
                     normal = { background = bg, textColor = new Color(1f, 0.82f, 0.82f) },
                     padding = new RectOffset(6, 6, 4, 4),
@@ -1124,7 +1453,7 @@ namespace HS2SandboxPlugin
             float boxH = _tooltipStyle.CalcHeight(new GUIContent(text), boxW) + 8f;
 
             // Position just above the cursor, clamped inside the window
-            Vector2 mouse = Event.current.mousePosition;
+            Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
             float x = Mathf.Clamp(mouse.x, 0f, windowRect.width - boxW);
             float y = Mathf.Clamp(mouse.y - boxH - 4f, 0f, windowRect.height - boxH);
             GUI.Label(new Rect(x, y, boxW, boxH), text, _tooltipStyle);
@@ -1169,12 +1498,15 @@ namespace HS2SandboxPlugin
             GUI.color = prevColor;
         }
 
+        void IOverlayDrawable.DrawOverlay() => DrawCrossesOverlay();
+
         /// <summary>Simulated variable store after executing commands 0..index-1. Used for interpolation validation.</summary>
         private TimelineVariableStore GetVariablesAtIndex(int index)
         {
             var store = new TimelineVariableStore();
             store.CopyFrom(_persistentVariables);
             store.CopyFrom(_designTimeVariables);
+            CollectCheckpointNames(_commands, store);
             for (int j = 0; j < index && j < _commands.Count; j++)
                 _commands[j].SimulateVariableEffects(store);
             return store;
@@ -1202,14 +1534,16 @@ namespace HS2SandboxPlugin
         /// </summary>
         private string CollectValidationErrors()
         {
-            if (_frameValidationErrors == null) return "";
+            if (_frameValidationErrors == null || _activeCommands == null) return "";
             var sb = new System.Text.StringBuilder();
-            for (int i = 0; i < _commands.Count && i < _frameValidationErrors.Length; i++)
+            for (int i = 0; i < _activeCommands.Count && i < _frameValidationErrors.Length; i++)
             {
-                if (!_commands[i].Enabled) continue;
+                var rowCmd = _activeCommands[i];
+                if (rowCmd == null) continue;
+                if (!rowCmd.Enabled) continue;
                 string? error = _frameValidationErrors[i];
                 if (error != null)
-                    sb.AppendLine($"Row {i + 1} ({_commands[i].GetDisplayLabel()}): {error}");
+                    sb.AppendLine($"Row {i + 1} ({rowCmd.GetDisplayLabel()}): {error}");
             }
             return sb.ToString().TrimEnd();
         }
@@ -1224,16 +1558,125 @@ namespace HS2SandboxPlugin
             _recordingMouseFor = cmd;
         }
 
+        private void DrawSubTimelineParamStrip(SubTimelineCommand sub)
+        {
+            SubTimelineParamCommand? pcmd = SubTimelineParamCommand.FindFirst(sub);
+            if (pcmd == null) return;
+            SubTimelineParamInputs inp = sub.ParamInputs;
+            GUILayout.BeginHorizontal();
+            string paramLabel = string.IsNullOrWhiteSpace(pcmd.VariableName) ? "In" : pcmd.VariableName.Trim();
+            GUILayout.Label(paramLabel, GetSubTimelineParamLabelStyle(), GUILayout.Width(56), GUILayout.ExpandWidth(false));
+            int uid = sub.ParamRowInstanceId;
+            switch (pcmd.Kind)
+            {
+                case SubTimelineParamKind.String:
+                {
+                    GUI.SetNextControlName($"stparam_{uid}_s");
+                    string ns = GUILayout.TextField(inp.StringText ?? "", GUILayout.MinWidth(70), GUILayout.ExpandWidth(true));
+                    if (ns != inp.StringText) { inp.StringText = ns; SaveTimeline(); }
+                    break;
+                }
+                case SubTimelineParamKind.Int:
+                {
+                    GUI.SetNextControlName($"stparam_{uid}_i");
+                    string ni = GUILayout.TextField(inp.IntText ?? "0", GUILayout.Width(56));
+                    if (ni != inp.IntText) { inp.IntText = ni; SaveTimeline(); }
+                    break;
+                }
+                case SubTimelineParamKind.Bool:
+                {
+                    GUI.SetNextControlName($"stparam_{uid}_b");
+                    bool nb = GUILayout.Toggle(inp.BoolValue, "");
+                    if (nb != inp.BoolValue) { inp.BoolValue = nb; SaveTimeline(); }
+                    break;
+                }
+                case SubTimelineParamKind.List:
+                {
+                    GUI.SetNextControlName($"stparam_{uid}_listbtn");
+                    if (GUILayout.Button("List…", GUILayout.Width(40), GUILayout.Height(18)))
+                        OpenSubTimelineParamListEditor(sub);
+                    GUILayout.Label(PreviewSubTimelineParamList(inp.ListItems), GUILayout.MinWidth(48), GUILayout.ExpandWidth(true));
+                    break;
+                }
+                case SubTimelineParamKind.Dict:
+                {
+                    GUI.SetNextControlName($"stparam_{uid}_dictbtn");
+                    if (GUILayout.Button("Dict…", GUILayout.Width(40), GUILayout.Height(18)))
+                        OpenSubTimelineParamDictEditor(sub);
+                    GUILayout.Label(PreviewSubTimelineParamDict(inp.Dict), GUILayout.MinWidth(48), GUILayout.ExpandWidth(true));
+                    break;
+                }
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private static string PreviewSubTimelineParamList(List<string> items)
+        {
+            if (items == null || items.Count == 0) return "(empty)";
+            string j = string.Join("; ", items);
+            return j.Length <= 36 ? j : j.Substring(0, 33) + "...";
+        }
+
+        private static string PreviewSubTimelineParamDict(Dictionary<string, string> d)
+        {
+            if (d == null || d.Count == 0) return "(empty)";
+            return $"{d.Count} keys";
+        }
+
+        private void OpenSubTimelineParamListEditor(SubTimelineCommand sub)
+        {
+            SubTimelineParamInputs inp = sub.ParamInputs;
+            _listEditorText = string.Join("\n", inp.ListItems);
+            _listEditorOnApply = arr =>
+            {
+                inp.SetListFromArray(arr);
+                SaveTimeline();
+            };
+            _listEditorWindowRect = new Rect(windowRect.xMin + 24f, windowRect.yMin + 120f, 320f, 280f);
+            _listEditorOpen = true;
+        }
+
+        private void OpenSubTimelineParamDictEditor(SubTimelineCommand sub)
+        {
+            SubTimelineParamInputs inp = sub.ParamInputs;
+            _dictEditorText = SubTimelineParamInputs.SerializeDictLines(inp.Dict);
+            _dictEditorOnApply = d =>
+            {
+                inp.Dict.Clear();
+                foreach (var kv in d)
+                    inp.Dict[kv.Key] = kv.Value;
+                SaveTimeline();
+            };
+            _dictEditorWindowRect = new Rect(windowRect.xMin + 24f, windowRect.yMin + 120f, 320f, 280f);
+            _dictEditorOpen = true;
+        }
+
         private void AddCommand(string typeId)
         {
             try
             {
-                _commands.Add(TimelineCommandFactory.Create(typeId));
+                if (typeId == "sub_timeline_param")
+                {
+                    if (_viewStack.Count == 0)
+                    {
+                        SandboxServices.Log.LogWarning("Param can only be added inside a subtimeline.");
+                        return;
+                    }
+                    foreach (var c in _activeCommands)
+                    {
+                        if (c is SubTimelineParamCommand)
+                        {
+                            SandboxServices.Log.LogWarning("This subtimeline already has a Param command.");
+                            return;
+                        }
+                    }
+                }
+                _activeCommands.Add(TimelineCommandFactory.Create(typeId));
                 SaveTimeline();
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Add command failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Add command failed: {ex.Message}");
             }
         }
 
@@ -1248,13 +1691,262 @@ namespace HS2SandboxPlugin
             return _lastRunElapsedSeconds;
         }
 
+        // ── SubTimeline view navigation ──────────────────────────────────────
+
+        private void FlushPendingSubTimelineNavigation()
+        {
+            if (_pendingCloseSubTimeline)
+            {
+                _pendingCloseSubTimeline = false;
+                CloseSubTimelineView();
+            }
+            if (_pendingOpenSubTimeline != null)
+            {
+                var sub = _pendingOpenSubTimeline;
+                _pendingOpenSubTimeline = null;
+                OpenSubTimelineView(sub);
+            }
+        }
+
+        private void OpenSubTimelineView(SubTimelineCommand sub)
+        {
+            _viewStack.Push((_activeCommands, _activeTitle, _currentSubTimelineOwner));
+            _activeCommands = sub.SubCommands;
+            _activeTitle = sub.Title;
+            _currentSubTimelineOwner = sub;
+            _scrollPosition = Vector2.zero;
+            _frameValidationErrors = null; // force rebuild for new view
+        }
+
+        private void CloseSubTimelineView()
+        {
+            if (_viewStack.Count == 0) return;
+            var (parentCmds, parentTitle, parentOwner) = _viewStack.Pop();
+            _activeCommands = parentCmds;
+            _activeTitle = parentTitle;
+            _currentSubTimelineOwner = parentOwner;
+            _scrollPosition = Vector2.zero;
+            _frameValidationErrors = null;
+        }
+
+        /// <summary>
+        /// Builds the breadcrumb path shown in the back row, e.g. "Sub1 › Sub2 › Sub3".
+        /// Parent titles come from the view stack (bottom = closest to root, top = direct parent).
+        /// </summary>
+        private string BuildActivePathLabel()
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            // Stack enumerates top→bottom; reverse to get root→current order
+            var stackItems = _viewStack.ToArray();
+            for (int i = stackItems.Length - 1; i >= 0; i--)
+            {
+                string t = stackItems[i].title;
+                if (!string.IsNullOrEmpty(t))
+                    parts.Add(t);
+            }
+            if (!string.IsNullOrEmpty(_activeTitle))
+                parts.Add(_activeTitle);
+            return string.Join(" \u203a ", parts); // › separator
+        }
+
+        private static void CollectSubTimelineCommandsRecursive(List<TimelineCommand> list, List<SubTimelineCommand> acc)
+        {
+            foreach (var c in list)
+            {
+                if (c is SubTimelineCommand st)
+                {
+                    acc.Add(st);
+                    CollectSubTimelineCommandsRecursive(st.SubCommands, acc);
+                }
+            }
+        }
+
+        private void DrawSubTimelineSharingBadges(
+            SubTimelineCommand st,
+            Dictionary<string, SubTimelineCommand> firstByDefId,
+            Dictionary<string, int> countByDefId)
+        {
+            if (!firstByDefId.TryGetValue(st.Id, out SubTimelineCommand? first))
+                return;
+            int n = countByDefId.TryGetValue(st.Id, out int c) ? c : 0;
+            bool isFirst = ReferenceEquals(first, st);
+            bool showTpl = isFirst && _subTimelineTemplateFlags.TryGetValue(st.Id, out bool isTpl) && isTpl;
+            bool showRef = n > 1 && !isFirst;
+            if (!showTpl && !showRef) return;
+
+            var baseStyle = new GUIStyle(GuiSkinHelper.SafeLabelStyle())
+            {
+                fontSize = 10,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            if (showTpl)
+            {
+                var tplStyle = new GUIStyle(baseStyle) { normal = { textColor = new Color(0.55f, 0.9f, 0.6f) } };
+                GUILayout.Label(new GUIContent("Tpl", "This definition is marked as a reusable template (link other rows by matching name)."), tplStyle, GUILayout.Width(30));
+            }
+            if (showRef)
+            {
+                var refStyle = new GUIStyle(baseStyle) { normal = { textColor = new Color(0.55f, 0.78f, 0.95f) } };
+                GUILayout.Label(new GUIContent("Ref", "This row shares the same subtimeline body as another row (template instance)."), refStyle, GUILayout.Width(30));
+            }
+        }
+
+        private void TryResolveSubTimelineTemplateByTitle(SubTimelineCommand sub)
+        {
+            string title = sub.Title?.Trim() ?? "";
+            if (string.IsNullOrEmpty(title)) return;
+            SubTimelineCommand? match = null;
+            foreach (var st in EnumerateAllSubTimelineCommands())
+            {
+                if (ReferenceEquals(st, sub)) continue;
+                if (!_subTimelineTemplateFlags.TryGetValue(st.Id, out bool isT) || !isT) continue;
+                if (!string.Equals(st.Title?.Trim(), title, StringComparison.OrdinalIgnoreCase)) continue;
+                match = st;
+                break;
+            }
+            if (match == null || match.Id == sub.Id) return;
+            sub.RebindToSharedDefinition(match.Id, match.SubCommands);
+            SaveTimeline();
+        }
+
+        private IEnumerable<SubTimelineCommand> EnumerateAllSubTimelineCommands()
+        {
+            var acc = new List<SubTimelineCommand>();
+            CollectSubTimelineCommandsRecursive(_commands, acc);
+            return acc;
+        }
+
+        private List<SavedSubTimelineDefinition> BuildSubTimelineDefinitionsForSave()
+        {
+            var acc = new List<SubTimelineCommand>();
+            CollectSubTimelineCommandsRecursive(_commands, acc);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var defs = new List<SavedSubTimelineDefinition>();
+            foreach (var st in acc)
+            {
+                if (!seen.Add(st.Id)) continue;
+                var entries = new SavedTimelineEntry[st.SubCommands.Count];
+                for (int i = 0; i < st.SubCommands.Count; i++)
+                {
+                    var c = st.SubCommands[i];
+                    entries[i] = new SavedTimelineEntry { typeId = c.TypeId, payload = c.SerializePayload(), enabled = c.Enabled };
+                }
+                defs.Add(new SavedSubTimelineDefinition
+                {
+                    id = st.Id,
+                    title = st.Title ?? "",
+                    template = _subTimelineTemplateFlags.TryGetValue(st.Id, out bool t) && t,
+                    entries = entries
+                });
+            }
+            return defs;
+        }
+
+        private void PruneSubTimelineTemplateFlags(HashSet<string> liveDefinitionIds)
+        {
+            var keys = new List<string>(_subTimelineTemplateFlags.Keys);
+            foreach (string k in keys)
+            {
+                if (!liveDefinitionIds.Contains(k))
+                    _subTimelineTemplateFlags.Remove(k);
+            }
+        }
+
+        private static void FillSubTimelineDefinitionList(Dictionary<string, List<TimelineCommand>> bodies, string id, SavedTimelineEntry[] rawEntries)
+        {
+            if (!bodies.TryGetValue(id, out var list)) return;
+            list.Clear();
+            foreach (var e in rawEntries)
+            {
+                if (string.IsNullOrEmpty(e.typeId)) continue;
+                try
+                {
+                    string typeId = e.typeId;
+                    string payload = e.payload ?? "";
+                    MigrateLegacyCommand(ref typeId, ref payload);
+                    var cmd = TimelineCommandFactory.Create(typeId);
+                    cmd.DeserializePayload(payload);
+                    cmd.Enabled = e.enabled;
+                    if (cmd is SubTimelineCommand st && bodies.TryGetValue(st.Id, out var childList))
+                        st.SubCommands = childList;
+                    list.Add(cmd);
+                }
+                catch (Exception ex)
+                {
+                    SandboxServices.Log.LogWarning($"SubTimeline definition {id}: load command {e.typeId} failed: {ex.Message}");
+                }
+            }
+        }
+
+        private void LoadCommandListFromEntries(List<SavedTimelineEntry> entries, Dictionary<string, List<TimelineCommand>>? bodies, List<TimelineCommand> target)
+        {
+            foreach (var e in entries)
+            {
+                if (string.IsNullOrEmpty(e.typeId)) continue;
+                try
+                {
+                    string typeId = e.typeId;
+                    string payload = e.payload ?? "";
+                    MigrateLegacyCommand(ref typeId, ref payload);
+                    var cmd = TimelineCommandFactory.Create(typeId);
+                    cmd.DeserializePayload(payload);
+                    cmd.Enabled = e.enabled;
+                    if (cmd is SubTimelineCommand st && bodies != null && bodies.TryGetValue(st.Id, out var subList))
+                        st.SubCommands = subList;
+                    target.Add(cmd);
+                }
+                catch (Exception ex)
+                {
+                    SandboxServices.Log.LogWarning($"Load command {e.typeId} failed: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns the currently-executing index within _activeCommands by scanning _runningStack,
+        /// or -1 if execution is not on the currently-viewed list.
+        /// </summary>
+        private int GetRunningIndexInActiveView()
+        {
+            foreach (var frame in _runningStack)
+            {
+                if (frame.Cmds == _activeCommands)
+                    return frame.Idx;
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// True if the innermost running command list is this sub's body or any nested subtimeline under it.
+        /// Used to show Confirm/Resolve/Retry on ancestor Sub rows while execution waits inside.
+        /// </summary>
+        private bool RunningLeafIsInsideSubTimeline(SubTimelineCommand sub)
+        {
+            if (_runningStack.Count == 0 || sub == null) return false;
+            var leaf = _runningStack[_runningStack.Count - 1];
+            return IsCommandListUnderSubTimeline(leaf.Cmds, sub);
+        }
+
+        private static bool IsCommandListUnderSubTimeline(List<TimelineCommand>? list, SubTimelineCommand sub)
+        {
+            if (list == null || sub.SubCommands == null) return false;
+            if (ReferenceEquals(list, sub.SubCommands)) return true;
+            foreach (var c in sub.SubCommands)
+            {
+                if (c is SubTimelineCommand nested && IsCommandListUnderSubTimeline(list, nested))
+                    return true;
+            }
+            return false;
+        }
+
         private void StartTimeline(int startFrom = 0)
         {
             if (_commands.Count == 0) return;
             // Do not allow starting when any enabled command is invalid.
             if (HasAnyInvalidCommands())
             {
-                HS2SandboxPlugin.Log.LogWarning("Cannot start timeline: at least one command is marked as invalid.");
+                SandboxServices.Log.LogWarning("Cannot start timeline: at least one command is marked as invalid.");
                 return;
             }
             _startFromIndex = Mathf.Clamp(startFrom, 0, _commands.Count - 1);
@@ -1265,7 +1957,6 @@ namespace HS2SandboxPlugin
             _lastRunElapsedSeconds = -1f;
             _stopRequested = false;
             _isPaused = false;
-            _runningIndex = -1;
             StartCoroutine(RunTimeline());
             // Workaround: click at (0,0) so the host program reliably loses focus from this window
             WindowsInput.SimulateMouseClickAt(0, 0, 0);
@@ -1290,61 +1981,192 @@ namespace HS2SandboxPlugin
                     ctx.LastScreenshotName = initialResult.files[0].original_name ?? "";
             }
 
-            int index = _startFromIndex;
-            while (index >= 0 && index < _commands.Count && !_stopRequested)
+            // Pre-register all checkpoints so forward jumps (to a checkpoint later in the list)
+            // work even before execution reaches them. Dynamic re-registration during execution
+            // handles checkpoints whose names depend on runtime variables.
+            PreScanCheckpoints(_commands, ctx);
+            // Also populate ctx.Variables with checkpoint names so HasInvalidConfiguration
+            // checks on Jump/Loop/If during execution don't false-positive as invalid.
+            CollectCheckpointNames(_commands, ctx.Variables);
+
+            _runningStack.Clear();
+            yield return StartCoroutine(RunCommandList(_commands, ctx, _startFromIndex));
+            _runningStack.Clear();
+
+            // Store last run duration so it stays visible after stop
+            float totalPaused = _totalPausedDuration + (_isPaused ? (Time.realtimeSinceStartup - _pauseStartTime) : 0f);
+            _lastRunElapsedSeconds = (Time.realtimeSinceStartup - _timelineStartTime) - totalPaused;
+            _isRunning = false;
+            _stopRequested = false;
+            _isPaused = false;
+            if (_runContext != null)
             {
-                TimelineCommand cmd = _commands[index];
+                _runContext.PendingConfirmCallback = null;
+                _runContext.PendingScreenshotAdvanceCallback = null;
+                _runContext.PendingResolveCallback = null;
+                _runContext.PendingRetryCallback = null;
+                _runContext.SubTimelineParamRuntime = null;
+                _runContext = null;
+            }
+            // If execution was inside a subtimeline view, close it so root is shown again
+            while (_viewStack.Count > 0) CloseSubTimelineView();
+        }
+
+        /// <summary>
+        /// Executes a flat list of commands sequentially. Called recursively for subtimelines.
+        /// Checkpoints are registered at every nesting level. Cross-level jumps bubble up through
+        /// ancestor coroutines, and can also dive into a direct-child subtimeline via PendingSubEntry.
+        /// </summary>
+        private IEnumerator RunCommandList(List<TimelineCommand> cmds, TimelineContext ctx, int startIndex)
+        {
+            var frame = new RunFrame { Cmds = cmds, Idx = startIndex };
+            _runningStack.Add(frame);
+
+            int index = startIndex;
+            while (index >= 0 && index < cmds.Count && !_stopRequested)
+            {
+                TimelineCommand cmd = cmds[index];
                 if (!cmd.Enabled)
                 {
                     index++;
+                    frame.Idx = index;
                     continue;
                 }
 
-                // If the current command is (now) invalid, pause the timeline and wait until it is fixed.
+                // If the current command is (now) invalid, pause and wait until fixed.
                 if (cmd.HasInvalidConfiguration(ctx.Variables))
                 {
                     if (!_isPaused)
                     {
                         _pauseStartTime = Time.realtimeSinceStartup;
                         _isPaused = true;
-                        HS2SandboxPlugin.Log.LogWarning($"Timeline paused: command at index {index + 1} is marked invalid.");
+                        SandboxServices.Log.LogWarning($"Timeline paused: command at index {index + 1} is marked invalid.");
                     }
-                    // Wait here until the command becomes valid again or stop is requested.
                     while (!_stopRequested && cmd.HasInvalidConfiguration(ctx.Variables))
                         yield return null;
                     if (_stopRequested) break;
                 }
-                _runningIndex = index;
-                ctx.NextIndex = null;
-                bool done = false;
-                cmd.Execute(ctx, () => done = true);
-                while (!done && !_stopRequested)
-                    yield return null;
-                if (_stopRequested) break;
+
+                frame.Idx = index;
+                ctx.JumpTarget = null; // Clear stale target before executing this command
+
+                if (cmd is SubTimelineCommand sub)
+                {
+                    // If a cross-level jump is targeting this subtimeline, start from that index
+                    int subStart = ctx.PendingSubEntry ?? 0;
+                    ctx.PendingSubEntry = null;
+                    ctx.SubTimelineParamRuntime = SubTimelineParamRuntime.FromCommand(
+                        SubTimelineParamCommand.FindFirstEnabled(sub), sub.ParamInputs);
+                    if (_autoscrollDuringRun) OpenSubTimelineView(sub);
+                    yield return StartCoroutine(RunCommandList(sub.SubCommands, ctx, subStart));
+                    ctx.SubTimelineParamRuntime = null;
+                    if (_autoscrollDuringRun) CloseSubTimelineView();
+                }
+                else
+                {
+                    bool done = false;
+                    cmd.Execute(ctx, () => done = true);
+                    while (!done && !_stopRequested)
+                        yield return null;
+                    if (_stopRequested) break;
+                }
+
+                // Register checkpoint from any nesting level so cross-level jumps can reach it
                 if (cmd is CheckpointCommand cp)
                 {
                     string name = cp.GetCheckpointName(ctx);
                     if (!string.IsNullOrEmpty(name))
-                        ctx.CheckpointIndices[name] = index;
+                        ctx.CheckpointRegistry[name] = (cmds, index);
                 }
+
                 while (_isPaused && !_stopRequested)
                     yield return null;
                 if (_stopRequested) break;
-                index = ctx.NextIndex ?? (index + 1);
+
+                if (ctx.ReturnRequested)
+                {
+                    ctx.ReturnRequested = false;
+                    break; // Exit this command list; parent continues after the SubTimelineCommand, or RunTimeline ends the run
+                }
+
+                if (ctx.JumpTarget.HasValue)
+                {
+                    var target = ctx.JumpTarget.Value;
+                    if (target.List == cmds)
+                    {
+                        // Same-level jump: update index and continue
+                        index = target.Idx;
+                        ctx.JumpTarget = null;
+                        frame.Idx = index;
+                        continue;
+                    }
+
+                    // Different level: check if the target lives inside a direct-child subtimeline
+                    bool resolved = false;
+                    for (int j = 0; j < cmds.Count; j++)
+                    {
+                        if (cmds[j] is SubTimelineCommand subCmd && subCmd.SubCommands == target.List)
+                        {
+                            ctx.PendingSubEntry = target.Idx;
+                            ctx.JumpTarget = null;
+                            index = j;
+                            frame.Idx = index;
+                            resolved = true;
+                            break;
+                        }
+                    }
+
+                    if (!resolved)
+                        break; // Target not in this level — bubble up to parent coroutine
+                }
+                else
+                {
+                    index++;
+                    frame.Idx = index;
+                }
             }
-            // Store last run duration so it stays visible after stop
-            float totalPaused = _totalPausedDuration + (_isPaused ? (Time.realtimeSinceStartup - _pauseStartTime) : 0f);
-            _lastRunElapsedSeconds = (Time.realtimeSinceStartup - _timelineStartTime) - totalPaused;
-            _isRunning = false;
-            _runningIndex = -1;
-            _stopRequested = false;
-            _isPaused = false;
-            if (_runContext != null)
+
+            _runningStack.Remove(frame);
+        }
+
+        /// <summary>
+        /// Recursively registers all checkpoints (including inside subtimelines) into
+        /// ctx.CheckpointRegistry before execution starts, enabling forward jumps.
+        /// Uses the variable state at call time for name interpolation.
+        /// </summary>
+        private static void PreScanCheckpoints(List<TimelineCommand> cmds, TimelineContext ctx)
+        {
+            for (int i = 0; i < cmds.Count; i++)
             {
-                _runContext.PendingConfirmCallback = null;
-                _runContext.PendingResolveCallback = null;
-                _runContext.PendingRetryCallback = null;
-                _runContext = null;
+                if (cmds[i] == null || !cmds[i].Enabled) continue;
+                if (cmds[i] is CheckpointCommand cp)
+                {
+                    string name = cp.GetCheckpointName(ctx);
+                    if (!string.IsNullOrEmpty(name))
+                        ctx.CheckpointRegistry[name] = (cmds, i);
+                }
+                else if (cmds[i] is SubTimelineCommand sub)
+                    PreScanCheckpoints(sub.SubCommands, ctx);
+            }
+        }
+
+        /// <summary>
+        /// Recursively collects all enabled checkpoint names into vs.CheckpointNames for
+        /// design-time validation (allows jump/loop/if to flag unknown checkpoint targets).
+        /// </summary>
+        private static void CollectCheckpointNames(List<TimelineCommand> cmds, TimelineVariableStore vs)
+        {
+            foreach (var cmd in cmds)
+            {
+                if (cmd == null || !cmd.Enabled) continue;
+                if (cmd is CheckpointCommand cp)
+                {
+                    string name = vs.Interpolate(cp.Name ?? "").Trim();
+                    if (!string.IsNullOrEmpty(name))
+                        vs.RegisterCheckpoint(name);
+                }
+                else if (cmd is SubTimelineCommand sub)
+                    CollectCheckpointNames(sub.SubCommands, vs);
             }
         }
 
@@ -1384,6 +2206,12 @@ namespace HS2SandboxPlugin
                     string s = GUILayout.TextField(current.ToString(), GUILayout.ExpandWidth(true));
                     if (int.TryParse(s, out int nVal) && nVal != current) { _persistentVariables.SetInt(n, nVal); MarkPersistentVarsDirty(); }
                 }
+                else if (type == "bool")
+                {
+                    bool current = _persistentVariables.GetBool(n);
+                    bool next = GUILayout.Toggle(current, current ? "True" : "False", GUILayout.ExpandWidth(true));
+                    if (next != current) { _persistentVariables.SetBoolExclusive(n, next); MarkPersistentVarsDirty(); }
+                }
                 else if (type == "list")
                 {
                     string displayValue = value.Length > 60 ? value.Substring(0, 57) + "..." : value;
@@ -1419,7 +2247,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6);
             GUILayout.Label("Add global variable:", GUILayout.ExpandWidth(false));
             GUILayout.BeginHorizontal();
-            _newPVarType = GUILayout.Toolbar(_newPVarType, new[] { "String", "Int", "List", "Dict" }, GUILayout.ExpandWidth(false));
+            _newPVarType = GUILayout.Toolbar(_newPVarType, new[] { "String", "Int", "Bool", "List", "Dict" }, GUILayout.ExpandWidth(false));
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             GUILayout.Label("Name", GUILayout.Width(36));
@@ -1435,6 +2263,11 @@ namespace HS2SandboxPlugin
                 _newPVarValue = GUILayout.TextField(_newPVarValue ?? "", GUILayout.ExpandWidth(true));
             }
             else if (_newPVarType == 2)
+            {
+                GUILayout.Label("Value", GUILayout.Width(32));
+                _newPVarBool = GUILayout.Toggle(_newPVarBool, _newPVarBool ? "True" : "False", GUILayout.ExpandWidth(true));
+            }
+            else if (_newPVarType == 3)
             {
                 if (GUILayout.Button("Edit list...", GUILayout.Width(72)))
                 {
@@ -1463,7 +2296,8 @@ namespace HS2SandboxPlugin
                 {
                     if (_newPVarType == 0)        _persistentVariables.SetString(pname, _newPVarValue ?? "");
                     else if (_newPVarType == 1)   _persistentVariables.SetInt(pname, int.TryParse(_newPVarValue, out int nv) ? nv : 0);
-                    else if (_newPVarType == 2)   _persistentVariables.SetList(pname, _newPVarList);
+                    else if (_newPVarType == 2)   _persistentVariables.SetBoolExclusive(pname, _newPVarBool);
+                    else if (_newPVarType == 3)   _persistentVariables.SetList(pname, _newPVarList);
                     else                          _persistentVariables.SetDict(pname, _newPVarDict);
                     MarkPersistentVarsDirty();
                     _newPVarName = "";
@@ -1492,7 +2326,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Save persistent vars failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Save persistent vars failed: {ex.Message}");
             }
         }
 
@@ -1507,7 +2341,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Load persistent vars failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Load persistent vars failed: {ex.Message}");
             }
         }
 
@@ -1524,53 +2358,30 @@ namespace HS2SandboxPlugin
                 for (int i = 0; i < _commands.Count; i++)
                     entries[i] = new SavedTimelineEntry { typeId = _commands[i].TypeId, payload = _commands[i].SerializePayload(), enabled = _commands[i].Enabled };
                 var variables = BuildVariablesList(_designTimeVariables);
-                string json = BuildTimelineJson(entries, variables);
+                var subDefs = BuildSubTimelineDefinitionsForSave();
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var d in subDefs)
+                    seen.Add(d.id);
+                PruneSubTimelineTemplateFlags(seen);
+                string json = BuildTimelineJson(entries, variables, subDefs.Count > 0 ? subDefs : null);
                 File.WriteAllText(_persistPath, json);
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Save timeline failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Save timeline failed: {ex.Message}");
             }
         }
 
-        private static string EscapeJsonString(string? s)
-        {
-            if (s == null) return "";
-            var sb = new StringBuilder(s.Length + 8);
-            foreach (char c in s)
-            {
-                switch (c)
-                {
-                    case '\\': sb.Append("\\\\"); break;
-                    case '"': sb.Append("\\\""); break;
-                    case '\n': sb.Append("\\n"); break;
-                    case '\r': sb.Append("\\r"); break;
-                    case '\t': sb.Append("\\t"); break;
-                    default:
-                        if (c < ' ') sb.AppendFormat("\\u{0:x4}", (int)c);
-                        else sb.Append(c);
-                        break;
-                }
-            }
-            return sb.ToString();
-        }
+        private static string EscapeJsonString(string? s) => TimelineJsonHelper.EscapeJsonString(s);
 
         private const char SavedVariablesListSeparator = '\u0002';
         private const char SavedVariablesDictKvSeparator = '\u0003';
 
-        private static string BuildTimelineJson(SavedTimelineEntry[] entries, List<(string name, string type, string value)>? variables = null)
+        private static string BuildTimelineJson(SavedTimelineEntry[] entries, List<(string name, string type, string value)>? variables = null, List<SavedSubTimelineDefinition>? subtimelines = null)
         {
             var sb = new StringBuilder();
-            sb.Append("{\"entries\":[");
-            for (int i = 0; i < entries.Length; i++)
-            {
-                if (i > 0) sb.Append(',');
-                var e = entries[i];
-                sb.Append("{\"typeId\":\"").Append(EscapeJsonString(e.typeId))
-                    .Append("\",\"payload\":\"").Append(EscapeJsonString(e.payload))
-                    .Append("\",\"enabled\":").Append(e.enabled ? "true" : "false").Append('}');
-            }
-            sb.Append("]");
+            sb.Append("{\"entries\":");
+            TimelineJsonHelper.AppendSavedEntriesArray(sb, entries);
             if (variables != null && variables.Count > 0)
             {
                 sb.Append(",\"variables\":[");
@@ -1584,6 +2395,16 @@ namespace HS2SandboxPlugin
                 }
                 sb.Append("]");
             }
+            if (subtimelines != null && subtimelines.Count > 0)
+            {
+                sb.Append(",\"subtimelines\":[");
+                for (int i = 0; i < subtimelines.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    TimelineJsonHelper.AppendSubTimelineDefinitionObject(sb, subtimelines[i]);
+                }
+                sb.Append(']');
+            }
             sb.Append("}");
             return sb.ToString();
         }
@@ -1595,6 +2416,8 @@ namespace HS2SandboxPlugin
                 list.Add((n, "string", v ?? ""));
             foreach (var (n, v) in store.GetAllInts())
                 list.Add((n, "int", v.ToString()));
+            foreach (var (n, v) in store.GetAllBools())
+                list.Add((n, "bool", v ? "True" : "False"));
             foreach (var (n, listVal) in store.GetAllLists())
                 list.Add((n, "list", string.Join(SavedVariablesListSeparator.ToString(), listVal ?? new List<string>())));
             foreach (var (n, dict) in store.GetAllDicts())
@@ -1622,7 +2445,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Load timeline failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Load timeline failed: {ex.Message}");
             }
         }
 
@@ -1643,53 +2466,41 @@ namespace HS2SandboxPlugin
             {
                 _commands.Clear();
                 ClearDesignTimeVariables();
+                _subTimelineTemplateFlags.Clear();
+                _viewStack.Clear();
+                _activeCommands = _commands;
+                _activeTitle = "";
+                _currentSubTimelineOwner = null;
             }
-            List<SavedTimelineEntry>? entries = null;
-            if (TryParseTimelineJson(json, out entries) && entries != null && entries.Count > 0)
+            if (TimelineJsonHelper.TryParseSubTimelinesArray(json, out List<SavedSubTimelineDefinition>? subDefs) && subDefs != null && subDefs.Count > 0)
             {
-                foreach (SavedTimelineEntry e in entries)
+                var bodies = new Dictionary<string, List<TimelineCommand>>(StringComparer.Ordinal);
+                foreach (var d in subDefs)
                 {
-                    if (string.IsNullOrEmpty(e.typeId)) continue;
-                    try
-                    {
-                        string typeId = e.typeId;
-                        string payload = e.payload ?? "";
-                        MigrateLegacyCommand(ref typeId, ref payload);
-                        var cmd = TimelineCommandFactory.Create(typeId);
-                        cmd.DeserializePayload(payload);
-                        cmd.Enabled = e.enabled;
-                        _commands.Add(cmd);
-                    }
-                    catch (Exception ex)
-                    {
-                        HS2SandboxPlugin.Log.LogWarning($"Load command {e.typeId} failed: {ex.Message}");
-                    }
+                    if (string.IsNullOrEmpty(d.id)) continue;
+                    bodies[d.id] = new List<TimelineCommand>();
+                    _subTimelineTemplateFlags[d.id] = d.template;
                 }
+                foreach (var d in subDefs)
+                {
+                    if (string.IsNullOrEmpty(d.id) || !bodies.ContainsKey(d.id)) continue;
+                    FillSubTimelineDefinitionList(bodies, d.id, d.entries ?? Array.Empty<SavedTimelineEntry>());
+                }
+                if (TryParseTimelineJson(json, out List<SavedTimelineEntry>? entries) && entries != null)
+                    LoadCommandListFromEntries(entries, bodies, _commands);
+                ApplySavedVariables(json, replace);
+                return;
+            }
+            List<SavedTimelineEntry>? entriesLegacy = null;
+            if (TryParseTimelineJson(json, out entriesLegacy) && entriesLegacy != null && entriesLegacy.Count > 0)
+            {
+                LoadCommandListFromEntries(entriesLegacy, bodies: null, _commands);
                 ApplySavedVariables(json, replace);
                 return;
             }
             var wrapper = JsonUtility.FromJson<SavedTimelineWrapper>(json);
             if (wrapper?.entries != null && wrapper.entries.Length > 0)
-            {
-                foreach (SavedTimelineEntry e in wrapper.entries)
-                {
-                    if (string.IsNullOrEmpty(e.typeId)) continue;
-                    try
-                    {
-                        string typeId = e.typeId;
-                        string payload = e.payload ?? "";
-                        MigrateLegacyCommand(ref typeId, ref payload);
-                        var cmd = TimelineCommandFactory.Create(typeId);
-                        cmd.DeserializePayload(payload);
-                        cmd.Enabled = e.enabled;
-                        _commands.Add(cmd);
-                    }
-                    catch (Exception ex)
-                    {
-                        HS2SandboxPlugin.Log.LogWarning($"Load command {e.typeId} failed: {ex.Message}");
-                    }
-                }
-            }
+                LoadCommandListFromEntries(new List<SavedTimelineEntry>(wrapper.entries), bodies: null, _commands);
             ApplySavedVariables(json, replace);
         }
 
@@ -1704,13 +2515,15 @@ namespace HS2SandboxPlugin
                 string n = name.Trim();
                 if (!replace)
                 {
-                    if (target.HasString(n) || target.HasInt(n) || target.HasList(n) || target.HasDict(n))
+                    if (target.HasString(n) || target.HasInt(n) || target.HasBool(n) || target.HasList(n) || target.HasDict(n))
                         continue;
                 }
                 if (type == "string")
                     target.SetString(n, value ?? "");
                 else if (type == "int")
                     target.SetInt(n, int.TryParse(value, out int iv) ? iv : 0);
+                else if (type == "bool")
+                    target.SetBool(n, TimelineVariableStore.TryParseBoolText(value ?? "", out bool bv) ? bv : false);
                 else if (type == "list")
                 {
                     var list = new List<string>();
@@ -1758,7 +2571,7 @@ namespace HS2SandboxPlugin
             {
                 int objStart = json.IndexOf('{', i);
                 if (objStart < 0) break;
-                int objEnd = IndexOfMatchingBrace(json, objStart);
+                int objEnd = TimelineJsonHelper.IndexOfMatchingBrace(json, objStart);
                 if (objEnd < 0) break;
                 string obj = json.Substring(objStart, objEnd - objStart + 1);
                 if (TryParseVariableEntry(obj, out string? name, out string? type, out string? value))
@@ -1776,135 +2589,14 @@ namespace HS2SandboxPlugin
             name = null;
             type = null;
             value = null;
-            if (!TryParseJsonStringValue(obj, "name", out name)) return false;
-            if (!TryParseJsonStringValue(obj, "type", out type)) type = "string";
-            if (!TryParseJsonStringValue(obj, "value", out value)) value = "";
+            if (!TimelineJsonHelper.TryParseJsonStringValue(obj, "name", out name)) return false;
+            if (!TimelineJsonHelper.TryParseJsonStringValue(obj, "type", out type)) type = "string";
+            if (!TimelineJsonHelper.TryParseJsonStringValue(obj, "value", out value)) value = "";
             return true;
         }
 
-        /// <summary>
-        /// Parses our timeline JSON format {"entries":[{...},{...}]} without relying on JsonUtility (which fails on arrays).
-        /// </summary>
         private static bool TryParseTimelineJson(string json, out List<SavedTimelineEntry>? entries)
-        {
-            entries = null;
-            int i = json.IndexOf("\"entries\"", StringComparison.OrdinalIgnoreCase);
-            if (i < 0) return false;
-            i = json.IndexOf('[', i);
-            if (i < 0) return false;
-            entries = new List<SavedTimelineEntry>();
-            i++;
-            while (i < json.Length)
-            {
-                int objStart = json.IndexOf('{', i);
-                if (objStart < 0) break;
-                int objEnd = IndexOfMatchingBrace(json, objStart);
-                if (objEnd < 0) break;
-                string obj = json.Substring(objStart, objEnd - objStart + 1);
-                if (TryParseEntry(obj, out SavedTimelineEntry? entry) && entry != null)
-                    entries.Add(entry);
-                i = objEnd + 1;
-                int next = json.IndexOf('{', i);
-                if (next < 0) break;
-                i = next;
-            }
-            return entries.Count >= 0;
-        }
-
-        private static int IndexOfMatchingBrace(string s, int openIndex)
-        {
-            int depth = 0;
-            bool inString = false;
-            bool escape = false;
-            char quote = '\0';
-            for (int i = openIndex; i < s.Length; i++)
-            {
-                char c = s[i];
-                if (inString)
-                {
-                    if (escape) { escape = false; continue; }
-                    if (c == '\\') { escape = true; continue; }
-                    if (c == quote) { inString = false; continue; }
-                    continue;
-                }
-                if (c == '"' || c == '\'') { inString = true; quote = c; continue; }
-                if (c == '{') { depth++; continue; }
-                if (c == '}')
-                {
-                    depth--;
-                    if (depth == 0) return i;
-                }
-            }
-            return -1;
-        }
-
-        private static bool TryParseEntry(string obj, out SavedTimelineEntry? entry)
-        {
-            entry = null;
-            if (!TryParseJsonStringValue(obj, "typeId", out string? typeId)) typeId = "";
-            if (!TryParseJsonStringValue(obj, "payload", out string? payload)) payload = "";
-            if (!TryParseJsonBoolValue(obj, "enabled", out bool enabled)) enabled = true;
-            entry = new SavedTimelineEntry { typeId = typeId ?? "", payload = payload ?? "", enabled = enabled };
-            return true;
-        }
-
-        private static bool TryParseJsonStringValue(string json, string key, out string? value)
-        {
-            value = null;
-            string keyPattern = "\"" + key + "\"";
-            int ki = json.IndexOf(keyPattern, StringComparison.OrdinalIgnoreCase);
-            if (ki < 0) return false;
-            int colon = json.IndexOf(':', ki);
-            if (colon < 0) return false;
-            int start = json.IndexOf('"', colon);
-            if (start < 0) return false;
-            start++;
-            var sb = new StringBuilder();
-            for (int i = start; i < json.Length; i++)
-            {
-                char c = json[i];
-                if (c == '\\' && i + 1 < json.Length)
-                {
-                    char next = json[i + 1];
-                    if (next == '"') { sb.Append('"'); i++; continue; }
-                    if (next == '\\') { sb.Append('\\'); i++; continue; }
-                    if (next == 'n') { sb.Append('\n'); i++; continue; }
-                    if (next == 'r') { sb.Append('\r'); i++; continue; }
-                    if (next == 't') { sb.Append('\t'); i++; continue; }
-                    if (next == 'u' && i + 5 < json.Length)
-                    {
-                        string hex = json.Substring(i + 2, 4);
-                        if (hex.Length == 4 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out int codePoint))
-                        {
-                            sb.Append((char)codePoint);
-                            i += 5;
-                            continue;
-                        }
-                    }
-                }
-                if (c == '"') break;
-                sb.Append(c);
-            }
-            value = sb.ToString();
-            return true;
-        }
-
-        private static bool TryParseJsonBoolValue(string json, string key, out bool value)
-        {
-            value = true;
-            string keyPattern = "\"" + key + "\"";
-            int ki = json.IndexOf(keyPattern, StringComparison.OrdinalIgnoreCase);
-            if (ki < 0) return false;
-            int colon = json.IndexOf(':', ki);
-            if (colon < 0) return false;
-            colon++;
-            while (colon < json.Length && char.IsWhiteSpace(json[colon])) colon++;
-            if (colon + 4 <= json.Length && string.Compare(json, colon, "true", 0, 4, StringComparison.OrdinalIgnoreCase) == 0)
-            { value = true; return true; }
-            if (colon + 5 <= json.Length && string.Compare(json, colon, "false", 0, 5, StringComparison.OrdinalIgnoreCase) == 0)
-            { value = false; return true; }
-            return false;
-        }
+            => TimelineJsonHelper.TryParseTimelineJson(json, out entries);
 
         private void SaveTimelineToFile()
         {
@@ -1918,14 +2610,19 @@ namespace HS2SandboxPlugin
                 for (int i = 0; i < _commands.Count; i++)
                     entries[i] = new SavedTimelineEntry { typeId = _commands[i].TypeId, payload = _commands[i].SerializePayload(), enabled = _commands[i].Enabled };
                 var variables = BuildVariablesList(_designTimeVariables);
-                string json = BuildTimelineJson(entries, variables);
+                var subDefs = BuildSubTimelineDefinitionsForSave();
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var d in subDefs)
+                    seen.Add(d.id);
+                PruneSubTimelineTemplateFlags(seen);
+                string json = BuildTimelineJson(entries, variables, subDefs.Count > 0 ? subDefs : null);
                 if (!savePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                     savePath += ".json";
                 File.WriteAllText(savePath, json);
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Save timeline failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Save timeline failed: {ex.Message}");
             }
         }
 
@@ -1942,7 +2639,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Load timeline failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Load timeline failed: {ex.Message}");
             }
         }
 
@@ -1959,7 +2656,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogError($"Import timeline failed: {ex.Message}");
+                SandboxServices.Log.LogError($"Import timeline failed: {ex.Message}");
             }
         }
     }

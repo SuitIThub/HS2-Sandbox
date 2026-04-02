@@ -5,9 +5,8 @@ namespace HS2SandboxPlugin
 {
     /// <summary>
     /// Reads a value from a dictionary variable by key and stores it in an existing variable.
-    /// The target type is inferred from the variable: if it is a known integer variable the raw
-    /// string is parsed as int (0 on failure); otherwise it is stored as a string.
-    /// Dictionary name and key support variable interpolation.
+    /// The target type is inferred from the variable: int, bool, or string (default). Raw strings
+    /// parse to int/bool with the same rules as scalar conversion. Dictionary name and key support interpolation.
     /// </summary>
     public class DictGetCommand : TimelineCommand
     {
@@ -44,24 +43,26 @@ namespace HS2SandboxPlugin
 
             if (string.IsNullOrEmpty(dictName))
             {
-                HS2SandboxPlugin.Log.LogWarning("DictGet: dict name is empty.");
+                SandboxServices.Log.LogWarning("DictGet: dict name is empty.");
                 onComplete();
                 return;
             }
             if (string.IsNullOrEmpty(targetVar))
             {
-                HS2SandboxPlugin.Log.LogWarning("DictGet: target variable name is empty.");
+                SandboxServices.Log.LogWarning("DictGet: target variable name is empty.");
                 onComplete();
                 return;
             }
 
             bool isIntTarget = ctx.Variables.HasInt(targetVar);
+            bool isBoolTarget = ctx.Variables.HasBool(targetVar);
 
             if (!ctx.Variables.TryGetDictValue(dictName, key, out string raw))
             {
-                HS2SandboxPlugin.Log.LogWarning($"DictGet: key '{key}' not found in dict '{dictName}'.");
-                if (isIntTarget) ctx.Variables.SetInt(targetVar, 0);
-                else             ctx.Variables.SetString(targetVar, "");
+                SandboxServices.Log.LogWarning($"DictGet: key '{key}' not found in dict '{dictName}'.");
+                if (isIntTarget) ctx.Variables.SetIntExclusive(targetVar, 0);
+                else if (isBoolTarget) ctx.Variables.SetBoolExclusive(targetVar, false);
+                else ctx.Variables.SetStringExclusive(targetVar, "");
                 onComplete();
                 return;
             }
@@ -69,16 +70,30 @@ namespace HS2SandboxPlugin
             if (isIntTarget)
             {
                 if (int.TryParse(raw, out int intVal))
-                    ctx.Variables.SetInt(targetVar, intVal);
+                    ctx.Variables.SetIntExclusive(targetVar, intVal);
+                else if (TimelineVariableStore.TryParseBoolText(raw, out bool bv))
+                    ctx.Variables.SetIntExclusive(targetVar, bv ? 1 : 0);
                 else
                 {
-                    HS2SandboxPlugin.Log.LogWarning($"DictGet: value '{raw}' for key '{key}' in dict '{dictName}' could not be parsed as int. Storing 0.");
-                    ctx.Variables.SetInt(targetVar, 0);
+                    SandboxServices.Log.LogWarning($"DictGet: value '{raw}' for key '{key}' in dict '{dictName}' could not be parsed as int. Storing 0.");
+                    ctx.Variables.SetIntExclusive(targetVar, 0);
+                }
+            }
+            else if (isBoolTarget)
+            {
+                if (TimelineVariableStore.TryParseBoolText(raw, out bool boolVal))
+                    ctx.Variables.SetBoolExclusive(targetVar, boolVal);
+                else if (int.TryParse(raw, out int n))
+                    ctx.Variables.SetBoolExclusive(targetVar, n != 0);
+                else
+                {
+                    SandboxServices.Log.LogWarning($"DictGet: value '{raw}' for key '{key}' in dict '{dictName}' could not be parsed as bool. Storing False.");
+                    ctx.Variables.SetBoolExclusive(targetVar, false);
                 }
             }
             else
             {
-                ctx.Variables.SetString(targetVar, raw);
+                ctx.Variables.SetStringExclusive(targetVar, raw);
             }
 
             onComplete();
@@ -90,13 +105,24 @@ namespace HS2SandboxPlugin
             if (string.IsNullOrEmpty(targetVar)) return;
 
             bool isIntTarget = store.HasInt(targetVar);
+            bool isBoolTarget = store.HasBool(targetVar);
 
             store.TryGetDictValue((_dictName ?? "").Trim(), _key ?? "", out string raw);
 
             if (isIntTarget)
-                store.SetInt(targetVar, int.TryParse(raw, out int v) ? v : 0);
+            {
+                if (int.TryParse(raw, out int v)) store.SetIntExclusive(targetVar, v);
+                else if (TimelineVariableStore.TryParseBoolText(raw, out bool bv)) store.SetIntExclusive(targetVar, bv ? 1 : 0);
+                else store.SetIntExclusive(targetVar, 0);
+            }
+            else if (isBoolTarget)
+            {
+                if (TimelineVariableStore.TryParseBoolText(raw, out bool b)) store.SetBoolExclusive(targetVar, b);
+                else if (int.TryParse(raw, out int n)) store.SetBoolExclusive(targetVar, n != 0);
+                else store.SetBoolExclusive(targetVar, false);
+            }
             else
-                store.SetString(targetVar, raw ?? "");
+                store.SetStringExclusive(targetVar, raw ?? "");
         }
 
         public override string? GetValidationError(TimelineVariableStore? vars)

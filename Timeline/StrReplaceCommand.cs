@@ -45,7 +45,7 @@ namespace HS2SandboxPlugin
             string varName = (_variableName ?? "").Trim();
             if (string.IsNullOrEmpty(varName))
             {
-                HS2SandboxPlugin.Log.LogWarning("StrReplace: variable name is empty.");
+                SandboxServices.Log.LogWarning("StrReplace: variable name is empty.");
                 onComplete();
                 return;
             }

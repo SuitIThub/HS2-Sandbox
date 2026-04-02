@@ -35,7 +35,7 @@ namespace HS2SandboxPlugin
 
             if (target == null)
             {
-                HS2SandboxPlugin.Log.LogWarning($"SelectObjectByName: No root object found with name '{resolvedName}'.");
+                SandboxServices.Log.LogWarning($"SelectObjectByName: No root object found with name '{resolvedName}'.");
                 onComplete();
                 return;
             }
@@ -46,7 +46,7 @@ namespace HS2SandboxPlugin
             }
             catch (Exception ex)
             {
-                HS2SandboxPlugin.Log.LogWarning($"SelectObjectByName: OnClickSelect failed for '{resolvedName}'. {ex.Message}");
+                SandboxServices.Log.LogWarning($"SelectObjectByName: OnClickSelect failed for '{resolvedName}'. {ex.Message}");
             }
 
             onComplete();

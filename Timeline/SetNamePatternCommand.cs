@@ -41,7 +41,7 @@ namespace HS2SandboxPlugin
             if (success)
             {
                 yield return new WaitForSeconds(0.5f);
-                UnityEngine.Object.FindObjectOfType<CopyScript>()?.RefreshFromTimeline();
+                CopyScriptInterop.TryRefreshCopyScriptWindow();
                 onComplete();
             }
             else

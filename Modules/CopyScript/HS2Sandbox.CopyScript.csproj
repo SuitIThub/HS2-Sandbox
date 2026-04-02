@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>HS2Sandbox.CopyScript</AssemblyName>
+    <RootNamespace>HS2SandboxPlugin</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Shared\**\*.cs" />
+    <Compile Include="..\..\CopyScript\CopyScriptApiClient.cs" />
+    <Compile Include="..\..\CopyScript\CopyScriptWindow.cs" />
+    <Compile Include="CopyScriptModulePlugin.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\copy-icon.png" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+</Project>
+
