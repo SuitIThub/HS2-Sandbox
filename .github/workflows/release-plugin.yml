@@ -1,0 +1,259 @@
+# Releases plugin artifacts when a BepInEx PluginVersion constant changes in any plugin/module.
+# One GitHub Release is created per qualifying push, containing a grouped set of assets:
+#   - HS2SandboxPlugin.dll (all-in-one) whenever any module or the main plugin version changed
+#   - HS2Sandbox.<Module>.dll only for modules whose PluginVersion line changed
+#
+# CI build prerequisites (see README / SETUP.md):
+#   - HS2_Data/Managed: set repository variable HS2_MANAGED_PATH, or
+#     secret HS2_MANAGED_ZIP_URL to a zip of the Managed folder contents (or minimum required DLLs).
+# The HS2API NuGet package is restored automatically in the workflow.
+
+name: Release plugin
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Create a release even if no PluginVersion was bumped"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-plugin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve comparison refs
+        id: refs
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.event.after }}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            AFTER="$(git rev-parse HEAD)"
+            BEFORE="$(git rev-parse HEAD~1)"
+          elif [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
+            AFTER="$(git rev-parse HEAD)"
+            BEFORE="$(git rev-parse HEAD~1)"
+          fi
+
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER" >> "$GITHUB_OUTPUT"
+
+      - name: Detect PluginVersion bumps
+        id: detect
+        run: |
+          set -euo pipefail
+          BEFORE="${{ steps.refs.outputs.before }}"
+          AFTER="${{ steps.refs.outputs.after }}"
+
+          FORCE="false"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && \
+             [[ "${{ github.event.inputs.force_release }}" == "true" ]]; then
+            FORCE="true"
+          fi
+
+          extract_version() {
+            local ref="$1"
+            local path="$2"
+            git show "${ref}:${path}" 2>/dev/null | grep -oP 'PluginVersion\s*=\s*"\K[^"]+' | head -n1 || true
+          }
+
+          declare -A FILES=(
+            [allinone]="HS2SandboxPlugin.cs"
+            [copyscript]="Modules/CopyScript/CopyScriptModulePlugin.cs"
+            [timeline]="Modules/Timeline/TimelineModulePlugin.cs"
+            [searchbarmanager]="Modules/SearchBarManager/SearchBarManagerModulePlugin.cs"
+          )
+
+          declare -A DLLS=(
+            [allinone]="bin/Release/HS2SandboxPlugin.dll"
+            [copyscript]="Modules/CopyScript/bin/Release/HS2Sandbox.CopyScript.dll"
+            [timeline]="Modules/Timeline/bin/Release/HS2Sandbox.Timeline.dll"
+            [searchbarmanager]="Modules/SearchBarManager/bin/Release/HS2Sandbox.SearchBarManager.dll"
+          )
+
+          CHANGED=()
+          NOTES=()
+
+          for key in allinone copyscript timeline searchbarmanager; do
+            f="${FILES[$key]}"
+            old_v="$(extract_version "$BEFORE" "$f")"
+            new_v="$(extract_version "$AFTER" "$f")"
+            if [[ -z "$new_v" ]]; then
+              echo "::warning::Could not read PluginVersion from $f at $AFTER"
+              continue
+            fi
+            if [[ "$old_v" != "$new_v" ]]; then
+              CHANGED+=("$key")
+              NOTES+=("- **${key}**: \`${old_v:-∅}\` → \`${new_v}\`")
+            fi
+          done
+
+          if [[ "$FORCE" != "true" && ${#CHANGED[@]} -eq 0 ]]; then
+            echo "No PluginVersion changes between $BEFORE and $AFTER; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
+            CHANGED=(copyscript timeline searchbarmanager)
+            NOTES+=("- **manual force**: including all module DLLs plus all-in-one")
+          fi
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+          ASSETS=()
+          ASSETS+=("${DLLS[allinone]}")
+
+          for key in "${CHANGED[@]}"; do
+            if [[ "$key" != "allinone" ]]; then
+              ASSETS+=("${DLLS[$key]}")
+            fi
+          done
+
+          UNIQUE=()
+          for p in "${ASSETS[@]}"; do
+            skip=false
+            for u in "${UNIQUE[@]}"; do
+              [[ "$u" == "$p" ]] && skip=true && break
+            done
+            $skip || UNIQUE+=("$p")
+          done
+
+          LIST_FILE="$GITHUB_WORKSPACE/.release-asset-paths.txt"
+          printf '%s\n' "${UNIQUE[@]}" > "$LIST_FILE"
+          echo "asset_list_file=$LIST_FILE" >> "$GITHUB_OUTPUT"
+
+          {
+            echo 'notes<<NOTEEOF'
+            echo "### Version changes"
+            if [[ ${#NOTES[@]} -gt 0 ]]; then
+              printf '%s\n' "${NOTES[@]}"
+            fi
+            echo ""
+            echo "### Artifacts"
+            printf '%s\n' "${UNIQUE[@]}" | while read -r line; do
+              [[ -z "$line" ]] && continue
+              echo "- \`$(basename "$line")\`"
+            done
+            echo 'NOTEEOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Skip (no version bump)
+        if: steps.detect.outputs.should_release != 'true'
+        run: echo "Skipping build and release."
+
+      - name: Check existing release for this commit
+        if: steps.detect.outputs.should_release == 'true'
+        id: existing
+        run: |
+          set -euo pipefail
+          TAG="release-${{ github.sha }}"
+          CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}")
+          if [[ "$CODE" == "200" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip (release tag already exists)
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists == 'true'
+        run: echo "Tag release-${{ github.sha }} already has a GitHub release; skipping build."
+
+      - name: Prepare HS2 Managed
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
+        env:
+          HS2_MANAGED_ZIP_URL: ${{ secrets.HS2_MANAGED_ZIP_URL }}
+        run: |
+          set -euo pipefail
+          VAR_PATH="${{ vars.HS2_MANAGED_PATH }}"
+          if [[ -n "$VAR_PATH" ]]; then
+            echo "HS2_Managed=$VAR_PATH" >> "$GITHUB_ENV"
+          elif [[ -n "${HS2_MANAGED_ZIP_URL:-}" ]]; then
+            mkdir -p "$GITHUB_WORKSPACE/.ci-hs2-managed"
+            curl -fsSL "$HS2_MANAGED_ZIP_URL" -o /tmp/hs2-managed.zip
+            unzip -q -o /tmp/hs2-managed.zip -d "$GITHUB_WORKSPACE/.ci-hs2-managed"
+            echo "HS2_Managed=$GITHUB_WORKSPACE/.ci-hs2-managed" >> "$GITHUB_ENV"
+          else
+            echo "::error::Set repository variable HS2_MANAGED_PATH (path on runner) or secret HS2_MANAGED_ZIP_URL (zip of HS2_Data/Managed)."
+            exit 1
+          fi
+
+      - name: Verify HS2 Managed
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$HS2_Managed/Assembly-CSharp.dll" ]]; then
+            echo "::error::HS2_Managed does not contain Assembly-CSharp.dll: $HS2_Managed"
+            exit 1
+          fi
+
+      - name: Restore HS2API NuGet package
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p packages/IllusionModdingAPI.HS2API.1.39.0
+          curl -fsSL "https://www.nuget.org/api/v2/package/IllusionModdingAPI.HS2API/1.39.0" -o /tmp/hs2api.nupkg
+          unzip -q -o /tmp/hs2api.nupkg -d packages/IllusionModdingAPI.HS2API.1.39.0
+
+      - name: Setup .NET
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore and build solution (Release)
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          dotnet restore HS2-Sandbox.sln
+          dotnet build HS2-Sandbox.sln -c Release --no-incremental
+
+      - name: Stage release files
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p release-staging
+          while IFS= read -r rel || [[ -n "${rel:-}" ]]; do
+            [[ -z "${rel// }" ]] && continue
+            if [[ ! -f "$rel" ]]; then
+              echo "::error::Expected artifact missing: $rel"
+              exit 1
+            fi
+            cp -a "$rel" "release-staging/$(basename "$rel")"
+          done < "${{ steps.detect.outputs.asset_list_file }}"
+
+      - name: Create GitHub Release (grouped assets)
+        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-${{ github.sha }}
+          name: HS2 Sandbox — grouped release (${{ github.sha }})
+          body: |
+            ${{ steps.detect.outputs.notes }}
+
+            **Commit:** ${{ github.sha }}
+            **Workflow:** ${{ github.run_id }}
+          files: release-staging/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

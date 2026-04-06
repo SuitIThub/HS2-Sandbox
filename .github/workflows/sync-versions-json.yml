@@ -1,0 +1,50 @@
+# Regenerates versions.json from PluginVersion constants so README shields.io badges stay accurate.
+# Does not run when only versions.json changes (path filter), avoiding commit loops.
+
+name: Sync versions.json
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "HS2SandboxPlugin.cs"
+      - "Modules/CopyScript/CopyScriptModulePlugin.cs"
+      - "Modules/Timeline/TimelineModulePlugin.cs"
+      - "Modules/SearchBarManager/SearchBarManagerModulePlugin.cs"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate versions.json
+        run: |
+          set -euo pipefail
+          extract_version() {
+            grep -oP 'PluginVersion\s*=\s*"\K[^"]+' "$1" | head -n1
+          }
+          jq -n \
+            --arg allInOne "$(extract_version HS2SandboxPlugin.cs)" \
+            --arg copyScript "$(extract_version Modules/CopyScript/CopyScriptModulePlugin.cs)" \
+            --arg timeline "$(extract_version Modules/Timeline/TimelineModulePlugin.cs)" \
+            --arg searchBarManager "$(extract_version Modules/SearchBarManager/SearchBarManagerModulePlugin.cs)" \
+            '{schemaVersion: 1, allInOne: $allInOne, copyScript: $copyScript, timeline: $timeline, searchBarManager: $searchBarManager}' \
+            > versions.json
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add versions.json
+          if git diff --cached --quiet; then
+            echo "versions.json already matches source."
+          else
+            git commit -m "chore: sync versions.json from PluginVersion constants"
+            git push
+          fi
