@@ -145,9 +145,9 @@ HS2-Sandbox/
 
 ## References
 
-- `BepInEx.Core`, `UnityEngine.Modules`, game assemblies via `HS2_Managed` in the `.csproj`.
+- `BepInEx.Core`, `UnityEngine.Modules`, IllusionLibs (`IllusionLibs.HoneySelect2.*`), and `IllusionModdingAPI.HS2API` via `Directory.Build.props` and `nuget.config`.
 
 ## Troubleshooting
 
-- **Missing references:** `HS2_Managed` path in `.csproj` must point at a valid game install; DLLs must exist there.
+- **Missing references:** Run `dotnet restore` from the repo root; ensure `nuget.config` includes the IllusionLibs feed. No local game `HS2_Data/Managed` path is required.
 - **SDK:** `dotnet --list-sdks` — need an SDK that can build the project (e.g. .NET 6+ SDK for `net472` targets).

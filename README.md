@@ -25,8 +25,7 @@ A BepInEx plugin for Honey Select 2 that adds a sandbox interface in StudioNeoV2
 
 ## Building
 
-1. Set the `HS2_Managed` environment variable to point to your Honey Select 2 `HS2_Data/Managed` folder
-2. Build the project using Visual Studio or `dotnet build`
+Game assemblies are restored from the [IllusionLibs](https://github.com/IllusionMods/IllusionLibs) NuGet feed (see `nuget.config`). Build with Visual Studio or `dotnet build HS2-Sandbox.sln -c Release`.
 
 ## Usage
 

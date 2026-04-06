@@ -7,32 +7,30 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin\$(Configuration)\</OutputPath>
-
-    <!-- Set your Honey Select 2 Managed folder path here -->
-    <!-- Example: C:\Games\HoneySelect2\HS2_Data\Managed -->
-    <HS2_Managed Condition="'$(HS2_Managed)' == ''">D:\Honey Select\StudioNEOV2_Data\Managed</HS2_Managed>
   </PropertyGroup>
 
+  <!--
+    Game and Unity UI references come from IllusionLibs (IllusionMods NuGet feed), same pattern as other HS2 plugins.
+    Requires nuget.config with the IllusionLibs source — no local HS2_Data/Managed path.
+  -->
   <ItemGroup>
     <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.4.21" />
     <PackageReference Include="BepInEx.PluginInfoProps" Version="1.1.0" />
     <PackageReference Include="IronPython" Version="3.4.2" />
     <PackageReference Include="UnityEngine.Modules" Version="2018.4.30" IncludeAssets="compile" />
-  </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="Assembly-CSharp">
-      <HintPath>$(HS2_Managed)\Assembly-CSharp.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="UnityEngine.UI">
-      <HintPath>$(HS2_Managed)\UnityEngine.UI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="HS2API">
-      <HintPath>$(MSBuildThisFileDirectory)packages\IllusionModdingAPI.HS2API.1.39.0\lib\net46\HS2API.dll</HintPath>
-    </Reference>
+    <PackageReference Include="IllusionLibs.HoneySelect2.Assembly-CSharp" Version="2020.5.29.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionLibs.HoneySelect2.UnityEngine.UI" Version="2018.4.11.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionModdingAPI.HS2API" Version="1.46.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>
-

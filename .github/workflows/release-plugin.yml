@@ -6,10 +6,7 @@
 #   - HS2Sandbox.<Module>.dll only for modules whose PluginVersion line changed (or all modules
 #     on first-ever release / force)
 #
-# CI build prerequisites (see README / SETUP.md):
-#   - HS2_Data/Managed: set repository variable HS2_MANAGED_PATH, or
-#     secret HS2_MANAGED_ZIP_URL to a zip of the Managed folder contents (or minimum required DLLs).
-# The HS2API NuGet package is restored automatically in the workflow.
+# Builds use NuGet only (IllusionLibs + BepInEx feeds via nuget.config); no local game path.
 
 name: Release plugin
 
@@ -117,7 +114,6 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=1")
-            # jq failure or non-array → assume releases exist (avoid accidental mass publish)
             REL_COUNT=$(echo "$REL_JSON" | jq 'length' 2>/dev/null || echo 1)
             if [[ "$REL_COUNT" =~ ^[0-9]+$ ]] && [[ "$REL_COUNT" -eq 0 ]]; then
               INITIAL_RELEASE="true"
@@ -202,42 +198,6 @@ jobs:
       - name: Skip (release tag already exists)
         if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists == 'true'
         run: echo "Tag release-${{ github.sha }} already has a GitHub release; skipping build."
-
-      - name: Prepare HS2 Managed
-        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
-        env:
-          HS2_MANAGED_ZIP_URL: ${{ secrets.HS2_MANAGED_ZIP_URL }}
-        run: |
-          set -euo pipefail
-          VAR_PATH="${{ vars.HS2_MANAGED_PATH }}"
-          if [[ -n "$VAR_PATH" ]]; then
-            echo "HS2_Managed=$VAR_PATH" >> "$GITHUB_ENV"
-          elif [[ -n "${HS2_MANAGED_ZIP_URL:-}" ]]; then
-            mkdir -p "$GITHUB_WORKSPACE/.ci-hs2-managed"
-            curl -fsSL "$HS2_MANAGED_ZIP_URL" -o /tmp/hs2-managed.zip
-            unzip -q -o /tmp/hs2-managed.zip -d "$GITHUB_WORKSPACE/.ci-hs2-managed"
-            echo "HS2_Managed=$GITHUB_WORKSPACE/.ci-hs2-managed" >> "$GITHUB_ENV"
-          else
-            echo "::error::Set repository variable HS2_MANAGED_PATH (path on runner) or secret HS2_MANAGED_ZIP_URL (zip of HS2_Data/Managed)."
-            exit 1
-          fi
-
-      - name: Verify HS2 Managed
-        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
-        run: |
-          set -euo pipefail
-          if [[ ! -f "$HS2_Managed/Assembly-CSharp.dll" ]]; then
-            echo "::error::HS2_Managed does not contain Assembly-CSharp.dll: $HS2_Managed"
-            exit 1
-          fi
-
-      - name: Restore HS2API NuGet package
-        if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
-        run: |
-          set -euo pipefail
-          mkdir -p packages/IllusionModdingAPI.HS2API.1.39.0
-          curl -fsSL "https://www.nuget.org/api/v2/package/IllusionModdingAPI.HS2API/1.39.0" -o /tmp/hs2api.nupkg
-          unzip -q -o /tmp/hs2api.nupkg -d packages/IllusionModdingAPI.HS2API.1.39.0
 
       - name: Setup .NET
         if: steps.detect.outputs.should_release == 'true' && steps.existing.outputs.exists != 'true'
