@@ -41,6 +41,8 @@ namespace HS2SandboxPlugin
         private Action<string[]>? _listEditorOnApply;
         private Rect _listEditorWindowRect;
         private const int ListEditorWindowID = 2007;
+        private const float ListEditorMaxHeightPx = 1400f;
+        private Vector2 _listEditorScrollPosition;
 
         public override void DrawWindow()
         {
@@ -51,7 +53,7 @@ namespace HS2SandboxPlugin
             {
                 float margin = 8f;
                 _listEditorWindowRect = GUILayout.Window(ListEditorWindowID, _listEditorWindowRect, DrawListEditorWindowContent, "Edit list",
-                    GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(500f));
+                    GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(ListEditorMaxHeightPx));
                 _listEditorWindowRect.x = Mathf.Clamp(_listEditorWindowRect.x, margin, Mathf.Max(margin, Screen.width - _listEditorWindowRect.width - margin));
                 _listEditorWindowRect.y = Mathf.Clamp(_listEditorWindowRect.y, margin, Mathf.Max(margin, Screen.height - _listEditorWindowRect.height - margin));
             }
@@ -669,11 +671,20 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
         }
 
+        private float GetListEditorTextScrollHeight()
+        {
+            const float reservedForLabelButtonsAndPadding = 100f;
+            float maxScroll = Mathf.Min(ListEditorMaxHeightPx, Screen.height - 48f) - reservedForLabelButtonsAndPadding;
+            return Mathf.Max(120f, maxScroll);
+        }
+
         private void DrawListEditorWindowContent(int id)
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label("One value per line:", GUILayout.ExpandWidth(false));
+            _listEditorScrollPosition = GUILayout.BeginScrollView(_listEditorScrollPosition, GUILayout.ExpandWidth(true), GUILayout.Height(GetListEditorTextScrollHeight()));
             _listEditorText = GUILayout.TextArea(_listEditorText ?? "", GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.EndScrollView();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Done", GUILayout.Width(80)))
             {

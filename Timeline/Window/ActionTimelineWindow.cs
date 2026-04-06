@@ -50,6 +50,10 @@ namespace HS2SandboxPlugin
         private Action<string[]>? _listEditorOnApply;
         private Rect _listEditorWindowRect;
         private const int ListEditorWindowID = 2005;
+        /// <summary>Max height of the text viewport (scroll area), not the whole window. GUILayout.MaxHeight on GUILayout.Window does not cap expanding TextAreas.</summary>
+        private const float ListOrDictEditorMaxHeightPx = 1400f;
+        private Vector2 _listEditorScrollPosition;
+        private Vector2 _dictEditorScrollPosition;
         private bool _dictEditorOpen;
         private string _dictEditorText = "";
         private Action<Dictionary<string, string>>? _dictEditorOnApply;
@@ -127,6 +131,9 @@ namespace HS2SandboxPlugin
             ["screenshot_alt_path_var"] = new Color(0.4f, 0.68f, 0.74f),
             ["set_camera_by_name"] = new Color(0.3f, 0.88f, 0.9f),
             ["select_object_by_name"] = new Color(0.32f, 0.84f, 0.88f),
+            ["set_object_visible_by_name"] = new Color(0.28f, 0.8f, 0.92f),
+            ["replace_chara_card"] = new Color(0.34f, 0.82f, 0.86f),
+            ["load_coordinate_card"] = new Color(0.36f, 0.8f, 0.84f),
             // FashionLine (mint/spring green)
             ["outfit_rotate"] = new Color(0.3f, 0.9f, 0.55f),
             ["outfit_by_name"] = new Color(0.28f, 0.86f, 0.52f),
@@ -393,7 +400,7 @@ namespace HS2SandboxPlugin
                 if (_listEditorOpen)
                 {
                     _listEditorWindowRect = GUILayout.Window(ListEditorWindowID, _listEditorWindowRect, DrawListEditorWindowContent, "Edit list",
-                        GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(500f));
+                        GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(ListOrDictEditorMaxHeightPx));
                     _listEditorWindowRect.x = Mathf.Clamp(_listEditorWindowRect.x, margin, Mathf.Max(margin, Screen.width - _listEditorWindowRect.width - margin));
                     _listEditorWindowRect.y = Mathf.Clamp(_listEditorWindowRect.y, margin, Mathf.Max(margin, Screen.height - _listEditorWindowRect.height - margin));
                 }
@@ -401,7 +408,7 @@ namespace HS2SandboxPlugin
                 if (_dictEditorOpen)
                 {
                     _dictEditorWindowRect = GUILayout.Window(DictEditorWindowID, _dictEditorWindowRect, DrawDictEditorWindowContent, "Edit dict",
-                        GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(500f));
+                        GUILayout.MinWidth(300f), GUILayout.MinHeight(200f), GUILayout.MaxHeight(ListOrDictEditorMaxHeightPx));
                     _dictEditorWindowRect.x = Mathf.Clamp(_dictEditorWindowRect.x, margin, Mathf.Max(margin, Screen.width - _dictEditorWindowRect.width - margin));
                     _dictEditorWindowRect.y = Mathf.Clamp(_dictEditorWindowRect.y, margin, Mathf.Max(margin, Screen.height - _dictEditorWindowRect.height - margin));
                 }
@@ -443,11 +450,21 @@ namespace HS2SandboxPlugin
             GUI.DragWindow(new Rect(0, 0, _categoryWindowRect.width, 20));
         }
 
+        /// <summary>Height of the scroll view that contains the multiline editor; enforces <see cref="ListOrDictEditorMaxHeightPx"/>.</summary>
+        private float GetListDictEditorTextScrollHeight()
+        {
+            const float reservedForLabelButtonsAndPadding = 100f;
+            float maxScroll = Mathf.Min(ListOrDictEditorMaxHeightPx, Screen.height - 48f) - reservedForLabelButtonsAndPadding;
+            return Mathf.Max(120f, maxScroll);
+        }
+
         private void DrawListEditorWindowContent(int id)
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label("One value per line:", GUILayout.ExpandWidth(false));
+            _listEditorScrollPosition = GUILayout.BeginScrollView(_listEditorScrollPosition, GUILayout.ExpandWidth(true), GUILayout.Height(GetListDictEditorTextScrollHeight()));
             _listEditorText = GUILayout.TextArea(_listEditorText ?? "", GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.EndScrollView();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Done", GUILayout.Width(80)))
             {
@@ -476,7 +493,9 @@ namespace HS2SandboxPlugin
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label("One key=value per line:", GUILayout.ExpandWidth(false));
+            _dictEditorScrollPosition = GUILayout.BeginScrollView(_dictEditorScrollPosition, GUILayout.ExpandWidth(true), GUILayout.Height(GetListDictEditorTextScrollHeight()));
             _dictEditorText = GUILayout.TextArea(_dictEditorText ?? "", GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.EndScrollView();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Done", GUILayout.Width(80)))
             {
@@ -891,6 +910,12 @@ namespace HS2SandboxPlugin
                     DrawAddButton("Camera", "set_camera_by_name", btnW, btnH);
                     GUILayout.Space(2);
                     DrawAddButton("Sel Object", "select_object_by_name", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Obj Vis", "set_object_visible_by_name", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Repl Chara", "replace_chara_card", btnW, btnH);
+                    GUILayout.Space(2);
+                    DrawAddButton("Load coord", "load_coordinate_card", btnW, btnH);
                     break;
                 case 6: // Screenshot
                     DrawAddButton("Screenshot", "screenshot", btnW, btnH);

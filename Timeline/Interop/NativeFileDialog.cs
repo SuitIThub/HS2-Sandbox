@@ -127,8 +127,13 @@ namespace HS2SandboxPlugin
         /// Shows an open file dialog. Returns the chosen path or null if cancelled.
         /// Restores the process current directory after the dialog closes (Windows changes it when navigating).
         /// </summary>
-        public static string? OpenFile(string title, string filter)
+        /// <param name="initialDirectory">If non-null and the directory exists, the dialog starts here; otherwise the default folder is used.</param>
+        public static string? OpenFile(string title, string filter, string? initialDirectory = null)
         {
+            string startDir = initialDirectory ?? "";
+            if (string.IsNullOrEmpty(startDir) || !Directory.Exists(startDir))
+                startDir = GetInitialDir();
+
             string? cwd = null;
             try
             {
@@ -149,7 +154,7 @@ namespace HS2SandboxPlugin
                     nFilterIndex = 1,
                     lpstrFile = filePtr,
                     nMaxFile = MaxPath + 1,
-                    lpstrInitialDir = GetInitialDir(),
+                    lpstrInitialDir = startDir,
                     lpstrTitle = title ?? "Open",
                     Flags = OfnFilemustexist | OfnPathmustexist,
                     lpstrDefExt = ""

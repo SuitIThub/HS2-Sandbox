@@ -1,26 +1,18 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace HS2SandboxPlugin
 {
     /// <summary>
-    /// Caches Studio accessory UI parent GameObjects so we can set accessory state by pressing
-    /// the correct Button (On / Off). Fetched once when the Action Timeline window is first opened.
-    /// Path: StudioScene/Canvas Main Menu/02_Manipulate/00_Chara/01_State/Viewport/Content/Slot
-    /// Each slot is a direct child of "Slot"; each has two Button children (On, Off). The first slot
-    /// (Slot01(Clone)) is the "all slots" control in Studio; the command shows it as "All Slots".
+    /// Provides a stable mapping from accessory slots to Studio's accessory state API.
+    /// No longer depends on finding UI GameObjects; instead uses fixed indices into MPCharCtrl.stateInfo.
     /// </summary>
     public static class AccessoryStateCache
     {
-        /// <summary>GameObject name of the slot that controls all accessories at once. Shown as "All Slots" in the command UI.</summary>
-        public const string SlotNameAllSlots = "Slot01(Clone)";
-
-        private const string PathSlotRoot = "StudioScene/Canvas Main Menu/02_Manipulate/00_Chara/01_State/Viewport/Content/Slot";
+        /// <summary>Virtual name for the control that toggles all accessory slots at once.</summary>
+        public const string SlotNameAllSlots = "All Slots";
 
         private static bool _fetched;
         private static readonly List<AccessorySlotEntry> Slots = new List<AccessorySlotEntry>();
@@ -30,8 +22,7 @@ namespace HS2SandboxPlugin
         public static void EnsureFetched(MonoBehaviour runner)
         {
             if (_fetched) return;
-            if (runner != null && runner.isActiveAndEnabled)
-                runner.StartCoroutine(FetchNextFrame());
+            Fetch();
         }
 
         public static void ClearCache()
@@ -40,53 +31,21 @@ namespace HS2SandboxPlugin
             Slots.Clear();
         }
 
-        private static IEnumerator FetchNextFrame()
-        {
-            yield return null;
-            Fetch();
-        }
-
         private static void Fetch()
         {
             Slots.Clear();
-            GameObject? slotRoot = GameObject.Find(PathSlotRoot);
-            if (slotRoot == null) return;
 
-            for (int i = 0; i < slotRoot.transform.childCount; i++)
+            // First, a synthetic "All Slots" entry that we display specially in the UI.
+            Slots.Add(new AccessorySlotEntry(SlotNameAllSlots, 2, -1));
+
+            // Then 20 concrete slots, with indices 0..19.
+            for (int i = 0; i < 20; i++)
             {
-                Transform child = slotRoot.transform.GetChild(i);
-                int buttonCount = CountButtonChildren(child);
-                if (buttonCount >= 2 && !string.IsNullOrEmpty(child.name))
-                    Slots.Add(new AccessorySlotEntry(child.name, child.gameObject, 2)); // On, Off only
+                string name = $"Slot {i + 1:00}";
+                Slots.Add(new AccessorySlotEntry(name, 2, i));
             }
 
             _fetched = true;
-        }
-
-        private static int CountButtonChildren(Transform parent)
-        {
-            int n = 0;
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                Transform t = parent.GetChild(i);
-                // Only count GameObjects whose name starts with "Button"; ignore TextMeshPro etc.
-                if (t.gameObject.name.StartsWith("Button", StringComparison.OrdinalIgnoreCase))
-                    n++;
-            }
-            return n;
-        }
-
-        private static IReadOnlyList<Transform> GetButtonTransforms(Transform parent)
-        {
-            var list = new List<Transform>();
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                Transform t = parent.GetChild(i);
-                if (t.gameObject.name.StartsWith("Button", StringComparison.OrdinalIgnoreCase))
-                    list.Add(t);
-            }
-            list.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.Ordinal));
-            return list;
         }
 
         public static IReadOnlyList<string> GetSlotNames()
@@ -104,43 +63,50 @@ namespace HS2SandboxPlugin
         public static bool PressState(string slotKey, int stateIndex)
         {
             if (string.IsNullOrEmpty(slotKey)) return false;
+
             var entry = Slots.FirstOrDefault(s => string.Equals(s.DisplayName, slotKey, StringComparison.OrdinalIgnoreCase));
-            if (entry?.GameObject == null) return false;
-            if (stateIndex < 0 || stateIndex >= entry.StateCount) return false;
+            if (entry == null)
+                return false;
 
-            IReadOnlyList<Transform> buttons = GetButtonTransforms(entry.GameObject.transform);
-            if (stateIndex >= buttons.Count) return false;
+            int clampedState = Mathf.Clamp(stateIndex, 0, entry.StateCount - 1);
+            bool turnOn = clampedState == 0;
 
-            Transform btnTransform = buttons[stateIndex];
-            var button = btnTransform.GetComponent<Button>();
-            if (button == null) return false;
-
-            InvokePress(button);
-            return true;
-        }
-
-        private static void InvokePress(Button button)
-        {
-            var method = button.GetType().GetMethod("Press", BindingFlags.Public | BindingFlags.Instance);
-            if (method != null)
+            // Prefer the direct MPCharCtrl.stateInfo API when available
+            if (string.Equals(entry.DisplayName, SlotNameAllSlots, StringComparison.OrdinalIgnoreCase))
             {
-                method.Invoke(button, null);
-                return;
+                bool any = false;
+                for (int i = 0; i < Slots.Count; i++)
+                {
+                    var s = Slots[i];
+                    if (s.SlotIndex < 0)
+                        continue;
+                    if (StudioCharStateBridge.TrySetAccessoryState(s.SlotIndex, turnOn))
+                        any = true;
+                }
+                if (any)
+                    return true;
             }
-            button.onClick?.Invoke();
+            else if (entry.SlotIndex >= 0)
+            {
+                if (StudioCharStateBridge.TrySetAccessoryState(entry.SlotIndex, turnOn))
+                    return true;
+            }
+
+            // No UI fallback anymore; rely solely on the stateInfo API
+            return false;
         }
 
         private sealed class AccessorySlotEntry
         {
             public readonly string DisplayName;
-            public readonly GameObject GameObject;
             public readonly int StateCount;
+            public readonly int SlotIndex;
 
-            public AccessorySlotEntry(string displayName, GameObject gameObject, int stateCount)
+            public AccessorySlotEntry(string displayName, int stateCount, int slotIndex)
             {
                 DisplayName = displayName;
-                GameObject = gameObject;
                 StateCount = stateCount;
+                SlotIndex = slotIndex;
             }
         }
     }

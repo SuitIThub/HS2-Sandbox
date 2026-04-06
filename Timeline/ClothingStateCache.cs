@@ -1,22 +1,16 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace HS2SandboxPlugin
 {
     /// <summary>
-    /// Caches Studio clothing UI parent GameObjects so we can set clothing state by pressing
-    /// the correct Button (On / Half / Off). Fetched once when the Action Timeline window is first opened.
+    /// Provides a stable mapping from clothing parts to Studio's clothing state API.
+    /// No longer depends on finding UI GameObjects; instead uses fixed indices into MPCharCtrl.stateInfo.
     /// </summary>
     public static class ClothingStateCache
     {
-        private const string PathAllClothing = "StudioScene/Canvas Main Menu/02_Manipulate/00_Chara/01_State/Viewport/Content/Cos";
-        private const string PathClothingDetails = "StudioScene/Canvas Main Menu/02_Manipulate/00_Chara/01_State/Viewport/Content/Clothing Details";
-
         public const string PartKeyAllClothing = "All Clothing";
 
         private static bool _fetched;
@@ -27,8 +21,7 @@ namespace HS2SandboxPlugin
         public static void EnsureFetched(MonoBehaviour runner)
         {
             if (_fetched) return;
-            if (runner != null && runner.isActiveAndEnabled)
-                runner.StartCoroutine(FetchNextFrame());
+            Fetch();
         }
 
         public static void ClearCache()
@@ -37,60 +30,33 @@ namespace HS2SandboxPlugin
             Parts.Clear();
         }
 
-        private static IEnumerator FetchNextFrame()
-        {
-            yield return null;
-            Fetch();
-        }
-
         private static void Fetch()
         {
             Parts.Clear();
-            GameObject? cos = GameObject.Find(PathAllClothing);
-            if (cos != null)
-            {
-                int stateCount = CountButtonChildren(cos.transform);
-                if (stateCount > 0)
-                    Parts.Add(new ClothingPartEntry(PartKeyAllClothing, cos, stateCount));
-            }
 
-            GameObject? detailsRoot = GameObject.Find(PathClothingDetails);
-            if (detailsRoot != null)
-            {
-                for (int i = 0; i < detailsRoot.transform.childCount; i++)
-                {
-                    Transform child = detailsRoot.transform.GetChild(i);
-                    int stateCount = CountButtonChildren(child);
-                    if (stateCount > 0 && !string.IsNullOrEmpty(child.name))
-                        Parts.Add(new ClothingPartEntry(child.name, child.gameObject, stateCount));
-                }
-            }
+            // All clothing toggle (uses OnClickCosState)
+            Parts.Add(new ClothingPartEntry(PartKeyAllClothing, 3, -1));
+
+            // Individual clothing detail types (uses OnClickClothingDetails)
+            // Order and indices must match Studio's internal mapping:
+            // 0 = Top, 1 = Bottom, 2 = Inner Top, 3 = Inner Bottom, 4 = Stockings,
+            // 5 = Gloves, 6 = Socks, 7 = Shoes.
+            AddDetail("Top", 0, 3);
+            AddDetail("Bottom", 1, 3);
+            AddDetail("Inner Layer (Top)", 2, 3);
+            AddDetail("Inner Layer (Bottom)", 3, 3);
+            AddDetail("Stockings", 4, 3);
+            // Gloves, Socks, Shoes are 2-state only (On / Off)
+            AddDetail("Gloves", 5, 2);
+            AddDetail("Socks", 6, 2);
+            AddDetail("Shoes", 7, 2);
 
             _fetched = true;
         }
 
-        private static int CountButtonChildren(Transform parent)
+        private static void AddDetail(string displayName, int clothingTypeIndex, int stateCount)
         {
-            int n = 0;
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                if (parent.GetChild(i).gameObject.name.StartsWith("Button", StringComparison.OrdinalIgnoreCase))
-                    n++;
-            }
-            return n;
-        }
-
-        private static IReadOnlyList<Transform> GetButtonTransforms(Transform parent)
-        {
-            var list = new List<Transform>();
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                Transform t = parent.GetChild(i);
-                if (t.gameObject.name.StartsWith("Button", StringComparison.OrdinalIgnoreCase))
-                    list.Add(t);
-            }
-            list.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.Ordinal));
-            return list;
+            Parts.Add(new ClothingPartEntry(displayName, stateCount, clothingTypeIndex));
         }
 
         public static IReadOnlyList<string> GetPartNames()
@@ -108,43 +74,37 @@ namespace HS2SandboxPlugin
         public static bool PressState(string partKey, int stateIndex)
         {
             if (string.IsNullOrEmpty(partKey)) return false;
+
             var entry = Parts.FirstOrDefault(p => string.Equals(p.DisplayName, partKey, StringComparison.OrdinalIgnoreCase));
-            if (entry?.GameObject == null) return false;
-            if (stateIndex < 0 || stateIndex >= entry.StateCount) return false;
+            if (entry == null)
+                return false;
 
-            IReadOnlyList<Transform> buttons = GetButtonTransforms(entry.GameObject.transform);
-            if (stateIndex >= buttons.Count) return false;
+            int clampedState = Mathf.Clamp(stateIndex, 0, entry.StateCount - 1);
 
-            Transform btnTransform = buttons[stateIndex];
-            var button = btnTransform.GetComponent<Button>();
-            if (button == null) return false;
-
-            InvokePress(button);
-            return true;
-        }
-
-        private static void InvokePress(Button button)
-        {
-            var method = button.GetType().GetMethod("Press", BindingFlags.Public | BindingFlags.Instance);
-            if (method != null)
+            if (string.Equals(entry.DisplayName, PartKeyAllClothing, StringComparison.OrdinalIgnoreCase))
             {
-                method.Invoke(button, null);
-                return;
+                // 0: On, 1: Half, 2: Off for full outfit
+                return StudioCharStateBridge.TrySetOutfitState(clampedState);
             }
-            button.onClick?.Invoke();
+
+            if (entry.ClothingTypeIndex < 0)
+                return false;
+
+            // 0: On, 1: Half, 2: Off for 3-state parts; 0: On, 1: Off for 2-state parts
+            return StudioCharStateBridge.TrySetClothingDetailState(entry.ClothingTypeIndex, clampedState);
         }
 
         private sealed class ClothingPartEntry
         {
             public readonly string DisplayName;
-            public readonly GameObject GameObject;
             public readonly int StateCount;
+            public readonly int ClothingTypeIndex;
 
-            public ClothingPartEntry(string displayName, GameObject gameObject, int stateCount)
+            public ClothingPartEntry(string displayName, int stateCount, int clothingTypeIndex)
             {
                 DisplayName = displayName;
-                GameObject = gameObject;
                 StateCount = stateCount;
+                ClothingTypeIndex = clothingTypeIndex;
             }
         }
     }
