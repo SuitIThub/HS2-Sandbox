@@ -60,6 +60,9 @@ jobs:
 
       - name: Detect PluginVersion bumps
         id: detect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           BEFORE="${{ steps.refs.outputs.before }}"
