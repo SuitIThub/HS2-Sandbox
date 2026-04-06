@@ -1,7 +1,10 @@
-# Releases plugin artifacts when a BepInEx PluginVersion constant changes in any plugin/module.
+# Releases plugin artifacts when a BepInEx PluginVersion constant changes in any plugin/module,
+# or when this repository has no GitHub releases yet (initial publish of all artifacts).
 # One GitHub Release is created per qualifying push, containing a grouped set of assets:
-#   - HS2SandboxPlugin.dll (all-in-one) whenever any module or the main plugin version changed
-#   - HS2Sandbox.<Module>.dll only for modules whose PluginVersion line changed
+#   - HS2SandboxPlugin.dll (all-in-one) whenever any module or the main plugin version changed,
+#     on first-ever release, or when manually forced
+#   - HS2Sandbox.<Module>.dll only for modules whose PluginVersion line changed (or all modules
+#     on first-ever release / force)
 #
 # CI build prerequisites (see README / SETUP.md):
 #   - HS2_Data/Managed: set repository variable HS2_MANAGED_PATH, or
@@ -105,7 +108,21 @@ jobs:
             fi
           done
 
-          if [[ "$FORCE" != "true" && ${#CHANGED[@]} -eq 0 ]]; then
+          INITIAL_RELEASE="false"
+          if [[ ${#CHANGED[@]} -eq 0 ]]; then
+            REL_JSON=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=1")
+            # jq failure or non-array → assume releases exist (avoid accidental mass publish)
+            REL_COUNT=$(echo "$REL_JSON" | jq 'length' 2>/dev/null || echo 1)
+            if [[ "$REL_COUNT" =~ ^[0-9]+$ ]] && [[ "$REL_COUNT" -eq 0 ]]; then
+              INITIAL_RELEASE="true"
+              echo "No GitHub releases exist on this repository yet; will publish an initial release."
+            fi
+          fi
+
+          if [[ "$FORCE" != "true" && ${#CHANGED[@]} -eq 0 && "$INITIAL_RELEASE" != "true" ]]; then
             echo "No PluginVersion changes between $BEFORE and $AFTER; skipping release."
             echo "should_release=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -114,6 +131,9 @@ jobs:
           if [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
             CHANGED=(copyscript timeline searchbarmanager)
             NOTES+=("- **manual force**: including all module DLLs plus all-in-one")
+          elif [[ "$INITIAL_RELEASE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
+            CHANGED=(copyscript timeline searchbarmanager)
+            NOTES+=("- **initial GitHub release**: repository had no prior releases; publishing all module DLLs plus all-in-one")
           fi
 
           echo "should_release=true" >> "$GITHUB_OUTPUT"
