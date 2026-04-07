@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>HS2Sandbox.SonScale</AssemblyName>
+    <RootNamespace>HS2SandboxPlugin</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Shared\**\*.cs" />
+    <Compile Include="..\..\SonScale\**\*.cs" />
+    <Compile Include="SonScaleModulePlugin.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\sonscale-icon.png" CopyToOutputDirectory="Always" />
+    <EmbeddedResource Include="..\..\sonscale-icon.png">
+      <LogicalName>$(AssemblyName).sonscale-icon.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

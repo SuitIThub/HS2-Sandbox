@@ -11,6 +11,7 @@ on:
       - "Modules/CopyScript/CopyScriptModulePlugin.cs"
       - "Modules/Timeline/TimelineModulePlugin.cs"
       - "Modules/SearchBarManager/SearchBarManagerModulePlugin.cs"
+      - "Modules/SonScale/SonScaleModulePlugin.cs"
   workflow_dispatch:
 
 permissions:
@@ -33,7 +34,8 @@ jobs:
             --arg copyScript "$(extract_version Modules/CopyScript/CopyScriptModulePlugin.cs)" \
             --arg timeline "$(extract_version Modules/Timeline/TimelineModulePlugin.cs)" \
             --arg searchBarManager "$(extract_version Modules/SearchBarManager/SearchBarManagerModulePlugin.cs)" \
-            '{schemaVersion: 1, allInOne: $allInOne, copyScript: $copyScript, timeline: $timeline, searchBarManager: $searchBarManager}' \
+            --arg sonScale "$(extract_version Modules/SonScale/SonScaleModulePlugin.cs)" \
+            '{schemaVersion: 1, allInOne: $allInOne, copyScript: $copyScript, timeline: $timeline, searchBarManager: $searchBarManager, sonScale: $sonScale}' \
             > versions.json
 
       - name: Commit if changed

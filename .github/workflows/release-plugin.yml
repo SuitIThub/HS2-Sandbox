@@ -82,6 +82,7 @@ jobs:
             [copyscript]="Modules/CopyScript/CopyScriptModulePlugin.cs"
             [timeline]="Modules/Timeline/TimelineModulePlugin.cs"
             [searchbarmanager]="Modules/SearchBarManager/SearchBarManagerModulePlugin.cs"
+            [sonscale]="Modules/SonScale/SonScaleModulePlugin.cs"
           )
 
           declare -A DLLS=(
@@ -89,12 +90,13 @@ jobs:
             [copyscript]="Modules/CopyScript/bin/Release/HS2Sandbox.CopyScript.dll"
             [timeline]="Modules/Timeline/bin/Release/HS2Sandbox.Timeline.dll"
             [searchbarmanager]="Modules/SearchBarManager/bin/Release/HS2Sandbox.SearchBarManager.dll"
+            [sonscale]="Modules/SonScale/bin/Release/HS2Sandbox.SonScale.dll"
           )
 
           CHANGED=()
           NOTES=()
 
-          for key in allinone copyscript timeline searchbarmanager; do
+          for key in allinone copyscript timeline searchbarmanager sonscale; do
             f="${FILES[$key]}"
             old_v="$(extract_version "$BEFORE" "$f")"
             new_v="$(extract_version "$AFTER" "$f")"
@@ -128,10 +130,10 @@ jobs:
           fi
 
           if [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
-            CHANGED=(copyscript timeline searchbarmanager)
+            CHANGED=(copyscript timeline searchbarmanager sonscale)
             NOTES+=("- **manual force**: including all module DLLs plus all-in-one")
           elif [[ "$INITIAL_RELEASE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
-            CHANGED=(copyscript timeline searchbarmanager)
+            CHANGED=(copyscript timeline searchbarmanager sonscale)
             NOTES+=("- **initial GitHub release**: repository had no prior releases; publishing all module DLLs plus all-in-one")
           fi
 

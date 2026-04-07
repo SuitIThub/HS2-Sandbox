@@ -13,11 +13,16 @@
     <Compile Include="SubWindows\**\*.cs" />
     <Compile Include="Timeline\**\*.cs" />
     <Compile Include="CopyScript\**\*.cs" />
+    <Compile Include="SonScale\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="copy-icon.png" CopyToOutputDirectory="Always" />
     <Content Include="timeline-icon.png" CopyToOutputDirectory="Always" />
+    <Content Include="sonscale-icon.png" CopyToOutputDirectory="Always" />
+    <EmbeddedResource Include="sonscale-icon.png">
+      <LogicalName>$(AssemblyName).sonscale-icon.png</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

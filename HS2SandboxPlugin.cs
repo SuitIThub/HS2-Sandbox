@@ -10,6 +10,7 @@ using UnityEngine;
 namespace HS2SandboxPlugin
 {
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
+    [BepInDependency("com.animal42069.studiobetterpenetration", BepInDependency.DependencyFlags.SoftDependency)]
     public class HS2SandboxPlugin : BaseUnityPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox";
@@ -21,9 +22,11 @@ namespace HS2SandboxPlugin
 
         private static Texture2D _copyIcon = null!;
         private static Texture2D _timelineIcon = null!;
+        private static Texture2D _sonScaleIcon = null!;
 
         public static ToolbarToggle _copyToolbarToggle = null!;
         public static ToolbarToggle _timelineToolbarToggle = null!;
+        public static ToolbarToggle _sonScaleToolbarToggle = null!;
 
         private void Awake()
         {
@@ -53,9 +56,14 @@ namespace HS2SandboxPlugin
         {
             try
             {
+                SonScaleBpIntegration.Log = Log;
+                SonScaleBpIntegration.TryInstall();
+                gameObject.AddComponent<SonScaleApplier>();
+                gameObject.AddComponent<SonScaleManipulateUi>();
                 var gui = gameObject.AddComponent<SandboxGUI>();
                 gui.RegisterWindow(SandboxWindowKeys.CopyScript, gameObject.AddComponent<CopyScript>(), initialVisible: false);
                 gui.RegisterWindow(SandboxWindowKeys.Timeline, gameObject.AddComponent<ActionTimeline>(), initialVisible: false);
+                gui.RegisterWindow(SandboxWindowKeys.SonScale, gameObject.AddComponent<SonScaleWindow>(), initialVisible: false);
                 Log.LogInfo("Sandbox GUI initialized");
             }
             catch (Exception ex)
@@ -108,6 +116,15 @@ namespace HS2SandboxPlugin
 
                 _timelineToolbarToggle.Value = gui.IsTimelineVisible;
 
+                _sonScaleToolbarToggle = CustomToolbarButtons.AddLeftToolbarToggle(
+                    _sonScaleIcon,
+                    onValueChanged: val =>
+                    {
+                        gui.SetSonScaleVisible(val);
+                    });
+
+                _sonScaleToolbarToggle.Value = gui.IsSonScaleVisible;
+
                 // Keep toolbar toggles in sync when windows close themselves.
                 gui.WindowVisibilityChanged += (key, visible) =>
                 {
@@ -115,6 +132,8 @@ namespace HS2SandboxPlugin
                         _copyToolbarToggle.Value = visible;
                     if (key == SandboxWindowKeys.Timeline && _timelineToolbarToggle != null)
                         _timelineToolbarToggle.Value = visible;
+                    if (key == SandboxWindowKeys.SonScale && _sonScaleToolbarToggle != null)
+                        _sonScaleToolbarToggle.Value = visible;
                 };
             }
             catch (Exception ex)
@@ -137,6 +156,7 @@ namespace HS2SandboxPlugin
 
                 _copyIcon = LoadPng(copyIconPath);
                 _timelineIcon = LoadPng(timelineIconPath);
+                _sonScaleIcon = ToolbarIconLoader.LoadPng("sonscale-icon.png");
             }
             catch (Exception ex)
             {

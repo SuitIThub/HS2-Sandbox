@@ -32,5 +32,9 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>compile</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="IllusionLibs.BepInEx.Harmony" Version="2.9.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>

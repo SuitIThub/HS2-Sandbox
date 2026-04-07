@@ -132,6 +132,14 @@ $targets = @(
         BuiltDllRelPath = "Modules\SearchBarManager\bin\Release\HS2Sandbox.SearchBarManager.dll"
         DeployFileName = "HS2Sandbox.SearchBarManager.dll"
         DeactivatedFileName = "HS2Sandbox.SearchBarManager.dl_"
+    },
+    @{
+        Key = "SonScale"
+        DisplayName = "Son scale module (HS2Sandbox.SonScale.dll)"
+        BuildPath = "Modules\SonScale\HS2Sandbox.SonScale.csproj"
+        BuiltDllRelPath = "Modules\SonScale\bin\Release\HS2Sandbox.SonScale.dll"
+        DeployFileName = "HS2Sandbox.SonScale.dll"
+        DeactivatedFileName = "HS2Sandbox.SonScale.dl_"
     }
 )
 
