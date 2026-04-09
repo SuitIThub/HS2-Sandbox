@@ -95,6 +95,7 @@ jobs:
 
           CHANGED=()
           NOTES=()
+          CHANGELOG=()
 
           for key in allinone copyscript timeline searchbarmanager sonscale; do
             f="${FILES[$key]}"
@@ -109,6 +110,20 @@ jobs:
               NOTES+=("- **${key}**: \`${old_v:-∅}\` → \`${new_v}\`")
             fi
           done
+
+          # Human-readable changelog from commits in this release range.
+          # Falls back to latest commit subject if range cannot be resolved.
+          if git rev-parse "$BEFORE" >/dev/null 2>&1 && git rev-parse "$AFTER" >/dev/null 2>&1; then
+            while IFS= read -r line; do
+              [[ -z "${line// }" ]] && continue
+              CHANGELOG+=("$line")
+            done < <(git log --no-merges --pretty=format:'- %s (%h)' "${BEFORE}..${AFTER}")
+          fi
+          if [[ ${#CHANGELOG[@]} -eq 0 ]]; then
+            fallback_subject="$(git log -1 --pretty=%s "$AFTER" 2>/dev/null || echo "Update release contents")"
+            fallback_hash="$(git rev-parse --short "$AFTER" 2>/dev/null || echo "HEAD")"
+            CHANGELOG+=("- ${fallback_subject} (${fallback_hash})")
+          fi
 
           INITIAL_RELEASE="false"
           if [[ ${#CHANGED[@]} -eq 0 ]]; then
@@ -173,6 +188,9 @@ jobs:
               [[ -z "$line" ]] && continue
               echo "- \`$(basename "$line")\`"
             done
+            echo ""
+            echo "### Changelog"
+            printf '%s\n' "${CHANGELOG[@]}"
             echo 'NOTEEOF'
           } >> "$GITHUB_OUTPUT"
 
