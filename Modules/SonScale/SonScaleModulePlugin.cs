@@ -10,7 +10,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.sonscale";
         public const string PluginName = "HS2 Sandbox - Son scale";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.1.1";
 
         private static Texture2D _icon = null!;
         private static ToolbarToggle _toolbarToggle = null!;

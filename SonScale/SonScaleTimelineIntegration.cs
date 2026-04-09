@@ -200,7 +200,7 @@ namespace HS2SandboxPlugin
 
             object?[] args =
             {
-                "HS2Sandbox.SonScale",
+                "SonScale",
                 id,
                 name,
                 interpolateDelegate,
@@ -213,7 +213,7 @@ namespace HS2SandboxPlugin
                 readParameterFromXml,
                 writeParameterToXml,
                 checkIntegrity,
-                false,
+                true,
                 getFinalName,
                 shouldShow
             };
