@@ -10,7 +10,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.sonscale";
         public const string PluginName = "HS2 Sandbox - Son scale";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.1.0";
 
         private static Texture2D _icon = null!;
         private static ToolbarToggle _toolbarToggle = null!;
@@ -24,7 +24,11 @@ namespace HS2SandboxPlugin
 
         private void Start()
         {
+            Logger.LogWarning("Son scale: timeline integration bootstrap starting.");
             SonScaleBpIntegration.TryInstall();
+            SonScaleTimelineIntegration.TryInstall(Logger);
+            var timelineBootstrap = gameObject.AddComponent<SonScaleTimelineBootstrap>();
+            timelineBootstrap.Init(Logger);
             SandboxConfig.AdditionalSearchBarParentPaths ??= Config.Bind(
                 "Search Bars",
                 "Additional Parent Paths",

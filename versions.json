@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "allInOne": "1.0.0",
+  "allInOne": "1.1.0",
   "copyScript": "1.0.0",
   "timeline": "1.0.0",
   "searchBarManager": "1.0.0",
-  "sonScale": "1.0.0"
+  "sonScale": "1.1.0"
 }

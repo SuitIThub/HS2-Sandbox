@@ -15,7 +15,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox";
         public const string PluginName = "HS2 Sandbox Plugin";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.1.0";
 
         internal static ManualLogSource Log = null!;
         internal static HS2SandboxPlugin Instance = null!;
@@ -58,6 +58,10 @@ namespace HS2SandboxPlugin
             {
                 SonScaleBpIntegration.Log = Log;
                 SonScaleBpIntegration.TryInstall();
+                Log.LogWarning("Son scale: timeline integration bootstrap starting.");
+                SonScaleTimelineIntegration.TryInstall(Log);
+                var timelineBootstrap = gameObject.AddComponent<SonScaleTimelineBootstrap>();
+                timelineBootstrap.Init(Log);
                 gameObject.AddComponent<SonScaleApplier>();
                 gameObject.AddComponent<SonScaleManipulateUi>();
                 var gui = gameObject.AddComponent<SandboxGUI>();
