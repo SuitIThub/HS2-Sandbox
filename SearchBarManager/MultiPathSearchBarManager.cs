@@ -15,7 +15,7 @@ namespace HS2SandboxPlugin
 
         private static readonly string[] DefaultParentPaths =
         {
-            "StudioScene/Canvas Main Menu/02_Manipulate/51_WearCustom/Category Panel/Viewport/Content",
+            // "StudioScene/Canvas Main Menu/02_Manipulate/51_WearCustom/Category Panel/Viewport/Content",
         };
 
         private static readonly CategoryPathChain[] DefaultCategoryRelationships =

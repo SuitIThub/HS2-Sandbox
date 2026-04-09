@@ -11,5 +11,7 @@ namespace HS2SandboxPlugin
         internal static float Master = 1f;
         internal static float Length = 1f;
         internal static float Girth = 1f;
+        /// <summary>Uniform scale on <see cref="SonBoneResolver.BallsRootBoneName"/> when that bone exists (folded into dan root scale if it is the same transform).</summary>
+        internal static float Balls = 1f;
     }
 }

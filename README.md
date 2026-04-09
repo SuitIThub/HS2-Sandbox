@@ -1,5 +1,8 @@
 # HS2 Sandbox Plugin
 
+[![License: MIT](https://img.shields.io/github/license/SuitIThub/HS2-Sandbox?style=flat-square)](LICENSE)
+[![Build](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/build.yml)
+
 [![All-in-one](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=All-in-one&query=%24.allInOne&style=flat-square&color=0366d6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/HS2SandboxPlugin.cs)
 [![CopyScript](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=CopyScript&query=%24.copyScript&style=flat-square&color=2ea043)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/CopyScript/CopyScriptModulePlugin.cs)
 [![Timeline](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Timeline&query=%24.timeline&style=flat-square&color=8957e5)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Timeline/TimelineModulePlugin.cs)
@@ -26,6 +29,8 @@ BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared
 - [CopyScript and Timeline](#copyscript-and-timeline)
 - [SearchBarManager](#searchbarmanager)
 - [Troubleshooting and known issues](#troubleshooting-and-known-issues)
+- [License](#license)
+- [Contributing](#contributing)
 
 ---
 
@@ -219,6 +224,10 @@ If BP integration fails at startup, check the BepInEx log for lines starting wit
 
 ---
 
-## License and contributing
+## License
 
-Add or adjust a `LICENSE` file in the repo if you publish builds; this README does not substitute for project licensing. For forks, update badge URLs in this file if they still point at `SuitIThub/HS2-Sandbox` on GitHub.
+This project is licensed under the [MIT License](LICENSE).
+
+## Contributing
+
+For forks, update badge URLs in this README if they still point at `SuitIThub/HS2-Sandbox` on GitHub.

@@ -37,7 +37,8 @@ namespace HS2SandboxPlugin
 
             GUILayout.Label(
                 "Manipulate → Chara → State → Son length: first row = overall shaft size (multiplies with Penis Length on BP rigs). " +
-                "Penis Girth scales thickness. With Studio Better Penetration and valid dan targets, girth is one dan-root XY multiply (uniform); length still uses BP base length. All use " +
+                "Penis Girth scales thickness. Balls scale targets bone cm_J_dan_f_top (uniform); when that bone is also the dan root, it multiplies the whole root scale. " +
+                "With Studio Better Penetration and valid dan targets, girth is one dan-root XY multiply (uniform); length still uses BP base length. All use " +
                 $"{SonScaleManipulateUi.MinMul:0.#}–{SonScaleManipulateUi.MaxMul:0.#}×.",
                 GUILayout.MaxWidth(300f));
 
@@ -52,6 +53,7 @@ namespace HS2SandboxPlugin
                 SonScaleSettings.Master = 1f;
                 SonScaleSettings.Length = 1f;
                 SonScaleSettings.Girth = 1f;
+                SonScaleSettings.Balls = 1f;
                 SonScaleManipulateUi.PushSettingsToSliders();
             }
 

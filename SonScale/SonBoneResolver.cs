@@ -12,10 +12,13 @@ namespace HS2SandboxPlugin
     /// </summary>
     internal static class SonBoneResolver
     {
+        /// <summary>Illusion bone that roots the testicles (uniform scale target for balls slider).</summary>
+        internal const string BallsRootBoneName = "cm_J_dan_f_top";
+
         private static readonly string[] ExactPreferred =
         {
             "cm_J_dan100_00",
-            "cm_J_dan_f_top",
+            BallsRootBoneName,
             "cm_J_dan_f_L00",
             "cm_J_dan_f_R00",
         };
@@ -221,7 +224,24 @@ namespace HS2SandboxPlugin
             return bestScore >= 0 ? best : null;
         }
 
-        private static Transform[] GetBodyRoots(ChaControl cha)
+        /// <summary>Locates the testicle root when present (often alongside male <c>cm_J_dan100_00</c> shaft).</summary>
+        internal static Transform? FindBallsTransform(ChaControl cha)
+        {
+            if (cha == null)
+                return null;
+
+            foreach (Transform root in GetBodyRoots(cha))
+            {
+                Transform? t = FindChildByName(root, BallsRootBoneName);
+                if (t != null)
+                    return t;
+            }
+
+            return null;
+        }
+
+        /// <summary>Body object transforms to search for dan / balls bones (same order as <see cref="FindDanTransform"/>).</summary>
+        internal static Transform[] GetBodyRoots(ChaControl cha)
         {
             var list = new List<Transform>();
             if (cha.objBody != null)

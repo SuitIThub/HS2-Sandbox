@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 using KKAPI.Studio;
 using UnityEngine;
@@ -22,6 +23,7 @@ namespace HS2SandboxPlugin
         private const string MasterCaption = "Overall size";
         private const string LengthTitle = "Penis Length";
         private const string GirthTitle = "Penis Girth";
+        private const string BallsTitle = "Balls scale";
 
         public const float MinMul = 0.2f;
         public const float MaxMul = 3f;
@@ -42,8 +44,10 @@ namespace HS2SandboxPlugin
 
         private GameObject? _rowLength;
         private GameObject? _rowGirth;
+        private GameObject? _rowBalls;
         private Slider? _sliderLength;
         private Slider? _sliderGirth;
+        private Slider? _sliderBalls;
 
         private void Awake()
         {
@@ -119,6 +123,14 @@ namespace HS2SandboxPlugin
                 changed = true;
             }
 
+            if (_sliderBalls != null && Mathf.Abs(_sliderBalls.value - SonScaleSettings.Balls) > drift)
+            {
+                _suppressEvents = true;
+                _sliderBalls.value = Mathf.Clamp(SonScaleSettings.Balls, MinMul, MaxMul);
+                _suppressEvents = false;
+                changed = true;
+            }
+
             if (changed)
             {
                 if (_vanillaMasterSlider != null && _vanillaRow != null)
@@ -127,12 +139,14 @@ namespace HS2SandboxPlugin
                     SetRowCaption(_rowLength, _sliderLength, FormatCaption(LengthTitle));
                 if (_sliderGirth != null && _rowGirth != null)
                     SetRowCaption(_rowGirth, _sliderGirth, FormatCaption(GirthTitle));
+                if (_sliderBalls != null && _rowBalls != null)
+                    SetRowCaption(_rowBalls, _sliderBalls, FormatCaption(BallsTitle));
             }
         }
 
         private bool IsInjectionHealthy()
         {
-            if (_rowLength == null || _rowGirth == null)
+            if (_rowLength == null || _rowGirth == null || _rowBalls == null)
                 return false;
 
             GameObject? vanillaRow = GameObject.Find(VanillaSonLengthRowPath);
@@ -143,7 +157,9 @@ namespace HS2SandboxPlugin
             if (vanillaParent == null)
                 return false;
 
-            return _rowLength.transform.parent == vanillaParent && _rowGirth.transform.parent == vanillaParent;
+            return _rowLength.transform.parent == vanillaParent
+                && _rowGirth.transform.parent == vanillaParent
+                && _rowBalls.transform.parent == vanillaParent;
         }
 
         private void TearDownInjected()
@@ -152,13 +168,17 @@ namespace HS2SandboxPlugin
                 Destroy(_rowLength);
             if (_rowGirth != null)
                 Destroy(_rowGirth);
+            if (_rowBalls != null)
+                Destroy(_rowBalls);
 
             _vanillaRow = null;
             _vanillaMasterSlider = null;
             _rowLength = null;
             _rowGirth = null;
+            _rowBalls = null;
             _sliderLength = null;
             _sliderGirth = null;
+            _sliderBalls = null;
         }
 
         private void TryInject()
@@ -177,14 +197,24 @@ namespace HS2SandboxPlugin
             int vanillaIndex = vanillaRow.transform.GetSiblingIndex();
 
             GameObject lenInstance = Instantiate(vanillaRow, parent, false);
-            _rowLength = ConfigureClonedRow(lenInstance, "HS2Sandbox_SonScale_Length", LengthTitle, updateLength: true, SonScaleSettings.Length);
+            _rowLength = ConfigureClonedRow(
+                lenInstance,
+                "HS2Sandbox_SonScale_Length",
+                LengthTitle,
+                v => SonScaleSettings.Length = v,
+                SonScaleSettings.Length);
             if (_rowLength == null)
                 return;
 
             _rowLength.transform.SetSiblingIndex(Mathf.Clamp(vanillaIndex + 1, 0, parent.childCount - 1));
 
             GameObject girInstance = Instantiate(vanillaRow, parent, false);
-            _rowGirth = ConfigureClonedRow(girInstance, "HS2Sandbox_SonScale_Girth", GirthTitle, updateLength: false, SonScaleSettings.Girth);
+            _rowGirth = ConfigureClonedRow(
+                girInstance,
+                "HS2Sandbox_SonScale_Girth",
+                GirthTitle,
+                v => SonScaleSettings.Girth = v,
+                SonScaleSettings.Girth);
             if (_rowGirth == null)
             {
                 TearDownInjected();
@@ -193,8 +223,24 @@ namespace HS2SandboxPlugin
 
             _rowGirth.transform.SetSiblingIndex(Mathf.Clamp(vanillaIndex + 2, 0, parent.childCount - 1));
 
+            GameObject ballsInstance = Instantiate(vanillaRow, parent, false);
+            _rowBalls = ConfigureClonedRow(
+                ballsInstance,
+                "HS2Sandbox_SonScale_Balls",
+                BallsTitle,
+                v => SonScaleSettings.Balls = v,
+                SonScaleSettings.Balls);
+            if (_rowBalls == null)
+            {
+                TearDownInjected();
+                return;
+            }
+
+            _rowBalls.transform.SetSiblingIndex(Mathf.Clamp(vanillaIndex + 3, 0, parent.childCount - 1));
+
             _sliderLength = _rowLength.GetComponentInChildren<Slider>(true);
             _sliderGirth = _rowGirth.GetComponentInChildren<Slider>(true);
+            _sliderBalls = _rowBalls.GetComponentInChildren<Slider>(true);
 
             _vanillaRow = vanillaRow;
             HijackVanillaMasterSlider(vanillaRow);
@@ -205,7 +251,7 @@ namespace HS2SandboxPlugin
             {
                 _loggedInject = true;
                 SandboxServices.Log.LogInfo(
-                    "Son scale: hijacked Son length master slider; added length + girth rows under Manipulate → Chara → State.");
+                    "Son scale: hijacked Son length master slider; added length, girth, and balls rows under Manipulate → Chara → State.");
             }
         }
 
@@ -263,7 +309,7 @@ namespace HS2SandboxPlugin
             GameObject clone,
             string rowObjectName,
             string title,
-            bool updateLength,
+            Action<float> applySetting,
             float initialValue)
         {
             clone.name = rowObjectName;
@@ -290,11 +336,7 @@ namespace HS2SandboxPlugin
                 if (_suppressEvents)
                     return;
 
-                if (updateLength)
-                    SonScaleSettings.Length = v;
-                else
-                    SonScaleSettings.Girth = v;
-
+                applySetting(v);
                 SetRowCaption(clone, sl, FormatCaption(title));
             });
 
@@ -320,12 +362,17 @@ namespace HS2SandboxPlugin
             if (_sliderGirth != null && _rowGirth != null)
                 _sliderGirth.value = Mathf.Clamp(SonScaleSettings.Girth, MinMul, MaxMul);
 
+            if (_sliderBalls != null && _rowBalls != null)
+                _sliderBalls.value = Mathf.Clamp(SonScaleSettings.Balls, MinMul, MaxMul);
+
             _suppressEvents = false;
 
             if (_rowLength != null && _sliderLength != null)
                 SetRowCaption(_rowLength, _sliderLength, FormatCaption(LengthTitle));
             if (_rowGirth != null && _sliderGirth != null)
                 SetRowCaption(_rowGirth, _sliderGirth, FormatCaption(GirthTitle));
+            if (_rowBalls != null && _sliderBalls != null)
+                SetRowCaption(_rowBalls, _sliderBalls, FormatCaption(BallsTitle));
         }
 
         /// <summary>Sets the row label (legacy <see cref="Text"/> or TMPro <c>TextMeshProUGUI</c>) outside the slider subtree.</summary>

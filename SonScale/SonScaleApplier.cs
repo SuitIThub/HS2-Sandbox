@@ -12,6 +12,7 @@ namespace HS2SandboxPlugin
     /// targets), girth is a single dan-root <c>(girth,girth,1)</c> multiply so thickness stays uniform down the chain.
     /// Per-segment XY scale would compound parent×child and look conical. Length/overall hooks <c>m_baseDanLength</c>.
     /// Non-BP multi-segment uses localPosition scaling; single-bone uses root <c>(girth,girth,master×length)</c>.
+    /// <see cref="SonScaleSettings.Balls"/> applies uniform scale to <c>cm_J_dan_f_top</c> when distinct from the dan root, or multiplies the dan root when they coincide.
     /// Runs late after BP and at end of frame.
     /// </summary>
     [DefaultExecutionOrder(500000)]
@@ -25,6 +26,15 @@ namespace HS2SandboxPlugin
             public bool HasWritten;
             public bool HasVanillaAnchorSample;
             public Vector3 LastVanillaForAnchor;
+            /// <summary>Uniform balls multiplier when balls root equals dan root; otherwise 1.</summary>
+            public float LastBallsMul = 1f;
+        }
+
+        private sealed class BallsOnlyMulCache
+        {
+            public float LastMul = 1f;
+            public Vector3 LastOutputScale;
+            public bool HasWritten;
         }
 
         private sealed class BoneLpCache
@@ -36,6 +46,7 @@ namespace HS2SandboxPlugin
         }
 
         private readonly Dictionary<int, MulCache> _mulCache = new Dictionary<int, MulCache>();
+        private readonly Dictionary<int, BallsOnlyMulCache> _ballsOnlyMulCache = new Dictionary<int, BallsOnlyMulCache>();
         private readonly Dictionary<int, Vector3> _baseLocalByChaId = new Dictionary<int, Vector3>();
         private readonly Dictionary<int, Dictionary<int, BoneLpCache>> _chainLpByChaId = new Dictionary<int, Dictionary<int, BoneLpCache>>();
         private readonly List<Transform> _chainBuffer = new List<Transform>();
@@ -61,6 +72,7 @@ namespace HS2SandboxPlugin
             if (!SonScaleSettings.Enabled)
             {
                 _mulCache.Clear();
+                _ballsOnlyMulCache.Clear();
                 _baseLocalByChaId.Clear();
                 _chainLpByChaId.Clear();
                 return;
@@ -90,6 +102,7 @@ namespace HS2SandboxPlugin
             float master = SonScaleSettings.Master;
             float len = SonScaleSettings.Length;
             float gir = SonScaleSettings.Girth;
+            float ballsMul = SonScaleSettings.Balls;
             var activeIds = new HashSet<int>();
 
             foreach (OCIChar? oci in selected)
@@ -102,56 +115,75 @@ namespace HS2SandboxPlugin
                     continue;
 
                 Transform? dan = SonBoneResolver.FindDanTransform(cha);
-                if (dan == null)
+                Transform? ballsTf = SonBoneResolver.FindBallsTransform(cha);
+                if (dan == null && ballsTf == null)
                     continue;
 
                 int id = cha.GetInstanceID();
                 activeIds.Add(id);
 
-                if (!_mulCache.TryGetValue(id, out MulCache? cache))
+                bool ballsFoldedIntoDan = dan != null && ballsTf != null && ReferenceEquals(ballsTf, dan);
+
+                if (dan != null)
                 {
-                    cache = new MulCache();
-                    _mulCache[id] = cache;
-                }
-
-                SonBoneResolver.CollectSonShaftDescendants(dan, _chainBuffer);
-                SortChainByDepth(dan, _chainBuffer);
-                bool useChainForLength = _chainBuffer.Count > 0;
-                bool bpOwnsShaft = useChainForLength
-                    && SonScaleBpIntegration.LengthHooksInstalled
-                    && SonScaleBpIntegration.IsBpDrivingShaft(cha);
-
-                Vector3 curScale = dan.localScale;
-                Vector3 vanillaScale;
-                Vector3 prevDanMul = cache.LastDanScaleMul;
-
-                if (!cache.HasWritten)
-                {
-                    vanillaScale = curScale;
-                }
-                else
-                {
-                    // Loose match: float noise, BP, or Studio can nudge scale slightly; false "external" writes doubled mul.
-                    const float eps = 0.02f;
-                    bool stillOursScale =
-                        Mathf.Abs(curScale.x - cache.LastOutputScale.x) <= eps &&
-                        Mathf.Abs(curScale.y - cache.LastOutputScale.y) <= eps &&
-                        Mathf.Abs(curScale.z - cache.LastOutputScale.z) <= eps;
-
-                    if (stillOursScale)
+                    if (!_mulCache.TryGetValue(id, out MulCache? cache))
                     {
-                        vanillaScale = new Vector3(
-                            prevDanMul.x > 1e-6f ? curScale.x / prevDanMul.x : curScale.x,
-                            prevDanMul.y > 1e-6f ? curScale.y / prevDanMul.y : curScale.y,
-                            prevDanMul.z > 1e-6f ? curScale.z / prevDanMul.z : curScale.z);
+                        cache = new MulCache();
+                        _mulCache[id] = cache;
+                    }
+
+                    SonBoneResolver.CollectSonShaftDescendants(dan, _chainBuffer);
+                    SortChainByDepth(dan, _chainBuffer);
+                    bool useChainForLength = _chainBuffer.Count > 0;
+                    bool bpOwnsShaft = useChainForLength
+                        && SonScaleBpIntegration.LengthHooksInstalled
+                        && SonScaleBpIntegration.IsBpDrivingShaft(cha);
+
+                    Vector3 curScale = dan.localScale;
+                    Vector3 vanillaScale;
+                    Vector3 prevDanMul = cache.LastDanScaleMul;
+                    float prevBalls = cache.LastBallsMul;
+
+                    if (!cache.HasWritten)
+                    {
+                        vanillaScale = curScale;
                     }
                     else
                     {
-                        // BP / IK rewrites the dan root scale (or full pose) each frame; it is not "vanilla + partial game delta".
-                        // Treat current scale as the baseline and re-apply our multipliers on top.
-                        vanillaScale = curScale;
+                        // Loose match: float noise, BP, or Studio can nudge scale slightly; false "external" writes doubled mul.
+                        const float eps = 0.02f;
+                        bool stillOursScale =
+                            Mathf.Abs(curScale.x - cache.LastOutputScale.x) <= eps &&
+                            Mathf.Abs(curScale.y - cache.LastOutputScale.y) <= eps &&
+                            Mathf.Abs(curScale.z - cache.LastOutputScale.z) <= eps;
+
+                        if (stillOursScale)
+                        {
+                            if (ballsFoldedIntoDan)
+                            {
+                                float bx = prevDanMul.x * prevBalls;
+                                float by = prevDanMul.y * prevBalls;
+                                float bz = prevDanMul.z * prevBalls;
+                                vanillaScale = new Vector3(
+                                    bx > 1e-6f ? curScale.x / bx : curScale.x,
+                                    by > 1e-6f ? curScale.y / by : curScale.y,
+                                    bz > 1e-6f ? curScale.z / bz : curScale.z);
+                            }
+                            else
+                            {
+                                vanillaScale = new Vector3(
+                                    prevDanMul.x > 1e-6f ? curScale.x / prevDanMul.x : curScale.x,
+                                    prevDanMul.y > 1e-6f ? curScale.y / prevDanMul.y : curScale.y,
+                                    prevDanMul.z > 1e-6f ? curScale.z / prevDanMul.z : curScale.z);
+                            }
+                        }
+                        else
+                        {
+                            // BP / IK rewrites the dan root scale (or full pose) each frame; it is not "vanilla + partial game delta".
+                            // Treat current scale as the baseline and re-apply our multipliers on top.
+                            vanillaScale = curScale;
+                        }
                     }
-                }
 
                 if (cache.HasVanillaAnchorSample && (vanillaScale - cache.LastVanillaForAnchor).sqrMagnitude > 1e-4f)
                     _baseLocalByChaId.Remove(id);
@@ -165,10 +197,11 @@ namespace HS2SandboxPlugin
                     ? new Vector3(gir, gir, 1f)
                     : new Vector3(gir, gir, master * len);
 
+                float ballsOnDan = ballsFoldedIntoDan ? ballsMul : 1f;
                 Vector3 newOutScale = new Vector3(
-                    vanillaScale.x * danScaleMul.x,
-                    vanillaScale.y * danScaleMul.y,
-                    vanillaScale.z * danScaleMul.z);
+                    vanillaScale.x * danScaleMul.x * ballsOnDan,
+                    vanillaScale.y * danScaleMul.y * ballsOnDan,
+                    vanillaScale.z * danScaleMul.z * ballsOnDan);
 
                 Vector3 prevChainMul = cache.HasWritten ? cache.LastChainPosMul : Vector3.one;
                 Vector3 chainPosMul = useChainForLength
@@ -258,9 +291,55 @@ namespace HS2SandboxPlugin
                 }
 
                 cache.LastDanScaleMul = danScaleMul;
+                cache.LastBallsMul = ballsFoldedIntoDan ? ballsMul : 1f;
                 cache.LastChainPosMul = bpOwnsShaft ? Vector3.one : chainPosMul;
                 cache.LastOutputScale = newOutScale;
                 cache.HasWritten = true;
+                }
+
+                if (ballsTf != null && !ballsFoldedIntoDan)
+                {
+                    if (!_ballsOnlyMulCache.TryGetValue(id, out BallsOnlyMulCache? bCache))
+                    {
+                        bCache = new BallsOnlyMulCache();
+                        _ballsOnlyMulCache[id] = bCache;
+                    }
+
+                    Vector3 curB = ballsTf.localScale;
+                    Vector3 vanillaB;
+                    if (!bCache.HasWritten)
+                    {
+                        vanillaB = curB;
+                    }
+                    else
+                    {
+                        const float epsB = 0.02f;
+                        bool stillBalls =
+                            Mathf.Abs(curB.x - bCache.LastOutputScale.x) <= epsB &&
+                            Mathf.Abs(curB.y - bCache.LastOutputScale.y) <= epsB &&
+                            Mathf.Abs(curB.z - bCache.LastOutputScale.z) <= epsB;
+
+                        if (stillBalls && bCache.LastMul > 1e-6f)
+                        {
+                            float inv = 1f / bCache.LastMul;
+                            vanillaB = new Vector3(curB.x * inv, curB.y * inv, curB.z * inv);
+                        }
+                        else
+                        {
+                            vanillaB = curB;
+                        }
+                    }
+
+                    Vector3 newBallsScale = new Vector3(
+                        vanillaB.x * ballsMul,
+                        vanillaB.y * ballsMul,
+                        vanillaB.z * ballsMul);
+
+                    ballsTf.localScale = newBallsScale;
+                    bCache.LastMul = ballsMul;
+                    bCache.LastOutputScale = newBallsScale;
+                    bCache.HasWritten = true;
+                }
             }
 
             if (_mulCache.Count > activeIds.Count)
@@ -279,6 +358,19 @@ namespace HS2SandboxPlugin
                     _baseLocalByChaId.Remove(k);
                     _chainLpByChaId.Remove(k);
                 }
+            }
+
+            if (_ballsOnlyMulCache.Count > activeIds.Count)
+            {
+                var staleB = new List<int>();
+                foreach (int key in _ballsOnlyMulCache.Keys)
+                {
+                    if (!activeIds.Contains(key))
+                        staleB.Add(key);
+                }
+
+                for (int i = 0; i < staleB.Count; i++)
+                    _ballsOnlyMulCache.Remove(staleB[i]);
             }
         }
 
