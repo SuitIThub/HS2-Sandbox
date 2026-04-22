@@ -8,6 +8,7 @@
 [![Timeline](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Timeline&query=%24.timeline&style=flat-square&color=8957e5)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Timeline/TimelineModulePlugin.cs)
 [![SearchBarManager](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=SearchBarManager&query=%24.searchBarManager&style=flat-square&color=bc4c00)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/SearchBarManager/SearchBarManagerModulePlugin.cs)
 [![Son scale](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Son+scale&query=%24.sonScale&style=flat-square&color=6e40c9)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/SonScale/SonScaleModulePlugin.cs)
+[![Workspace tree lock](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Workspace+tree+lock&query=%24.workspaceTreeLock&style=flat-square&color=1f6feb)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs)
 
 *Version badges read [`versions.json`](versions.json); CI regenerates it when `PluginVersion` constants change.*
 
@@ -28,6 +29,7 @@ BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared
 - [Son scale and Better Penetration](#son-scale-and-better-penetration)
 - [CopyScript and Timeline](#copyscript-and-timeline)
 - [SearchBarManager](#searchbarmanager)
+- [Workspace tree lock](#workspace-tree-lock)
 - [Troubleshooting and known issues](#troubleshooting-and-known-issues)
 - [License](#license)
 - [Contributing](#contributing)
@@ -43,8 +45,9 @@ BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared
 | `HS2Sandbox.Timeline.dll` | `Modules/Timeline` | Action timeline window + toolbar only. |
 | `HS2Sandbox.SearchBarManager.dll` | `Modules/SearchBarManager` | Search bar injection only (no sandbox toolbar). |
 | `HS2Sandbox.SonScale.dll` | `Modules/SonScale` | Son scale UI + applier + optional BP hooks only. |
+| `HS2Sandbox.WorkspaceTreeLock.dll` | `Modules/WorkspaceTreeLock` | Middle-click pins in the Studio workspace tree so pinned rows stay visible when parents collapse. |
 
-Shared code lives under `Shared/`, `CopyScript/`, `Timeline/`, `SearchBarManager/`, and `SonScale/`. The all-in-one project compiles a superset of these via `HS2SandboxPlugin.csproj`.
+Shared code lives under `Shared/`, `CopyScript/`, `Timeline/`, `SearchBarManager/`, `SonScale/`, and `WorkspaceTreeLock/`. The all-in-one project compiles a superset of these via `HS2SandboxPlugin.csproj`.
 
 ---
 
@@ -73,9 +76,9 @@ Most users already have **HS2API** (KKAPI for HS2) and BepInEx installed. This p
 
 ### Critical: do not double-load features
 
-**Do not** install the **all-in-one** DLL **together** with the **same** split modules (e.g. `HS2SandboxPlugin.dll` + `HS2Sandbox.SonScale.dll`). You would register duplicate components, duplicate Harmony IDs, or run the same logic twice.
+**Do not** install the **all-in-one** DLL **together** with the **same** split modules (e.g. `HS2SandboxPlugin.dll` + `HS2Sandbox.SonScale.dll` or `HS2Sandbox.WorkspaceTreeLock.dll`). You would register duplicate components, duplicate Harmony IDs, or run the same logic twice.
 
-**SearchBarManager** is safe to combine with split **CopyScript** / **Timeline** / **Son scale** plugins if you want search bars without the all-in-one package—just avoid duplicating the same DLL twice.
+**SearchBarManager** is safe to combine with split **CopyScript** / **Timeline** / **Son scale** / **Workspace tree lock** plugins if you want search bars without the all-in-one package—just avoid duplicating the same DLL twice.
 
 ---
 
@@ -123,6 +126,16 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Runtime needs** | Studio; character selected in the workspace for scaling to apply. |
 | **Typical issues** | BP fork with renamed types/methods can break reflection/Harmony (check BepInEx log for “BP integration” messages). BP’s own girth/scale UI may stack visually with Son scale if both are used aggressively. UI injection path must still match `SonScaleManipulateUi` constants after game updates. |
 
+### HS2 Sandbox — Workspace tree lock (`HS2Sandbox.WorkspaceTreeLock.dll`)
+
+| | |
+|--|--|
+| **GUID** | `com.hs2.sandbox.workspacetreelock` |
+| **Declared BepIn dependencies** | None. |
+| **Purpose** | In the Studio **workspace** object list, **middle-click** a **nested** row (any item that has a parent) to **pin** it. When you collapse ancestors, Studio normally hides descendant rows; pinned rows stay visible so deep items you care about stay in view. Pinned rows show a **cyan border** overlay; middle-click again to unpin (border removed; if a collapsed ancestor hides that row, only that row is hidden—other pins are unchanged). |
+| **Runtime needs** | StudioNeoV2. Uses **Harmony** on `Studio.TreeNodeObject` visibility helpers (`SetVisible`, `SetVisibleChild`, `SetVisibleLoop`) and a lightweight UI raycast for middle clicks. |
+| **Typical issues** | Illusion changes to the workspace tree implementation could require updated patch targets; pinned rows are only a UI affordance—if Studio’s internal tree model changes, behavior may drift until the mod is updated. |
+
 ---
 
 ## All-in-one build
@@ -131,7 +144,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 |--|--|
 | **GUID** | `com.hs2.sandbox` |
 | **Declared BepIn dependencies** | **Soft:** `com.animal42069.studiobetterpenetration` (same as Son scale module). |
-| **Purpose** | Single plugin that registers **SandboxGUI**, **CopyScript**, **ActionTimeline**, **Son scale** (applier + Manipulate UI + BP integration), and **MultiPathSearchBarManager**, with sidebar toggles for the three windows. |
+| **Purpose** | Single plugin that registers **SandboxGUI**, **CopyScript**, **ActionTimeline**, **Son scale** (applier + Manipulate UI + BP integration), **MultiPathSearchBarManager**, and **workspace tree lock** (middle-click pins in the object list), with sidebar toggles for the three windows. |
 | **Config** | Search bar extra paths: **`Search Bars` → `Additional Parent Paths`**. |
 
 Use this if you want every feature without juggling multiple DLLs.
@@ -149,7 +162,7 @@ These are **compile-time** references from [`Directory.Build.props`](Directory.B
 | `IllusionLibs.HoneySelect2.Assembly-CSharp` | Game assemblies (compile-only). |
 | `IllusionLibs.HoneySelect2.UnityEngine.UI` | uGUI for injected sliders/search UI. |
 | `UnityEngine.Modules` | Unity 2018.4 API surface. |
-| `IllusionLibs.BepInEx.Harmony` 2.9.0 | Harmony used by **Son scale** BP integration. |
+| `IllusionLibs.BepInEx.Harmony` 2.9.0 | Harmony used by **Son scale** BP integration and **workspace tree lock**. |
 | `IronPython` | Used by **Timeline** code paths that host/script via `Microsoft.Scripting` (e.g. VNGE-related interop in `VngePython.cs`). Irrelevant if you never run those commands. |
 
 Feeds are listed in [`nuget.config`](nuget.config): **nuget.org**, **BepInEx**, **IllusionLibs** (Azure DevOps).
@@ -210,6 +223,13 @@ If BP integration fails at startup, check the BepInEx log for lines starting wit
 
 ---
 
+## Workspace tree lock
+
+- **Middle-click** a nested row (anything with a parent) in the Studio **workspace** object list to **pin** it. Pinned rows show a **cyan border** and stay visible when you collapse parents; middle-click again to **unpin** (border removed).
+- Install **`HS2Sandbox.WorkspaceTreeLock.dll`** alone, or use the **all-in-one** build—do not load both for this feature (duplicate Harmony patches).
+
+---
+
 ## Troubleshooting and known issues
 
 | Symptom | Likely cause |
@@ -219,6 +239,7 @@ If BP integration fails at startup, check the BepInEx log for lines starting wit
 | BP length integration silent | BP not installed, wrong plugin GUID, or BP assembly/API changed (Harmony patch not applied—see log). |
 | CopyScript always “offline” | API not running, wrong port, firewall, or URL mismatch. |
 | Search bars missing | UI hierarchy path changed; update config or defaults in `MultiPathSearchBarManager`. |
+| Pinned workspace rows behave oddly after a game update | Studio changed `TreeNodeObject` internals; Harmony targets in `WorkspaceTreeLockHarmony` may need updating. |
 | Build restore fails | Missing `nuget.config` or no access to **IllusionLibs** feed. |
 | Yellow CS0618 warnings when building | KKAPI toolbar APIs deprecated in favor of newer overloads; cosmetic for now. |
 

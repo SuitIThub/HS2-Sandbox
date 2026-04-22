@@ -140,6 +140,14 @@ $targets = @(
         BuiltDllRelPath = "Modules\SonScale\bin\Release\HS2Sandbox.SonScale.dll"
         DeployFileName = "HS2Sandbox.SonScale.dll"
         DeactivatedFileName = "HS2Sandbox.SonScale.dl_"
+    },
+    @{
+        Key = "WorkspaceTreeLock"
+        DisplayName = "Workspace tree lock module (HS2Sandbox.WorkspaceTreeLock.dll)"
+        BuildPath = "Modules\WorkspaceTreeLock\HS2Sandbox.WorkspaceTreeLock.csproj"
+        BuiltDllRelPath = "Modules\WorkspaceTreeLock\bin\Release\HS2Sandbox.WorkspaceTreeLock.dll"
+        DeployFileName = "HS2Sandbox.WorkspaceTreeLock.dll"
+        DeactivatedFileName = "HS2Sandbox.WorkspaceTreeLock.dl_"
     }
 )
 
@@ -219,12 +227,10 @@ try {
         Write-Host "Launched: $studioExePath" -ForegroundColor Yellow
     }
 
-    Read-Host "Press Enter to continue"
 }
 catch {
     Write-Host ""
     Write-Host "Build flow failed: $($_.Exception.Message)" -ForegroundColor Red
-    Read-Host "Press Enter to continue"
     exit 1
 }
 finally {

@@ -54,11 +54,10 @@ namespace HS2SandboxPlugin
                 switch (_mode)
                 {
                     case 0: // select: ensure not already selected, then select
-                        target.OnDeselect();
-                        target.OnClickSelect();
+                        target.Select(true);
                         break;
                     case 1:
-                        target.OnDeselect();
+                        target.Select(false);
                         break;
                     default:
                         target.OnClickSelect();

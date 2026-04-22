@@ -12,7 +12,7 @@ namespace HS2SandboxPlugin
     public class OutfitByNameCommand : TimelineCommand
     {
         private const string ControllerTypeName = "FashionLineController";
-        private const string MethodName = "WearFashionByName";
+        private const string MethodName = "WearFashionByNameForActiveCharacters";
         private const char PayloadSeparator = '\u0001';
 
         public override string TypeId => "outfit_by_name";

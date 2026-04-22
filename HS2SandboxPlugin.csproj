@@ -14,6 +14,7 @@
     <Compile Include="Timeline\**\*.cs" />
     <Compile Include="CopyScript\**\*.cs" />
     <Compile Include="SonScale\**\*.cs" />
+    <Compile Include="WorkspaceTreeLock\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>

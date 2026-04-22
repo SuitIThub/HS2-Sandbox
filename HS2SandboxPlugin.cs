@@ -5,6 +5,7 @@ using KKAPI.Studio.UI;
 using System;
 using System.IO;
 using System.Reflection;
+using HS2SandboxPlugin.WorkspaceTreeLock;
 using UnityEngine;
 
 namespace HS2SandboxPlugin
@@ -15,7 +16,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox";
         public const string PluginName = "HS2 Sandbox Plugin";
-        public const string PluginVersion = "1.1.0";
+        public const string PluginVersion = "1.2.0";
 
         internal static ManualLogSource Log = null!;
         internal static HS2SandboxPlugin Instance = null!;
@@ -49,6 +50,7 @@ namespace HS2SandboxPlugin
         {
             InitializeSandbox();
             InitializeSearchBars();
+            InitializeWorkspaceTreeLock();
             InitializeToolbarButtons();
         }
 
@@ -86,6 +88,19 @@ namespace HS2SandboxPlugin
             catch (Exception ex)
             {
                 Log.LogError($"Error initializing search bar manager: {ex.Message}");
+            }
+        }
+
+        private void InitializeWorkspaceTreeLock()
+        {
+            try
+            {
+                WorkspaceTreeLockBootstrap.Install(gameObject);
+                Log.LogInfo("Workspace tree lock (middle-click pins) initialized");
+            }
+            catch (Exception ex)
+            {
+                Log.LogError($"Error initializing workspace tree lock: {ex.Message}");
             }
         }
 

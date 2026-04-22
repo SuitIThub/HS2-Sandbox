@@ -12,6 +12,7 @@ on:
       - "Modules/Timeline/TimelineModulePlugin.cs"
       - "Modules/SearchBarManager/SearchBarManagerModulePlugin.cs"
       - "Modules/SonScale/SonScaleModulePlugin.cs"
+      - "Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs"
   workflow_dispatch:
 
 permissions:
@@ -35,7 +36,8 @@ jobs:
             --arg timeline "$(extract_version Modules/Timeline/TimelineModulePlugin.cs)" \
             --arg searchBarManager "$(extract_version Modules/SearchBarManager/SearchBarManagerModulePlugin.cs)" \
             --arg sonScale "$(extract_version Modules/SonScale/SonScaleModulePlugin.cs)" \
-            '{schemaVersion: 1, allInOne: $allInOne, copyScript: $copyScript, timeline: $timeline, searchBarManager: $searchBarManager, sonScale: $sonScale}' \
+            --arg workspaceTreeLock "$(extract_version Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs)" \
+            '{schemaVersion: 1, allInOne: $allInOne, copyScript: $copyScript, timeline: $timeline, searchBarManager: $searchBarManager, sonScale: $sonScale, workspaceTreeLock: $workspaceTreeLock}' \
             > versions.json
 
       - name: Commit if changed
