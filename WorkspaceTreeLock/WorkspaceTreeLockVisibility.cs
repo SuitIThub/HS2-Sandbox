@@ -1,3 +1,4 @@
+using System.Reflection;
 using Studio;
 
 namespace HS2SandboxPlugin.WorkspaceTreeLock
@@ -9,6 +10,9 @@ namespace HS2SandboxPlugin.WorkspaceTreeLock
     /// </summary>
     internal static class WorkspaceTreeLockVisibility
     {
+        private static readonly MethodInfo? SetStateVisibleMethod =
+            typeof(TreeNodeObject).GetMethod("SetStateVisible", BindingFlags.Instance | BindingFlags.NonPublic);
+
         /// <summary>
         /// If any ancestor folder is collapsed (<see cref="TreeNodeObject.treeState"/> <see cref="TreeNodeObject.TreeState.Close"/>),
         /// hide this row now that it is no longer pinned.
@@ -21,7 +25,9 @@ namespace HS2SandboxPlugin.WorkspaceTreeLock
             if (!HasCollapsedAncestor(node))
                 return;
 
-            node.SetVisible(false);
+            // Hide only the row UI state. Do not toggle the node's actual visible/checked value.
+            if (SetStateVisibleMethod != null)
+                SetStateVisibleMethod.Invoke(node, new object[] { false });
         }
 
         private static bool HasCollapsedAncestor(TreeNodeObject node)
