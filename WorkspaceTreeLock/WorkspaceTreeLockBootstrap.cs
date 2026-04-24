@@ -14,6 +14,7 @@ namespace HS2SandboxPlugin.WorkspaceTreeLock
             _installed = true;
             WorkspaceTreeLockHarmony.Install();
             host.AddComponent<WorkspaceTreeLockInput>();
+            WorkspaceTreeLockRestorer.EnsureInstance(host);
         }
     }
 }

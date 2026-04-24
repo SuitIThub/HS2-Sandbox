@@ -34,7 +34,7 @@ namespace HS2SandboxPlugin.WorkspaceTreeLock
             RemoveIfPresent(node);
 
             RectTransform parent = node.rectNode;
-            var root = new GameObject(BorderRootName, typeof(RectTransform));
+            var root = new GameObject(BorderRootName, typeof(RectTransform), typeof(CanvasGroup));
             var rootRt = (RectTransform)root.transform;
             rootRt.SetParent(parent, false);
             rootRt.SetAsLastSibling();
@@ -43,6 +43,10 @@ namespace HS2SandboxPlugin.WorkspaceTreeLock
             rootRt.offsetMin = Vector2.zero;
             rootRt.offsetMax = Vector2.zero;
             rootRt.localScale = Vector3.one;
+
+            var cg = root.GetComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
 
             Sprite sprite = GetWhiteSprite();
             AddEdge(rootRt, "Top", sprite, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, Thickness));

@@ -9,7 +9,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.workspacetreelock";
         public const string PluginName = "HS2 Sandbox - Workspace tree lock";
-        public const string PluginVersion = "1.0.1";
+        public const string PluginVersion = "1.0.7";
 
         private void Awake()
         {

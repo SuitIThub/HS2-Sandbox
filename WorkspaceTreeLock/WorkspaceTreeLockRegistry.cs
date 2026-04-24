@@ -56,5 +56,10 @@ namespace HS2SandboxPlugin.WorkspaceTreeLock
             Locked.Remove(node);
             WorkspaceTreeLockBorder.RemoveIfPresent(node);
         }
+
+        /// <summary>
+        /// Returns all currently locked nodes (for iteration by Harmony postfixes).
+        /// </summary>
+        internal static IReadOnlyCollection<TreeNodeObject> GetLockedNodes() => Locked;
     }
 }

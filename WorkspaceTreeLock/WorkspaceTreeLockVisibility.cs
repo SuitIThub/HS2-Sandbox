@@ -25,9 +25,13 @@ namespace HS2SandboxPlugin.WorkspaceTreeLock
             if (!HasCollapsedAncestor(node))
                 return;
 
-            // Hide only the row UI state. Do not toggle the node's actual visible/checked value.
+            // Hide the row UI. Do not toggle the node's actual visible/checked value.
             if (SetStateVisibleMethod != null)
                 SetStateVisibleMethod.Invoke(node, new object[] { false });
+
+            // Also directly deactivate as fallback
+            if (node.rectNode != null)
+                node.rectNode.gameObject.SetActive(false);
         }
 
         private static bool HasCollapsedAncestor(TreeNodeObject node)
