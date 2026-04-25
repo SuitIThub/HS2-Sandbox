@@ -148,6 +148,14 @@ $targets = @(
         BuiltDllRelPath = "Modules\WorkspaceTreeLock\bin\Release\HS2Sandbox.WorkspaceTreeLock.dll"
         DeployFileName = "HS2Sandbox.WorkspaceTreeLock.dll"
         DeactivatedFileName = "HS2Sandbox.WorkspaceTreeLock.dl_"
+    },
+    @{
+        Key = "Notebook"
+        DisplayName = "Notebook module (HS2Sandbox.Notebook.dll)"
+        BuildPath = "Modules\Notebook\HS2Sandbox.Notebook.csproj"
+        BuiltDllRelPath = "Modules\Notebook\bin\Release\HS2Sandbox.Notebook.dll"
+        DeployFileName = "HS2Sandbox.Notebook.dll"
+        DeactivatedFileName = "HS2Sandbox.Notebook.dl_"
     }
 )
 

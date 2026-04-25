@@ -24,10 +24,12 @@ namespace HS2SandboxPlugin
         private static Texture2D _copyIcon = null!;
         private static Texture2D _timelineIcon = null!;
         private static Texture2D _sonScaleIcon = null!;
+        private static Texture2D _notebookIcon = null!;
 
         public static ToolbarToggle _copyToolbarToggle = null!;
         public static ToolbarToggle _timelineToolbarToggle = null!;
         public static ToolbarToggle _sonScaleToolbarToggle = null!;
+        public static ToolbarToggle _notebookToolbarToggle = null!;
 
         private void Awake()
         {
@@ -70,6 +72,7 @@ namespace HS2SandboxPlugin
                 gui.RegisterWindow(SandboxWindowKeys.CopyScript, gameObject.AddComponent<CopyScript>(), initialVisible: false);
                 gui.RegisterWindow(SandboxWindowKeys.Timeline, gameObject.AddComponent<ActionTimeline>(), initialVisible: false);
                 gui.RegisterWindow(SandboxWindowKeys.SonScale, gameObject.AddComponent<SonScaleWindow>(), initialVisible: false);
+                gui.RegisterWindow(SandboxWindowKeys.Notebook, gameObject.AddComponent<NotebookWindow>(), initialVisible: false);
                 Log.LogInfo("Sandbox GUI initialized");
             }
             catch (Exception ex)
@@ -144,6 +147,15 @@ namespace HS2SandboxPlugin
 
                 _sonScaleToolbarToggle.Value = gui.IsSonScaleVisible;
 
+                _notebookToolbarToggle = CustomToolbarButtons.AddLeftToolbarToggle(
+                    _notebookIcon,
+                    onValueChanged: val =>
+                    {
+                        gui.SetNotebookVisible(val);
+                    });
+
+                _notebookToolbarToggle.Value = gui.IsNotebookVisible;
+
                 // Keep toolbar toggles in sync when windows close themselves.
                 gui.WindowVisibilityChanged += (key, visible) =>
                 {
@@ -153,6 +165,8 @@ namespace HS2SandboxPlugin
                         _timelineToolbarToggle.Value = visible;
                     if (key == SandboxWindowKeys.SonScale && _sonScaleToolbarToggle != null)
                         _sonScaleToolbarToggle.Value = visible;
+                    if (key == SandboxWindowKeys.Notebook && _notebookToolbarToggle != null)
+                        _notebookToolbarToggle.Value = visible;
                 };
             }
             catch (Exception ex)
@@ -176,6 +190,7 @@ namespace HS2SandboxPlugin
                 _copyIcon = LoadPng(copyIconPath);
                 _timelineIcon = LoadPng(timelineIconPath);
                 _sonScaleIcon = ToolbarIconLoader.LoadPng("sonscale-icon.png");
+                _notebookIcon = ToolbarIconLoader.LoadPng("notes-icon.png");
             }
             catch (Exception ex)
             {
