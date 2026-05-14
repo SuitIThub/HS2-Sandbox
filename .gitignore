@@ -41,3 +41,4 @@ packages/
 .idea/
 *.sln.iml
 
+decompiled_*
