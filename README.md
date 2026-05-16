@@ -1,7 +1,7 @@
 # HS2 Sandbox Plugin
 
 [![License: MIT](https://img.shields.io/github/license/SuitIThub/HS2-Sandbox?style=flat-square)](LICENSE)
-[![Build](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/build.yml)
+[![Release CI](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/release-plugin.yml/badge.svg?branch=main)](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/release-plugin.yml)
 
 [![All-in-one](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=All-in-one&query=%24.allInOne&style=flat-square&color=0366d6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/HS2SandboxPlugin.cs)
 [![CopyScript](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=CopyScript&query=%24.copyScript&style=flat-square&color=2ea043)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/CopyScript/CopyScriptModulePlugin.cs)
@@ -9,10 +9,12 @@
 [![SearchBarManager](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=SearchBarManager&query=%24.searchBarManager&style=flat-square&color=bc4c00)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/SearchBarManager/SearchBarManagerModulePlugin.cs)
 [![Son scale](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Son+scale&query=%24.sonScale&style=flat-square&color=6e40c9)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/SonScale/SonScaleModulePlugin.cs)
 [![Workspace tree lock](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Workspace+tree+lock&query=%24.workspaceTreeLock&style=flat-square&color=1f6feb)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs)
+[![Notebook](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Notebook&query=%24.notebook&style=flat-square&color=8b5cf6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Notebook/NotebookModulePlugin.cs)
+[![Pose Browser](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser&query=%24.poseBrowser&style=flat-square&color=0d9488)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/PoseBrowser/PoseBrowserModulePlugin.cs)
 
 *Version badges read [`versions.json`](versions.json); CI regenerates it when `PluginVersion` constants change.*
 
-BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared sidebar UI, optional automation (CopyScript / Timeline), search bars on manipulate panels, and split **Son** (member) scaling.
+BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared sidebar UI, optional automation (CopyScript / Timeline), a **pose library** browser, a simple **notebook**, search bars on manipulate panels, and split **Son** (member) scaling.
 
 ---
 
@@ -30,6 +32,8 @@ BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared
 - [CopyScript and Timeline](#copyscript-and-timeline)
 - [SearchBarManager](#searchbarmanager)
 - [Workspace tree lock](#workspace-tree-lock)
+- [Notebook](#notebook)
+- [Pose Browser](#pose-browser)
 - [Troubleshooting and known issues](#troubleshooting-and-known-issues)
 - [License](#license)
 - [Contributing](#contributing)
@@ -46,8 +50,10 @@ BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared
 | `HS2Sandbox.SearchBarManager.dll` | `Modules/SearchBarManager` | Search bar injection only (no sandbox toolbar). |
 | `HS2Sandbox.SonScale.dll` | `Modules/SonScale` | Son scale UI + applier + optional BP hooks only. |
 | `HS2Sandbox.WorkspaceTreeLock.dll` | `Modules/WorkspaceTreeLock` | Middle-click pins in the Studio workspace tree so pinned rows stay visible when parents collapse. |
+| `HS2Sandbox.Notebook.dll` | `Modules/Notebook` | In-game **Notebook** window and sidebar toggle only. |
+| `HS2Sandbox.PoseBrowser.dll` | `Modules/PoseBrowser` | **Pose Browser**: browse / tag / save / apply poses under `UserData/studio/pose`, with sidebar toggle only. |
 
-Shared code lives under `Shared/`, `CopyScript/`, `Timeline/`, `SearchBarManager/`, `SonScale/`, and `WorkspaceTreeLock/`. The all-in-one project compiles a superset of these via `HS2SandboxPlugin.csproj`.
+Shared code lives under `Shared/`, `CopyScript/`, `Timeline/`, `SearchBarManager/`, `SonScale/`, `WorkspaceTreeLock/`, `Notebook/`, and `PoseBrowser/`. The all-in-one project compiles a superset of these via `HS2SandboxPlugin.csproj`.
 
 ---
 
@@ -72,13 +78,13 @@ Most users already have **HS2API** (KKAPI for HS2) and BepInEx installed. This p
    - **`HS2SandboxPlugin.dll`** (all-in-one) **or**
    - The individual **`HS2Sandbox.*.dll`** modules you want  
    into `BepInEx/plugins/` (any subfolder is fine).
-4. Ensure **`copy-icon.png`**, **`timeline-icon.png`**, and **`sonscale-icon.png`** sit next to the DLL that needs them (the build copies them to each project’s output; the all-in-one build expects all three beside `HS2SandboxPlugin.dll`).
+4. Ensure the matching **PNG icons** sit next to each DLL that needs them (builds copy them to output). **All-in-one** beside `HS2SandboxPlugin.dll`: `copy-icon.png`, `timeline-icon.png`, `sonscale-icon.png`, `notes-icon.png`, `pose-icon.png`. Split modules ship their own icons with the module DLL (e.g. **Pose Browser** / **Notebook** use `pose-icon.png` / `notes-icon.png`).
 
 ### Critical: do not double-load features
 
 **Do not** install the **all-in-one** DLL **together** with the **same** split modules (e.g. `HS2SandboxPlugin.dll` + `HS2Sandbox.SonScale.dll` or `HS2Sandbox.WorkspaceTreeLock.dll`). You would register duplicate components, duplicate Harmony IDs, or run the same logic twice.
 
-**SearchBarManager** is safe to combine with split **CopyScript** / **Timeline** / **Son scale** / **Workspace tree lock** plugins if you want search bars without the all-in-one package—just avoid duplicating the same DLL twice.
+**SearchBarManager** is safe to combine with split **CopyScript** / **Timeline** / **Son scale** / **Workspace tree lock** / **Notebook** / **Pose Browser** plugins if you want search bars without the all-in-one package—just avoid duplicating the same DLL twice (and do not load **both** the all-in-one and a module that duplicates a feature).
 
 ---
 
@@ -136,6 +142,26 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Runtime needs** | StudioNeoV2. Uses **Harmony** on `Studio.TreeNodeObject` visibility helpers (`SetVisible`, `SetVisibleChild`, `SetVisibleLoop`) and a lightweight UI raycast for middle clicks. |
 | **Typical issues** | Illusion changes to the workspace tree implementation could require updated patch targets; pinned rows are only a UI affordance—if Studio’s internal tree model changes, behavior may drift until the mod is updated. |
 
+### HS2 Sandbox — Notebook (`HS2Sandbox.Notebook.dll`)
+
+| | |
+|--|--|
+| **GUID** | `com.hs2.sandbox.notebook` |
+| **Declared BepIn dependencies** | None. |
+| **Purpose** | Adds a Studio sidebar toggle and an in-session **Notebook** window (shared `Notebook/` UI with the all-in-one build). |
+| **Runtime needs** | Studio. |
+| **Typical issues** | Same as all-in-one notebook: window state and content are local to the plugin instance; duplicate plugins would duplicate the feature—avoid loading **Notebook** together with the all-in-one. |
+
+### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)
+
+| | |
+|--|--|
+| **GUID** | `com.hs2.sandbox.posebrowser` |
+| **Declared BepIn dependencies** | None. |
+| **Purpose** | **Pose library** for Studio neo: folder tree for `UserData/studio/pose`, thumbnail grid, search / tags / favorites, save & apply poses for selected characters, move & copy on disk, thumbnails, optional **HS2Wiki** help pages (soft dependency). Same `PoseBrowser/` UI as the all-in-one. |
+| **Runtime needs** | Studio; `pose-icon.png` beside the DLL (or embedded fallback). Config under `BepInEx/config/com.hs2.sandbox/` for options and tag DB. |
+| **Typical issues** | Do not load **with** the all-in-one—you would register a **second** Pose Browser (same split-module rule as CopyScript / Timeline). Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** adds F3 documentation when installed. Longer **in-repo** manual: [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md). |
+
 ---
 
 ## All-in-one build
@@ -144,7 +170,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 |--|--|
 | **GUID** | `com.hs2.sandbox` |
 | **Declared BepIn dependencies** | **Soft:** `com.animal42069.studiobetterpenetration` (same as Son scale module). |
-| **Purpose** | Single plugin that registers **SandboxGUI**, **CopyScript**, **ActionTimeline**, **Son scale** (applier + Manipulate UI + BP integration), **MultiPathSearchBarManager**, and **workspace tree lock** (middle-click pins in the object list), with sidebar toggles for the three windows. |
+| **Purpose** | Single plugin that registers **SandboxGUI**, **CopyScript**, **ActionTimeline**, **Son scale** (applier + Manipulate UI + BP integration), **Notebook**, **Pose Browser**, **MultiPathSearchBarManager**, and **workspace tree lock** (middle-click pins in the object list), with sidebar toggles for each window. |
 | **Config** | Search bar extra paths: **`Search Bars` → `Additional Parent Paths`**. |
 
 Use this if you want every feature without juggling multiple DLLs.
@@ -191,9 +217,10 @@ Feeds are listed in [`nuget.config`](nuget.config): **nuget.org**, **BepInEx**, 
 ## Usage overview
 
 1. Start **StudioNeoV2**.
-2. Use the **left sidebar** toggles added by the all-in-one or by CopyScript / Timeline / Son scale modules (SearchBarManager has no toolbar button).
-3. **CopyScript** / **Timeline** windows are IMGUI subwindows; Timeline can draw a **screen overlay** for mouse positions when enabled.
+2. Use the **left sidebar** toggles added by the all-in-one or by the split modules (SearchBarManager has no toolbar button).
+3. **CopyScript** / **Timeline** / **Notebook** / **Pose Browser** windows are IMGUI subwindows; Timeline can draw a **screen overlay** for mouse positions when enabled.
 4. **Son scale**: select a character in the Studio tree/workspace, open **Son scale**, enable **split scaling**, and use **Manipulate → Chara → State** sliders (**Overall size**, **Penis Length**, **Penis Girth**).
+5. **Pose Browser**: browse poses under **UserData/studio/pose**, filter and tag them, save or apply to selected characters; use **Help** in the window or **HS2Wiki** (F3) when installed.
 
 ---
 
@@ -230,11 +257,27 @@ If BP integration fails at startup, check the BepInEx log for lines starting wit
 
 ---
 
+## Notebook
+
+- Sidebar toggle opens the **Notebook** IMGUI window (scratch notes in session).
+- Prefer **either** the all-in-one **or** `HS2Sandbox.Notebook.dll`, not both.
+
+---
+
+## Pose Browser
+
+- **Pose library** for Studio: tree + grid for `UserData/studio/pose`, search, tags, favorites, save / apply / move / copy / delete (with backup), thumbnail capture, persisted options.
+- **Split build:** `HS2Sandbox.PoseBrowser.dll` + `pose-icon.png` beside it (see Installation).
+- **All-in-one:** same feature; do not install the Pose Browser module on top of it.
+- Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** registers extended help under **F3**; details in [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md).
+
+---
+
 ## Troubleshooting and known issues
 
 | Symptom | Likely cause |
 |---------|----------------|
-| Duplicate windows / double actions | All-in-one **and** one or more split modules loaded together. |
+| Duplicate windows / double actions | All-in-one **and** one or more split modules loaded together (including **Notebook** / **Pose Browser** duplicates). |
 | Son scale does nothing | No Studio selection; or **Son scale** disabled in its window; or wrong character. |
 | BP length integration silent | BP not installed, wrong plugin GUID, or BP assembly/API changed (Harmony patch not applied—see log). |
 | CopyScript always “offline” | API not running, wrong port, firewall, or URL mismatch. |
