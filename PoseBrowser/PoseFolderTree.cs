@@ -80,6 +80,22 @@ namespace HS2SandboxPlugin
             }
         }
 
+        /// <summary>All folders in pre-order depth-first walk (library roots first, then each subtree).</summary>
+        public List<PoseFolderNode> GetAllFoldersDepthFirst()
+        {
+            var list = new List<PoseFolderNode>();
+            foreach (var root in RootNodes)
+                CollectDepthFirst(root, list);
+            return list;
+        }
+
+        private static void CollectDepthFirst(PoseFolderNode node, List<PoseFolderNode> list)
+        {
+            list.Add(node);
+            foreach (var child in node.Children)
+                CollectDepthFirst(child, list);
+        }
+
         private IEnumerable<PoseFolderNode> EnumerateVisible(PoseFolderNode node)
         {
             yield return node;

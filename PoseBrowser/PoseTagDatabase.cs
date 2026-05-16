@@ -10,7 +10,7 @@ namespace HS2SandboxPlugin
 {
     public class PoseTagDatabase
     {
-        private const string TsvHeader = "HS2SANDBOX_POSE_TAGS\t2";
+        private const string TsvHeader = "HS2SANDBOX_POSE_TAGS\t3";
         /// <summary>ASCII record separator — unlikely in user-defined tag names; splits tag list in one column.</summary>
         private const char TagDelimiter = '\x1e';
 
@@ -34,6 +34,17 @@ namespace HS2SandboxPlugin
         {
             if (_dirty)
                 SaveToDisk();
+        }
+
+        public void RecordLastUsed(PoseGridItem item)
+        {
+            string key = GetKey(item);
+            if (string.IsNullOrEmpty(key)) return;
+            long t = DateTime.UtcNow.Ticks;
+            var entry = GetOrCreate(key);
+            entry.LastUsedUtcTicks = t;
+            item.LastUsedUtc = new DateTime(t, DateTimeKind.Utc);
+            MarkDirty();
         }
 
         public bool IsFavorite(PoseGridItem item)
@@ -117,11 +128,15 @@ namespace HS2SandboxPlugin
                 item.Tags = entry.Tags != null && entry.Tags.Length > 0
                     ? new HashSet<string>(entry.Tags, StringComparer.OrdinalIgnoreCase)
                     : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                item.LastUsedUtc = entry.LastUsedUtcTicks > 0
+                    ? new DateTime(entry.LastUsedUtcTicks, DateTimeKind.Utc)
+                    : DateTime.MinValue;
             }
             else
             {
                 item.IsFavorite = false;
                 item.Tags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                item.LastUsedUtc = DateTime.MinValue;
             }
         }
 
@@ -230,7 +245,7 @@ namespace HS2SandboxPlugin
                         string tagsCol = kvp.Value.Tags == null || kvp.Value.Tags.Length == 0
                             ? ""
                             : string.Join(TagDelimiter.ToString(), kvp.Value.Tags);
-                        sw.WriteLine($"{key}\t{(kvp.Value.Favorite ? "1" : "0")}\t{tagsCol}");
+                        sw.WriteLine($"{key}\t{(kvp.Value.Favorite ? "1" : "0")}\t{tagsCol}\t{kvp.Value.LastUsedUtcTicks}");
                     }
                 }
 
@@ -311,7 +326,17 @@ namespace HS2SandboxPlugin
                     if (string.IsNullOrEmpty(key)) continue;
 
                     string favCell = line.Substring(i1 + 1, i2 - i1 - 1).Trim();
-                    string tagsCell = i2 + 1 < line.Length ? line.Substring(i2 + 1) : "";
+                    int i3 = line.IndexOf('\t', i2 + 1);
+                    string tagsCell;
+                    long lastUsedUtcTicks = 0;
+                    if (i3 > i2 && i3 + 1 <= line.Length)
+                    {
+                        tagsCell = line.Substring(i2 + 1, i3 - i2 - 1);
+                        string lu = i3 + 1 < line.Length ? line.Substring(i3 + 1).Trim() : "";
+                        long.TryParse(lu, out lastUsedUtcTicks);
+                    }
+                    else
+                        tagsCell = i2 + 1 < line.Length ? line.Substring(i2 + 1) : "";
 
                     bool favorite = favCell == "1" || string.Equals(favCell, "true", StringComparison.OrdinalIgnoreCase);
 
@@ -327,7 +352,12 @@ namespace HS2SandboxPlugin
                             .ToArray();
                     }
 
-                    temp[key] = new PoseTagEntry { Favorite = favorite, Tags = tags };
+                    temp[key] = new PoseTagEntry
+                    {
+                        Favorite = favorite,
+                        Tags = tags,
+                        LastUsedUtcTicks = lastUsedUtcTicks
+                    };
                     imported++;
                 }
             }
@@ -411,14 +441,16 @@ namespace HS2SandboxPlugin
         {
             public bool Favorite;
             public string[] Tags = Array.Empty<string>();
+            public long LastUsedUtcTicks;
 
             public bool HasPersistableData() =>
-                Favorite || (Tags != null && Tags.Length > 0);
+                Favorite || (Tags != null && Tags.Length > 0) || LastUsedUtcTicks != 0;
 
             public PoseTagEntry Clone() => new PoseTagEntry
             {
                 Favorite = Favorite,
-                Tags = Tags != null ? (string[])Tags.Clone() : Array.Empty<string>()
+                Tags = Tags != null ? (string[])Tags.Clone() : Array.Empty<string>(),
+                LastUsedUtcTicks = LastUsedUtcTicks
             };
         }
 

@@ -212,7 +212,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Search</b> — filters by display name / path. Toggle <b>.*</b> for case-insensitive regex; invalid patterns show an error line under the bar.");
             GUILayout.Label("<b>★</b> — show only poses marked favorite (see Tags / Fav Selected).");
             GUILayout.Label("<b>AND / OR</b> — combines active tag filters: every selected tag must match (AND) or any one (OR).");
-            GUILayout.Label("<b>Tags (n)</b> — opens the tag checklist; <b>Clear All</b> removes tag filters (not tags on files).");
+            GUILayout.Label("<b>Tags (n)</b> — opens a side <b>Tag filter</b> window (search, toggles). <b>AND / OR</b> stays on the top bar.");
             GUILayout.EndVertical();
 
             GUILayout.Space(8f);
@@ -250,7 +250,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Save Pose</b> (top bar) — writes the current character pose into the <i>active save folder</i>: selected folder, or root when using <b>All poses</b>.");
             GUILayout.Label("<b>Update Pose</b> (one selected) — overwrite file from the scene; choose keeping or regenerating the thumbnail.");
             GUILayout.Label("<b>Rename…</b> — optional rename of file to match display name.");
-            GUILayout.Label("<b>Tag Selected</b> — add/remove tags for all selected items (database-backed).");
+            GUILayout.Label("<b>Tag Selected</b> — opens the same tag window in <b>assign</b> mode: search, add new tag from search when offered, and ✓ / ☐ / ◪ (mixed) rows to set tags on <i>all</i> selected poses.");
             GUILayout.Label("<b>Fav Selected</b> — toggle favorite flag (★ filter).");
             GUILayout.Label("<b>Move… / Copy…</b> — pick destination in the <b>Folders</b> tree (<b>Root only</b> or a folder; highlighted), then <b>Apply</b> or <b>Cancel</b> in the folder footer. The grid does not reload while picking, so your selection is preserved. <b>New folder…</b> still works. Tags move with paths when applicable.");
             GUILayout.Label("<b>Delete…</b> — copies into <b>!_AutoBackup</b> then removes files; confirmations are required.");

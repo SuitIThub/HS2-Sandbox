@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using BepInEx;
+using BepInEx.Configuration;
 using KKAPI.Utilities;
 using Studio;
 using UnityEngine;
@@ -14,10 +15,6 @@ namespace HS2SandboxPlugin
 {
     public class PoseBrowserWindow : SubWindow
     {
-        private const float MinWidth = 780f;
-        private const float MinHeight = 500f;
-        private const float MaxWidth = 1400f;
-        private const float MaxHeight = 1000f;
         private const float ResizeHandleSize = 18f;
         private const float TreePanelWidth = 200f;
         private const float BottomBarHeight = 36f;
@@ -26,12 +23,89 @@ namespace HS2SandboxPlugin
         private const float MaxCardSize = 280f;
         private const int OptionsWindowId = 2021;
         private const int HelpWindowId = 2022;
+        private const int TagWindowId = 2024;
+        private const int SortWindowId = 2025;
+
+        private enum PoseBrowserLayoutTier
+        {
+            Normal = 0,
+            CompactList = 1,
+            CompactMini = 2
+        }
+
+        private enum MiniBrowseKind
+        {
+            RootOnly,
+            Folder,
+            AllPoses,
+            Favorites
+        }
+
+        private readonly struct MiniBrowseTarget
+        {
+            public readonly MiniBrowseKind Kind;
+            public readonly PoseFolderNode? Node;
+
+            public MiniBrowseTarget(MiniBrowseKind kind, PoseFolderNode? node = null)
+            {
+                Kind = kind;
+                Node = node;
+            }
+        }
+
+        private PoseBrowserLayoutTier _layoutTier = PoseBrowserLayoutTier.Normal;
+        private int _compactPoseIndex = -1;
+        private Vector2 _compactListScroll;
+
+        // Per–layout-tier main window rect (persisted so switching modes restores size/position).
+        private float _savedFullW = 900f, _savedFullH = 620f, _savedFullX = 200f, _savedFullY = 80f;
+        private float _savedListW = 520f, _savedListH = 400f, _savedListX = 200f, _savedListY = 80f;
+        private float _savedMiniW = 280f, _savedMiniH = 240f, _savedMiniX = 200f, _savedMiniY = 80f;
+
+        private static float LayoutMinWidthFor(PoseBrowserLayoutTier tier) => tier switch
+        {
+            PoseBrowserLayoutTier.Normal => 780f,
+            PoseBrowserLayoutTier.CompactList => 300f,
+            PoseBrowserLayoutTier.CompactMini => 200f,
+            _ => 780f
+        };
+
+        private static float LayoutMaxWidthFor(PoseBrowserLayoutTier tier) =>
+            tier == PoseBrowserLayoutTier.CompactMini ? 440f : 1400f;
+
+        private static float LayoutMinHeightFor(PoseBrowserLayoutTier tier) => tier switch
+        {
+            PoseBrowserLayoutTier.Normal => 500f,
+            PoseBrowserLayoutTier.CompactList => 278f,
+            PoseBrowserLayoutTier.CompactMini => 152f,
+            _ => 500f
+        };
+
+        private static float LayoutMaxHeightFor(PoseBrowserLayoutTier tier) =>
+            tier == PoseBrowserLayoutTier.CompactMini ? 320f : 1000f;
+
+        private float LayoutMinWidth => LayoutMinWidthFor(_layoutTier);
+        private float LayoutMaxWidth => LayoutMaxWidthFor(_layoutTier);
+        private float LayoutMinHeight => LayoutMinHeightFor(_layoutTier);
+        private float LayoutMaxHeight => LayoutMaxHeightFor(_layoutTier);
 
         private float _cardCellSize = 140f;
         private int _itemsPerPage;
         private int _currentPage = 1;
 
         private bool _viewAllPosesRecursive;
+        private bool _browseFavoritesOnly;
+
+        private enum PoseSortMode
+        {
+            LastUsed = 0,
+            LastUpdated = 1,
+            LastCreated = 2,
+            Name = 3
+        }
+
+        private PoseSortMode _poseSortMode = PoseSortMode.Name;
+        private bool _sortAscending = true;
 
         private PoseDataService _dataService = null!;
         private PoseTagDatabase _tagDb = null!;
@@ -52,9 +126,13 @@ namespace HS2SandboxPlugin
         private string _searchRegexError = "";
         private HashSet<string> _activeTagFilters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _tagFilterAndMode = true;
-        private bool _showTagFilterDropdown;
-        private Vector2 _tagDropdownScroll;
         private bool _showFavoritesOnly;
+
+        private enum TagWindowPurpose { None, FilterLibrary, EditSelection }
+        private TagWindowPurpose _tagWindowPurpose = TagWindowPurpose.None;
+        private Rect _tagWindowRect;
+        private Vector2 _tagWindowScroll;
+        private string _tagWindowSearch = "";
 
         // Multi-select (global index into _filteredItems when paginating)
         private int _lastClickedGlobalIndex = -1;
@@ -65,6 +143,9 @@ namespace HS2SandboxPlugin
         private bool _showHelpPane;
         private Rect _helpWindowRect;
         private Vector2 _helpScroll;
+
+        private bool _showSortPane;
+        private Rect _sortWindowRect;
 
         // Folder / pose rename & move-copy
         private bool _showRenameFolderPopup;
@@ -87,10 +168,6 @@ namespace HS2SandboxPlugin
         private bool _showDeletePosesConfirm;
         private string _folderActionError = "";
 
-        // Mass tagging popup
-        private bool _showTagPopup;
-        private string _tagPopupText = "";
-
         // Save pose
         private bool _showSavePopup;
         private string _savePoseName = "";
@@ -106,12 +183,17 @@ namespace HS2SandboxPlugin
 
         // GUIStyles (lazy-init)
         private GUIStyle? _selectedStyle;
+        private GUIStyle? _favoriteCardStyle;
         private GUIStyle? _favoriteStyle;
         private GUIStyle? _treeNodeStyle;
         private GUIStyle? _treeNodeSelectedStyle;
         private GUIStyle? _tagWrapStyle;
         private GUIStyle? _headerSectionCaptionStyle;
         private GUIStyle? _characterHintStyle;
+        private GUIStyle? _compactWordWrapStyle;
+
+        // BepInEx config ↔ Options panel (grid settings); hotkeys use KeyboardShortcut in Configuration Manager
+        private EventHandler? _cfgGridHandler;
 
         protected override void Start()
         {
@@ -128,18 +210,38 @@ namespace HS2SandboxPlugin
 
             CreatePlaceholderTexture();
             _folderTree.Refresh();
-            _optionsWindowRect = new Rect(windowRect.xMax + 6f, windowRect.y, 268f, windowRect.height);
+            _optionsWindowRect = new Rect(windowRect.xMax + 6f, windowRect.y, 340f, windowRect.height);
             _helpWindowRect = new Rect(windowRect.xMax + 6f, windowRect.y, 340f, windowRect.height);
+            _tagWindowRect = new Rect(windowRect.xMax + 6f, windowRect.y, 288f, windowRect.height);
+            _sortWindowRect = new Rect(windowRect.xMax + 6f, windowRect.y, 260f, windowRect.height);
+            PoseBrowserConfig.Register(SandboxServices.Config);
+            if (PoseBrowserConfig.CardColumnWidth != null)
+            {
+                _cfgGridHandler = (_, __) => ApplyPoseBrowserConfigToUi();
+                PoseBrowserConfig.CardColumnWidth.SettingChanged += _cfgGridHandler;
+                PoseBrowserConfig.ItemsPerPage!.SettingChanged += _cfgGridHandler;
+            }
+
             LoadPersistedOptions();
+            ApplyPoseBrowserConfigToUi();
+            SyncWindowTitleForLayoutTier();
         }
 
         private void Update()
         {
             _tagDb?.Update();
+            if (isVisible)
+                MaybeProcessPoseBrowserHotkeys();
         }
 
         private void OnDestroy()
         {
+            if (PoseBrowserConfig.CardColumnWidth != null && _cfgGridHandler != null)
+            {
+                PoseBrowserConfig.CardColumnWidth.SettingChanged -= _cfgGridHandler;
+                PoseBrowserConfig.ItemsPerPage!.SettingChanged -= _cfgGridHandler;
+            }
+
             _tagDb?.ForceSave();
             SavePersistedOptions();
             if (_placeholderTex != null)
@@ -179,14 +281,14 @@ namespace HS2SandboxPlugin
                 _thumbCapture.DrawOverlay();
 
             HandleResize();
-            windowRect.width = Mathf.Clamp(windowRect.width, MinWidth, MaxWidth);
-            windowRect.height = Mathf.Clamp(windowRect.height, MinHeight, MaxHeight);
+            windowRect.width = Mathf.Clamp(windowRect.width, LayoutMinWidth, LayoutMaxWidth);
+            windowRect.height = Mathf.Clamp(windowRect.height, LayoutMinHeight, LayoutMaxHeight);
             windowRect.x = Mathf.Clamp(windowRect.x, 4f, Mathf.Max(4f, Screen.width - windowRect.width - 4f));
             windowRect.y = Mathf.Clamp(windowRect.y, 4f, Mathf.Max(4f, Screen.height - windowRect.height - 4f));
 
             windowRect = GUILayout.Window(windowID, windowRect, DrawWindowContent, windowTitle);
 
-            if (_showOptionsPane)
+            if (_layoutTier == PoseBrowserLayoutTier.Normal && _showOptionsPane)
             {
                 SyncOptionsWindowRect();
                 _optionsWindowRect = GUILayout.Window(OptionsWindowId, _optionsWindowRect, DrawOptionsWindowContent, "Pose Browser · Options");
@@ -195,7 +297,7 @@ namespace HS2SandboxPlugin
                 IMGUIUtils.EatInputInRect(_optionsWindowRect);
             }
 
-            if (_showHelpPane)
+            if (_layoutTier == PoseBrowserLayoutTier.Normal && _showHelpPane)
             {
                 SyncHelpWindowRect();
                 _helpWindowRect = GUILayout.Window(HelpWindowId, _helpWindowRect, DrawHelpWindowContent, "Pose Browser · Help");
@@ -203,11 +305,32 @@ namespace HS2SandboxPlugin
                 _helpWindowRect.y = Mathf.Clamp(_helpWindowRect.y, 4f, Mathf.Max(4f, Screen.height - _helpWindowRect.height - 4f));
                 IMGUIUtils.EatInputInRect(_helpWindowRect);
             }
+
+            if (_layoutTier == PoseBrowserLayoutTier.Normal && _tagWindowPurpose != TagWindowPurpose.None)
+            {
+                SyncTagWindowRect();
+                string tagTitle = _tagWindowPurpose == TagWindowPurpose.FilterLibrary
+                    ? "Pose Browser · Tag filter"
+                    : "Pose Browser · Tags on selection";
+                _tagWindowRect = GUILayout.Window(TagWindowId, _tagWindowRect, DrawTagWindowContent, tagTitle);
+                _tagWindowRect.x = Mathf.Clamp(_tagWindowRect.x, 4f, Mathf.Max(4f, Screen.width - _tagWindowRect.width - 4f));
+                _tagWindowRect.y = Mathf.Clamp(_tagWindowRect.y, 4f, Mathf.Max(4f, Screen.height - _tagWindowRect.height - 4f));
+                IMGUIUtils.EatInputInRect(_tagWindowRect);
+            }
+
+            if (_layoutTier == PoseBrowserLayoutTier.Normal && _showSortPane)
+            {
+                SyncSortWindowRect();
+                _sortWindowRect = GUILayout.Window(SortWindowId, _sortWindowRect, DrawSortWindowContent, "Pose Browser · Sort");
+                _sortWindowRect.x = Mathf.Clamp(_sortWindowRect.x, 4f, Mathf.Max(4f, Screen.width - _sortWindowRect.width - 4f));
+                _sortWindowRect.y = Mathf.Clamp(_sortWindowRect.y, 4f, Mathf.Max(4f, Screen.height - _sortWindowRect.height - 4f));
+                IMGUIUtils.EatInputInRect(_sortWindowRect);
+            }
         }
 
         private void SyncOptionsWindowRect()
         {
-            _optionsWindowRect = new Rect(windowRect.xMax + 4f, windowRect.y, _optionsWindowRect.width > 0 ? _optionsWindowRect.width : 268f, windowRect.height);
+            _optionsWindowRect = new Rect(windowRect.xMax + 4f, windowRect.y, _optionsWindowRect.width > 0 ? _optionsWindowRect.width : 340f, windowRect.height);
         }
 
         private void SyncHelpWindowRect()
@@ -219,8 +342,50 @@ namespace HS2SandboxPlugin
             _helpWindowRect = new Rect(x, windowRect.y, w, windowRect.height);
         }
 
+        private void SyncTagWindowRect()
+        {
+            float x = windowRect.xMax + 4f;
+            if (_showOptionsPane)
+                x = _optionsWindowRect.xMax + 4f;
+            if (_showHelpPane)
+                x = _helpWindowRect.xMax + 4f;
+            float w = _tagWindowRect.width > 0 ? _tagWindowRect.width : 288f;
+            _tagWindowRect = new Rect(x, windowRect.y, w, windowRect.height);
+        }
+
+        private void SyncSortWindowRect()
+        {
+            float x = windowRect.xMax + 4f;
+            if (_showOptionsPane)
+                x = _optionsWindowRect.xMax + 4f;
+            if (_showHelpPane)
+                x = _helpWindowRect.xMax + 4f;
+            if (_tagWindowPurpose != TagWindowPurpose.None)
+                x = _tagWindowRect.xMax + 4f;
+            float w = _sortWindowRect.width > 0 ? _sortWindowRect.width : 260f;
+            _sortWindowRect = new Rect(x, windowRect.y, w, windowRect.height);
+        }
+
+        private void CloseTagWindow()
+        {
+            _tagWindowPurpose = TagWindowPurpose.None;
+        }
+
+        private void OpenTagFilterWindow()
+        {
+            _tagWindowPurpose = TagWindowPurpose.FilterLibrary;
+            _tagWindowScroll = Vector2.zero;
+        }
+
+        private void OpenTagAssignWindow()
+        {
+            _tagWindowPurpose = TagWindowPurpose.EditSelection;
+            _tagWindowSearch = "";
+            _tagWindowScroll = Vector2.zero;
+        }
+
         private string SaveTargetFolderPath =>
-            _viewAllPosesRecursive
+            _viewAllPosesRecursive || _browseFavoritesOnly
                 ? _folderTree.RootPath
                 : (_folderTree.SelectedNode?.FullPath ?? _folderTree.RootPath);
 
@@ -259,27 +424,129 @@ namespace HS2SandboxPlugin
             _folderActionError = "";
         }
 
-        protected override void DrawWindowContent(int id)
+        private void ResortPoseItemsInPlace()
         {
-            InitStyles();
+            _allItems.Sort((a, b) =>
+            {
+                int c = _poseSortMode switch
+                {
+                    PoseSortMode.Name => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase),
+                    PoseSortMode.LastUsed => a.LastUsedUtc.CompareTo(b.LastUsedUtc),
+                    PoseSortMode.LastUpdated => a.LastWriteTime.CompareTo(b.LastWriteTime),
+                    PoseSortMode.LastCreated => a.CreationTimeUtc.CompareTo(b.CreationTimeUtc),
+                    _ => 0
+                };
+                if (!_sortAscending)
+                    c = -c;
+                if (c != 0)
+                    return c;
+                return string.Compare(a.FilePath, b.FilePath, StringComparison.OrdinalIgnoreCase);
+            });
+        }
 
-            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+        private void ApplyPoseToSelectedWithUsage(PoseGridItem item)
+        {
+            _tagDb.RecordLastUsed(item);
+            _dataService.ApplyPoseToSelected(item);
+            if (_poseSortMode == PoseSortMode.LastUsed)
+            {
+                ResortPoseItemsInPlace();
+                ApplyFilters();
+            }
+        }
 
-            DrawTopBar();
+        private void SelectAllInCurrentFolderView()
+        {
+            foreach (var it in _allItems)
+                it.IsSelected = true;
+        }
 
-            DrawStudioCharacterSelectionRow();
+        private void DeselectAllInCurrentFolderView()
+        {
+            foreach (var it in _allItems)
+                it.IsSelected = false;
+        }
 
-            GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
-            DrawTreePanel();
-            DrawGridPanel();
-            GUILayout.EndHorizontal();
+        private void CaptureWindowRectForCurrentTier()
+        {
+            switch (_layoutTier)
+            {
+                case PoseBrowserLayoutTier.Normal:
+                    _savedFullW = windowRect.width;
+                    _savedFullH = windowRect.height;
+                    _savedFullX = windowRect.x;
+                    _savedFullY = windowRect.y;
+                    break;
+                case PoseBrowserLayoutTier.CompactList:
+                    _savedListW = windowRect.width;
+                    _savedListH = windowRect.height;
+                    _savedListX = windowRect.x;
+                    _savedListY = windowRect.y;
+                    break;
+                case PoseBrowserLayoutTier.CompactMini:
+                    _savedMiniW = windowRect.width;
+                    _savedMiniH = windowRect.height;
+                    _savedMiniX = windowRect.x;
+                    _savedMiniY = windowRect.y;
+                    break;
+            }
+        }
 
-            DrawBottomBar();
+        private void RestoreWindowRectForTier(PoseBrowserLayoutTier tier)
+        {
+            float w, h, x, y;
+            switch (tier)
+            {
+                case PoseBrowserLayoutTier.Normal:
+                    w = _savedFullW;
+                    h = _savedFullH;
+                    x = _savedFullX;
+                    y = _savedFullY;
+                    break;
+                case PoseBrowserLayoutTier.CompactList:
+                    w = _savedListW;
+                    h = _savedListH;
+                    x = _savedListX;
+                    y = _savedListY;
+                    break;
+                default:
+                    w = _savedMiniW;
+                    h = _savedMiniH;
+                    x = _savedMiniX;
+                    y = _savedMiniY;
+                    break;
+            }
 
-            DrawFolderPoseDialogs();
+            float defW = tier == PoseBrowserLayoutTier.Normal ? 900f : tier == PoseBrowserLayoutTier.CompactList ? 520f : 280f;
+            float defH = tier == PoseBrowserLayoutTier.Normal ? 620f : tier == PoseBrowserLayoutTier.CompactList ? 400f : 240f;
+            if (w < 50f) w = defW;
+            if (h < 50f) h = defH;
 
-            GUILayout.EndVertical();
+            w = Mathf.Clamp(w, LayoutMinWidthFor(tier), LayoutMaxWidthFor(tier));
+            h = Mathf.Clamp(h, LayoutMinHeightFor(tier), LayoutMaxHeightFor(tier));
+            windowRect = new Rect(x, y, w, h);
+        }
 
+        /// <summary>After changing browse target (folder / all / favorites), apply the first filtered pose and sync compact index + grid selection.</summary>
+        private void ApplyFirstFilteredPoseAfterBrowseChange()
+        {
+            if (_filteredItems.Count == 0)
+            {
+                _compactPoseIndex = -1;
+                return;
+            }
+
+            var item = _filteredItems[0];
+            _compactPoseIndex = 0;
+            for (int i = 0; i < _filteredItems.Count; i++)
+                _filteredItems[i].IsSelected = false;
+            item.IsSelected = true;
+            _lastClickedGlobalIndex = 0;
+            ApplyPoseToSelectedWithUsage(item);
+        }
+
+        private void FinishMainWindowChrome()
+        {
             if (Event.current.type == EventType.Repaint && !string.IsNullOrEmpty(GUI.tooltip))
                 DrawPoseBrowserTooltip(GUI.tooltip, windowRect);
 
@@ -288,6 +555,311 @@ namespace HS2SandboxPlugin
 
             GUI.DragWindow(new Rect(0f, 0f, windowRect.width - ResizeHandleSize, 20f));
             IMGUIUtils.EatInputInRect(windowRect);
+        }
+
+        private void SyncWindowTitleForLayoutTier()
+        {
+            windowTitle = _layoutTier switch
+            {
+                PoseBrowserLayoutTier.CompactMini => "Pose Browser · Mini",
+                PoseBrowserLayoutTier.CompactList => "Pose Browser · Compact",
+                _ => "Pose Browser"
+            };
+        }
+
+        private string LayoutTierShortLabel() => _layoutTier switch
+        {
+            PoseBrowserLayoutTier.Normal => "Full",
+            PoseBrowserLayoutTier.CompactList => "List",
+            PoseBrowserLayoutTier.CompactMini => "Mini",
+            _ => "Full"
+        };
+
+        private void CycleLayoutTier()
+        {
+            CaptureWindowRectForCurrentTier();
+            _layoutTier = (PoseBrowserLayoutTier)(((int)_layoutTier + 1) % 3);
+
+            if (_layoutTier != PoseBrowserLayoutTier.Normal)
+            {
+                _moveCopyPending = false;
+                _moveCopyDestPath = null;
+                CloseTagWindow();
+                _showOptionsPane = false;
+                _showHelpPane = false;
+                _showSortPane = false;
+                _showSavePopup = false;
+                StopThumbnailLoading();
+            }
+            else
+                MaybeStartThumbnailsAfterLoad();
+
+            RestoreWindowRectForTier(_layoutTier);
+            SyncWindowTitleForLayoutTier();
+            SavePersistedOptions();
+        }
+
+        private void MaybeStartThumbnailsAfterLoad()
+        {
+            if (_layoutTier == PoseBrowserLayoutTier.Normal && _allItems.Count > 0)
+                StartThumbnailLoading();
+        }
+
+        private void DrawCompactLayoutHeader()
+        {
+            GUILayout.BeginHorizontal(GUILayout.Height(26f));
+            if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
+                CycleLayoutTier();
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
+
+        private List<MiniBrowseTarget> BuildMiniBrowseTargets()
+        {
+            var list = new List<MiniBrowseTarget> { new MiniBrowseTarget(MiniBrowseKind.RootOnly) };
+            foreach (var n in _folderTree.GetAllFoldersDepthFirst())
+                list.Add(new MiniBrowseTarget(MiniBrowseKind.Folder, n));
+            list.Add(new MiniBrowseTarget(MiniBrowseKind.AllPoses));
+            list.Add(new MiniBrowseTarget(MiniBrowseKind.Favorites));
+            return list;
+        }
+
+        private int GetCurrentMiniBrowseIndex(List<MiniBrowseTarget> targets)
+        {
+            for (int i = 0; i < targets.Count; i++)
+            {
+                if (MiniBrowseTargetMatchesCurrent(targets[i]))
+                    return i;
+            }
+            return 0;
+        }
+
+        private bool MiniBrowseTargetMatchesCurrent(MiniBrowseTarget t)
+        {
+            switch (t.Kind)
+            {
+                case MiniBrowseKind.RootOnly:
+                    return !_viewAllPosesRecursive && !_browseFavoritesOnly && _folderTree.SelectedNode == null;
+                case MiniBrowseKind.Folder:
+                    return !_viewAllPosesRecursive && !_browseFavoritesOnly &&
+                           _folderTree.SelectedNode != null && ReferenceEquals(_folderTree.SelectedNode, t.Node);
+                case MiniBrowseKind.AllPoses:
+                    return _viewAllPosesRecursive && !_browseFavoritesOnly;
+                case MiniBrowseKind.Favorites:
+                    return _browseFavoritesOnly;
+                default:
+                    return false;
+            }
+        }
+
+        private void ApplyMiniBrowseTarget(MiniBrowseTarget t)
+        {
+            ClearTreeFolderActionUi();
+            _compactPoseIndex = 0;
+            switch (t.Kind)
+            {
+                case MiniBrowseKind.RootOnly:
+                    _folderTree.SelectedNode = null;
+                    LoadFolder(_folderTree.RootPath);
+                    break;
+                case MiniBrowseKind.Folder:
+                    var node = t.Node!;
+                    _folderTree.EnsureExpandedToShow(node);
+                    _folderTree.SelectNode(node);
+                    LoadFolder(node.FullPath);
+                    break;
+                case MiniBrowseKind.AllPoses:
+                    _folderTree.SelectedNode = null;
+                    LoadAllPosesFromTreeRoot();
+                    break;
+                case MiniBrowseKind.Favorites:
+                    LoadFavoritePosesFromTreeRoot();
+                    break;
+            }
+            ApplyFirstFilteredPoseAfterBrowseChange();
+        }
+
+        private void AdvanceMiniBrowse(int delta)
+        {
+            var targets = BuildMiniBrowseTargets();
+            if (targets.Count == 0) return;
+            int cur = GetCurrentMiniBrowseIndex(targets);
+            int n = cur + delta;
+            n = ((n % targets.Count) + targets.Count) % targets.Count;
+            ApplyMiniBrowseTarget(targets[n]);
+        }
+
+        private void AdvanceCompactPose(int delta, bool applyToStudio)
+        {
+            if (_filteredItems.Count == 0) return;
+            ClampCompactPoseIndex();
+            if (_compactPoseIndex < 0) _compactPoseIndex = 0;
+            _compactPoseIndex = (_compactPoseIndex + delta + _filteredItems.Count) % _filteredItems.Count;
+            if (applyToStudio)
+                ApplyPoseToSelectedWithUsage(_filteredItems[_compactPoseIndex]);
+        }
+
+        private void ClampCompactPoseIndex()
+        {
+            if (_filteredItems.Count == 0)
+            {
+                _compactPoseIndex = -1;
+                return;
+            }
+            if (_compactPoseIndex < 0 || _compactPoseIndex >= _filteredItems.Count)
+                _compactPoseIndex = 0;
+            _compactPoseIndex = Mathf.Clamp(_compactPoseIndex, 0, _filteredItems.Count - 1);
+        }
+
+        private string GetCompactMiniFolderCaption()
+        {
+            if (_browseFavoritesOnly)
+                return "★ Favorites · library-wide";
+            if (_viewAllPosesRecursive)
+                return "All poses · library-wide";
+            if (_folderTree.SelectedNode != null)
+                return PoseDataService.GetRelativePath(_folderTree.RootPath, _folderTree.SelectedNode.FullPath);
+            string rel = PoseDataService.GetRelativePath(_folderTree.RootPath, _folderTree.RootPath);
+            if (string.IsNullOrEmpty(rel)) rel = "(pose root)";
+            return "Root only · " + rel;
+        }
+
+        private void DrawCompactListWindowBody()
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            DrawCompactLayoutHeader();
+            GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
+            DrawTreePanel(showFolderFooter: false);
+            DrawCompactPoseListPanel();
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+        }
+
+        private void DrawCompactPoseListPanel()
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+
+            GUILayout.Label(
+                new GUIContent($"{_filteredItems.Count} shown", "After search & tag filters."),
+                GUILayout.ExpandWidth(false));
+            GUILayout.Space(2f);
+            GUILayout.BeginHorizontal();
+            GUI.enabled = _filteredItems.Count > 0;
+            if (GUILayout.Button("◀ Prev", GUILayout.Height(26f), GUILayout.MinWidth(72f)))
+                AdvanceCompactPose(-1, applyToStudio: true);
+            if (GUILayout.Button("Next ▶", GUILayout.Height(26f), GUILayout.MinWidth(72f)))
+                AdvanceCompactPose(1, applyToStudio: true);
+            GUI.enabled = true;
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            _compactListScroll = GUILayout.BeginScrollView(_compactListScroll, GUILayout.ExpandHeight(true));
+            for (int i = 0; i < _filteredItems.Count; i++)
+            {
+                var item = _filteredItems[i];
+                bool rowOn = i == _compactPoseIndex;
+                var rowStyle = rowOn ? _treeNodeSelectedStyle! : _treeNodeStyle!;
+                string label = (item.IsFavorite ? "★ " : "") + item.DisplayName;
+                if (GUILayout.Button(label, rowStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
+                {
+                    _compactPoseIndex = i;
+                    ApplyPoseToSelectedWithUsage(item);
+                }
+            }
+            GUILayout.EndScrollView();
+
+            GUILayout.EndVertical();
+        }
+
+        private void DrawCompactMiniWindowBody()
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            DrawCompactLayoutHeader();
+
+            GUILayout.BeginHorizontal();
+            GUI.enabled = BuildMiniBrowseTargets().Count > 0;
+            if (GUILayout.Button("◀ Folder", GUILayout.Height(26f)))
+                AdvanceMiniBrowse(-1);
+            if (GUILayout.Button("Folder ▶", GUILayout.Height(26f)))
+                AdvanceMiniBrowse(1);
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label(GetCompactMiniFolderCaption(), _compactWordWrapStyle!, GUILayout.ExpandWidth(true));
+
+            GUILayout.Space(6f);
+            GUILayout.BeginHorizontal();
+            GUI.enabled = _filteredItems.Count > 0;
+            if (GUILayout.Button("◀ Pose", GUILayout.Height(26f)))
+                AdvanceCompactPose(-1, applyToStudio: true);
+            if (GUILayout.Button("Pose ▶", GUILayout.Height(26f)))
+                AdvanceCompactPose(1, applyToStudio: true);
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+
+            string poseLine = _filteredItems.Count == 0 || _compactPoseIndex < 0 || _compactPoseIndex >= _filteredItems.Count
+                ? "—"
+                : _filteredItems[_compactPoseIndex].DisplayName;
+            GUILayout.Label(poseLine, _compactWordWrapStyle!, GUILayout.ExpandWidth(true));
+
+            GUILayout.FlexibleSpace();
+            GUI.enabled = _filteredItems.Count > 0 && _compactPoseIndex >= 0 && _compactPoseIndex < _filteredItems.Count;
+            if (GUILayout.Button("Reapply", GUILayout.Height(28f)))
+                ApplyPoseToSelectedWithUsage(_filteredItems[_compactPoseIndex]);
+            GUI.enabled = true;
+
+            GUILayout.EndVertical();
+        }
+
+        protected override void DrawWindowContent(int id)
+        {
+            // Other IMGUI windows may leave GUI.color / GUI.backgroundColor set; those multiply our card tint
+            // textures and can wash them out completely.
+            Color prevGuiColor = GUI.color;
+            Color prevBgColor = GUI.backgroundColor;
+            GUI.color = Color.white;
+            GUI.backgroundColor = Color.white;
+            try
+            {
+                InitStyles();
+
+                if (_layoutTier == PoseBrowserLayoutTier.CompactMini)
+                {
+                    DrawCompactMiniWindowBody();
+                    FinishMainWindowChrome();
+                    return;
+                }
+                if (_layoutTier == PoseBrowserLayoutTier.CompactList)
+                {
+                    DrawCompactListWindowBody();
+                    FinishMainWindowChrome();
+                    return;
+                }
+
+                GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+
+                DrawTopBar();
+
+                DrawStudioCharacterSelectionRow();
+
+                GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
+                DrawTreePanel(showFolderFooter: true);
+                DrawGridPanel();
+                GUILayout.EndHorizontal();
+
+                DrawBottomBar();
+
+                DrawFolderPoseDialogs();
+
+                GUILayout.EndVertical();
+
+                FinishMainWindowChrome();
+            }
+            finally
+            {
+                GUI.color = prevGuiColor;
+                GUI.backgroundColor = prevBgColor;
+            }
         }
 
         // ── Top Bar ──
@@ -331,8 +903,17 @@ namespace HS2SandboxPlugin
                 ApplyFilters();
             }
 
-            if (GUILayout.Button($"Tags ({_activeTagFilters.Count})", GUILayout.Width(80f)))
-                _showTagFilterDropdown = !_showTagFilterDropdown;
+            bool tagFilterPanelOpen = _tagWindowPurpose == TagWindowPurpose.FilterLibrary;
+            if (GUILayout.Button(tagFilterPanelOpen ? "Tags ▶" : $"Tags ({_activeTagFilters.Count})", GUILayout.Width(88f)))
+            {
+                if (tagFilterPanelOpen)
+                    CloseTagWindow();
+                else
+                    OpenTagFilterWindow();
+            }
+
+            if (GUILayout.Button(_showSortPane ? "Sort ▶" : "Sort", GUILayout.Width(56f)))
+                _showSortPane = !_showSortPane;
 
             GUILayout.Space(8f);
 
@@ -347,6 +928,9 @@ namespace HS2SandboxPlugin
             DrawTopBarVerticalRule(22f);
 
             DrawHeaderSectionCaption("Window");
+
+            if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
+                CycleLayoutTier();
 
             if (GUILayout.Button(_showHelpPane ? "Help ▶" : "Help", GUILayout.Width(56f), GUILayout.Height(24f)))
                 _showHelpPane = !_showHelpPane;
@@ -363,9 +947,6 @@ namespace HS2SandboxPlugin
                 GUILayout.Label(_searchRegexError);
                 GUI.color = c;
             }
-
-            if (_showTagFilterDropdown)
-                DrawTagFilterDropdown();
 
             if (_showSavePopup)
                 DrawSavePopup();
@@ -419,23 +1000,61 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
         }
 
-        private void DrawTagFilterDropdown()
+        private void DrawTagWindowContent(int id)
         {
-            var allTags = _tagDb.GetAllKnownTags().OrderBy(t => t).ToList();
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.Label("Search tags", GUILayout.Height(18f));
+            _tagWindowSearch = GUILayout.TextField(_tagWindowSearch, GUILayout.Height(22f));
+
+            string searchNormFold = _tagWindowSearch.Trim();
+
+            if (_tagWindowPurpose == TagWindowPurpose.FilterLibrary)
+                DrawTagWindowFilterBody(searchNormFold);
+            else if (_tagWindowPurpose == TagWindowPurpose.EditSelection)
+            {
+                var selected = _filteredItems.Where(i => i.IsSelected).ToList();
+                if (selected.Count == 0)
+                {
+                    GUILayout.Label("No poses selected — closing.");
+                    CloseTagWindow();
+                }
+                else
+                    DrawTagWindowAssignBody(selected, searchNormFold);
+            }
+
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Close", GUILayout.Height(26f)))
+                CloseTagWindow();
+
+            GUILayout.EndVertical();
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
+        }
+
+        private void DrawTagWindowFilterBody(string searchNormFold)
+        {
+            var allTags = _tagDb.GetAllKnownTags().OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
             if (allTags.Count == 0)
             {
-                GUILayout.Label("  No tags defined yet.");
+                GUILayout.Label("No tags defined yet. Use Tag Selected on the grid.");
                 return;
             }
 
-            float dropH = Mathf.Min(allTags.Count * 22f + 30f, 200f);
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Height(dropH));
-            _tagDropdownScroll = GUILayout.BeginScrollView(_tagDropdownScroll);
+            var visible = string.IsNullOrEmpty(searchNormFold)
+                ? allTags
+                : allTags.Where(t => t.IndexOf(searchNormFold, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
 
-            foreach (var tag in allTags)
+            if (visible.Count == 0)
+            {
+                GUILayout.Label("No tags match the search.");
+                return;
+            }
+
+            GUILayout.Space(4f);
+            _tagWindowScroll = GUILayout.BeginScrollView(_tagWindowScroll, GUILayout.ExpandHeight(true));
+            foreach (var tag in visible)
             {
                 bool active = _activeTagFilters.Contains(tag);
-                bool newActive = GUILayout.Toggle(active, tag);
+                bool newActive = GUILayout.Toggle(active, tag, GUILayout.Height(22f));
                 if (newActive != active)
                 {
                     if (newActive) _activeTagFilters.Add(tag);
@@ -443,20 +1062,155 @@ namespace HS2SandboxPlugin
                     ApplyFilters();
                 }
             }
-
             GUILayout.EndScrollView();
 
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Clear All", GUILayout.Height(20f)))
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Clear active filters", GUILayout.Height(24f)))
             {
                 _activeTagFilters.Clear();
                 ApplyFilters();
             }
-            if (GUILayout.Button("Close", GUILayout.Height(20f)))
-                _showTagFilterDropdown = false;
-            GUILayout.EndHorizontal();
+        }
+
+        private enum TagCoverage { None, Some, All }
+
+        private static TagCoverage GetTagCoverage(IReadOnlyList<PoseGridItem> selected, string tag)
+        {
+            if (selected.Count == 0) return TagCoverage.None;
+            int n = selected.Count;
+            int c = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (selected[i].Tags.Contains(tag)) c++;
+            }
+            if (c == 0) return TagCoverage.None;
+            if (c == n) return TagCoverage.All;
+            return TagCoverage.Some;
+        }
+
+        private void ApplyTagToAllSelected(IReadOnlyList<PoseGridItem> selected, string tag, bool add)
+        {
+            if (selected.Count == 0) return;
+            if (add)
+            {
+                foreach (var it in selected)
+                    _tagDb.AddTags(it, new[] { tag });
+            }
+            else
+            {
+                foreach (var it in selected)
+                    _tagDb.RemoveTags(it, new[] { tag });
+            }
+            ApplyFilters();
+        }
+
+        private List<string> CollectAssignTagUnion(IReadOnlyList<PoseGridItem> selected)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in _tagDb.GetAllKnownTags())
+                set.Add(t);
+            foreach (var it in selected)
+            {
+                foreach (var t in it.Tags)
+                    set.Add(t);
+            }
+            return set.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private void DrawTagWindowAssignBody(List<PoseGridItem> selected, string searchNormFold)
+        {
+            GUILayout.Label($"{selected.Count} pose(s) selected.", GUILayout.Height(20f));
+
+            if (!string.IsNullOrEmpty(searchNormFold))
+            {
+                bool alreadyKnown = CollectAssignTagUnion(selected).Any(t =>
+                    string.Equals(t, searchNormFold, StringComparison.OrdinalIgnoreCase));
+
+                if (!alreadyKnown &&
+                    GUILayout.Button($"Add new tag \"{searchNormFold}\" to all selected", GUILayout.Height(26f)))
+                {
+                    foreach (var it in selected)
+                        _tagDb.AddTags(it, new[] { searchNormFold });
+                    ApplyFilters();
+                }
+            }
+
+            var union = CollectAssignTagUnion(selected);
+            var visible = string.IsNullOrEmpty(searchNormFold)
+                ? union
+                : union.Where(t => t.IndexOf(searchNormFold, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            GUILayout.Space(4f);
+            GUILayout.Label("Click to set for all selected: ✓ = on all, ☐ = off all, ◪ = mixed (click adds on all).", GUILayout.Height(36f));
+
+            if (visible.Count == 0)
+            {
+                GUILayout.Label("No tags match the search.");
+                return;
+            }
+
+            _tagWindowScroll = GUILayout.BeginScrollView(_tagWindowScroll, GUILayout.ExpandHeight(true));
+            foreach (var tag in visible)
+            {
+                var cov = GetTagCoverage(selected, tag);
+                if (cov == TagCoverage.Some)
+                {
+                    var gc = GUI.color;
+                    GUI.color = new Color(0.9f, 0.82f, 0.5f);
+                    if (GUILayout.Button(
+                            new GUIContent($"◪  {tag}", "Mixed: only some selected poses have this tag — click to add on all."),
+                            GUILayout.Height(24f)))
+                        ApplyTagToAllSelected(selected, tag, add: true);
+                    GUI.color = gc;
+                }
+                else
+                {
+                    bool on = cov == TagCoverage.All;
+                    bool nv = GUILayout.Toggle(on, tag, GUILayout.Height(22f));
+                    if (nv != on)
+                        ApplyTagToAllSelected(selected, tag, add: nv);
+                }
+            }
+            GUILayout.EndScrollView();
+        }
+
+        private void DrawSortWindowContent(int id)
+        {
+            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            GUILayout.Label("Click a row to choose the primary sort. Click the same row again to flip ↑ / ↓.", GUILayout.Height(36f));
+
+            void Row(PoseSortMode mode, string label)
+            {
+                bool on = _poseSortMode == mode;
+                string arrow = on ? (_sortAscending ? "↑" : "↓") : "";
+                string suffix = on ? $"  {arrow}" : "";
+                var st = on ? _treeNodeSelectedStyle! : _treeNodeStyle!;
+                if (GUILayout.Button($"{label}{suffix}", st, GUILayout.Height(26f)))
+                {
+                    if (_poseSortMode == mode)
+                        _sortAscending = !_sortAscending;
+                    else
+                    {
+                        _poseSortMode = mode;
+                        _sortAscending = true;
+                    }
+                    ResortPoseItemsInPlace();
+                    ApplyFilters();
+                    SavePersistedOptions();
+                }
+            }
+
+            Row(PoseSortMode.LastUsed, "Last used");
+            Row(PoseSortMode.LastUpdated, "Last updated (file)");
+            Row(PoseSortMode.LastCreated, "Last created (file)");
+            Row(PoseSortMode.Name, "Name");
+
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Close sort", GUILayout.Height(26f)))
+                _showSortPane = false;
 
             GUILayout.EndVertical();
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
         }
 
         private void DrawSavePopup()
@@ -482,7 +1236,7 @@ namespace HS2SandboxPlugin
 
         // ── Tree Panel ──
 
-        private void DrawTreePanel()
+        private void DrawTreePanel(bool showFolderFooter)
         {
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(TreePanelWidth), GUILayout.ExpandHeight(true));
 
@@ -496,19 +1250,33 @@ namespace HS2SandboxPlugin
 
             _treeScroll = GUILayout.BeginScrollView(_treeScroll, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
-            bool allViewSelected = _viewAllPosesRecursive;
+            bool allViewSelected = !_moveCopyPending && _viewAllPosesRecursive && !_browseFavoritesOnly;
             var allStyle = allViewSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
             GUI.enabled = !_moveCopyPending;
             if (GUILayout.Button("All poses", allStyle, GUILayout.Height(22f)))
             {
                 _viewAllPosesRecursive = true;
+                _browseFavoritesOnly = false;
                 _folderTree.SelectedNode = null;
                 ClearTreeFolderActionUi();
                 LoadAllPosesFromTreeRoot();
             }
             GUI.enabled = true;
 
-            bool rootOnlyNormalSelected = !_moveCopyPending && !_viewAllPosesRecursive && _folderTree.SelectedNode == null;
+            bool favSelected = !_moveCopyPending && _browseFavoritesOnly;
+            var favStyle = favSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
+            GUI.enabled = !_moveCopyPending;
+            if (GUILayout.Button("★ Favorites", favStyle, GUILayout.Height(22f)))
+            {
+                _browseFavoritesOnly = true;
+                _viewAllPosesRecursive = false;
+                _folderTree.SelectedNode = null;
+                ClearTreeFolderActionUi();
+                LoadFavoritePosesFromTreeRoot();
+            }
+            GUI.enabled = true;
+
+            bool rootOnlyNormalSelected = !_moveCopyPending && !_viewAllPosesRecursive && !_browseFavoritesOnly && _folderTree.SelectedNode == null;
             bool rootOnlyMoveDest = _moveCopyPending && !string.IsNullOrEmpty(_moveCopyDestPath) &&
                 Path.GetFullPath(_moveCopyDestPath).Equals(Path.GetFullPath(_folderTree.RootPath), StringComparison.OrdinalIgnoreCase);
             var rootOnlyStyle = (rootOnlyNormalSelected || rootOnlyMoveDest) ? _treeNodeSelectedStyle! : _treeNodeStyle!;
@@ -523,6 +1291,7 @@ namespace HS2SandboxPlugin
                 else
                 {
                     _viewAllPosesRecursive = false;
+                    _browseFavoritesOnly = false;
                     _folderTree.SelectedNode = null;
                     ClearTreeFolderActionUi();
                     LoadFolder(_folderTree.RootPath);
@@ -546,7 +1315,7 @@ namespace HS2SandboxPlugin
                     GUILayout.Space(24f);
                 }
 
-                bool normalSel = !_moveCopyPending && !_viewAllPosesRecursive && _folderTree.SelectedNode == node;
+                bool normalSel = !_moveCopyPending && !_viewAllPosesRecursive && !_browseFavoritesOnly && _folderTree.SelectedNode == node;
                 bool moveDestSel = _moveCopyPending && !string.IsNullOrEmpty(_moveCopyDestPath) &&
                     Path.GetFullPath(node.FullPath).Equals(Path.GetFullPath(_moveCopyDestPath), StringComparison.OrdinalIgnoreCase);
                 var style = (normalSel || moveDestSel) ? _treeNodeSelectedStyle! : _treeNodeStyle!;
@@ -561,6 +1330,7 @@ namespace HS2SandboxPlugin
                     else
                     {
                         _viewAllPosesRecursive = false;
+                        _browseFavoritesOnly = false;
                         ClearTreeFolderActionUi();
                         _folderTree.SelectNode(node);
                         LoadFolder(node.FullPath);
@@ -572,7 +1342,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.EndScrollView();
 
-            if (!_viewAllPosesRecursive || _moveCopyPending)
+            if (showFolderFooter && ((!_viewAllPosesRecursive && !_browseFavoritesOnly) || _moveCopyPending))
             {
                 GUILayout.Space(6f);
                 DrawTreeFolderActions();
@@ -815,19 +1585,31 @@ namespace HS2SandboxPlugin
             var visible = GetGridVisibleItems();
             ClampCurrentPage();
 
+            GUILayout.BeginHorizontal(GUILayout.Height(22f));
+            if (GUILayout.Button(new GUIContent("All", "Select all poses in the current folder / library view"), GUILayout.Width(36f)))
+                SelectAllInCurrentFolderView();
+            if (GUILayout.Button(new GUIContent("None", "Deselect all poses in the current folder / library view"), GUILayout.Width(44f)))
+                DeselectAllInCurrentFolderView();
+            GUILayout.Label(
+                new GUIContent($"{_allItems.Count} in folder", "Total poses in the current tree scope (before search / tag filters)."),
+                GUILayout.Width(78f));
             if (_itemsPerPage > 0 && _filteredItems.Count > 0)
             {
+                GUILayout.FlexibleSpace();
                 int pages = Mathf.Max(1, Mathf.CeilToInt(_filteredItems.Count / (float)_itemsPerPage));
-                GUILayout.BeginHorizontal(GUILayout.Height(22f));
-                GUILayout.Label($"Page {_currentPage}/{pages} · {_filteredItems.Count} poses", GUILayout.Width(200f));
+                GUILayout.Label($"Page {_currentPage}/{pages} · {_filteredItems.Count} shown", GUILayout.Width(168f));
                 GUI.enabled = _currentPage > 1;
                 if (GUILayout.Button("◀", GUILayout.Width(28f))) { _currentPage--; _gridScroll = Vector2.zero; }
                 GUI.enabled = _currentPage < pages;
                 if (GUILayout.Button("▶", GUILayout.Width(28f))) { _currentPage++; _gridScroll = Vector2.zero; }
                 GUI.enabled = true;
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
             }
+            else
+            {
+                GUILayout.Label(new GUIContent($"{_filteredItems.Count} shown", "After search & tag filters."), GUILayout.Width(72f));
+                GUILayout.FlexibleSpace();
+            }
+            GUILayout.EndHorizontal();
 
             _gridScroll = GUILayout.BeginScrollView(_gridScroll, alwaysShowHorizontal: false, alwaysShowVertical: false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
@@ -864,14 +1646,16 @@ namespace HS2SandboxPlugin
 
         private void DrawGridCell(PoseGridItem item, int displayIndex, float cellW, float tagBlockH)
         {
-            var oldBg = GUI.backgroundColor;
+            GUIStyle cardBox = GUI.skin.box;
             if (item.IsSelected)
-                GUI.backgroundColor = new Color(0.3f, 0.6f, 1f, 1f);
+                cardBox = _selectedStyle!;
+            else if (item.IsFavorite)
+                cardBox = _favoriteCardStyle!;
 
             const float edge = 2f;
             float innerW = Mathf.Max(40f, cellW - edge * 2f);
 
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(cellW), GUILayout.ExpandWidth(false));
+            GUILayout.BeginVertical(cardBox, GUILayout.Width(cellW), GUILayout.ExpandWidth(false));
 
             Rect thumbRect = GUILayoutUtility.GetRect(innerW, innerW);
             Texture2D tex = item.Thumbnail ?? _placeholderTex!;
@@ -881,12 +1665,30 @@ namespace HS2SandboxPlugin
 
             const float cbSize = 18f;
             var cbRect = new Rect(thumbRect.xMax - cbSize - 3f, thumbRect.y + 3f, cbSize, cbSize);
-            bool newSel = GUI.Toggle(cbRect, item.IsSelected, "");
-            if (newSel != item.IsSelected)
+            Event evCb = Event.current;
+            if (evCb.type == EventType.MouseDown && evCb.button == 0 && cbRect.Contains(evCb.mousePosition))
             {
-                item.IsSelected = newSel;
-                _lastClickedGlobalIndex = DisplayIndexToGlobal(displayIndex);
+                int g = DisplayIndexToGlobal(displayIndex);
+                if (evCb.shift && _lastClickedGlobalIndex >= 0)
+                {
+                    int start = Mathf.Min(_lastClickedGlobalIndex, g);
+                    int end = Mathf.Max(_lastClickedGlobalIndex, g);
+                    for (int i = start; i <= end && i < _filteredItems.Count; i++)
+                        _filteredItems[i].IsSelected = true;
+                }
+                else if (evCb.control)
+                {
+                    item.IsSelected = !item.IsSelected;
+                    _lastClickedGlobalIndex = g;
+                }
+                else
+                {
+                    item.IsSelected = !item.IsSelected;
+                    _lastClickedGlobalIndex = g;
+                }
+                evCb.Use();
             }
+            GUI.Toggle(cbRect, item.IsSelected, "");
 
             Event ev = Event.current;
             if (ev.type == EventType.MouseDown && thumbRect.Contains(ev.mousePosition) && !cbRect.Contains(ev.mousePosition))
@@ -897,7 +1699,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.BeginHorizontal();
             if (item.IsFavorite)
-                GUILayout.Label("★", GUILayout.Width(14f));
+                GUILayout.Label("★", _favoriteStyle!, GUILayout.Width(14f));
 
             string label = item.DisplayName;
             var nameStyle = GUI.skin.label;
@@ -911,7 +1713,6 @@ namespace HS2SandboxPlugin
             }
 
             GUILayout.EndVertical();
-            GUI.backgroundColor = oldBg;
         }
 
         private void HandleItemClick(PoseGridItem item, int displayIndex)
@@ -921,7 +1722,7 @@ namespace HS2SandboxPlugin
 
             if (e != null && e.button == 1)
             {
-                _dataService.ApplyPoseToSelected(item);
+                ApplyPoseToSelectedWithUsage(item);
                 return;
             }
 
@@ -943,7 +1744,7 @@ namespace HS2SandboxPlugin
                 item.IsSelected = true;
                 _lastClickedGlobalIndex = globalIdx;
 
-                _dataService.ApplyPoseToSelected(item);
+                ApplyPoseToSelectedWithUsage(item);
             }
         }
 
@@ -954,7 +1755,8 @@ namespace HS2SandboxPlugin
             var selected = _filteredItems.Where(i => i.IsSelected).ToList();
             if (selected.Count == 0)
             {
-                if (_showTagPopup) _showTagPopup = false;
+                if (_tagWindowPurpose == TagWindowPurpose.EditSelection)
+                    CloseTagWindow();
                 if (_pendingUpdateMode != UpdateMode.None) _pendingUpdateMode = UpdateMode.None;
                 _showDeletePosesConfirm = false;
                 if (_moveCopyPending)
@@ -985,15 +1787,14 @@ namespace HS2SandboxPlugin
             }
 
             if (GUILayout.Button("Tag Selected", GUILayout.Width(100f), GUILayout.Height(24f)))
-            {
-                _showTagPopup = true;
-                _tagPopupText = "";
-            }
+                OpenTagAssignWindow();
 
             if (GUILayout.Button("Fav Selected", GUILayout.Width(100f), GUILayout.Height(24f)))
             {
                 foreach (var it in selected)
                     _tagDb.ToggleFavorite(it);
+                ResortPoseItemsInPlace();
+                ApplyFilters();
             }
 
             if (GUILayout.Button("Thumbs…", GUILayout.Width(72f), GUILayout.Height(24f)))
@@ -1059,9 +1860,6 @@ namespace HS2SandboxPlugin
             }
 
             GUILayout.EndVertical();
-
-            if (_showTagPopup)
-                DrawTagPopup(selected);
 
             if (_pendingUpdateMode != UpdateMode.None)
                 DrawUpdatePopup();
@@ -1129,9 +1927,9 @@ namespace HS2SandboxPlugin
                     {
                         if (_dataService.RenamePoseDisplayNameAndOptionalFile(sel[0], _renamePoseText, _renamePoseAlsoFile, _tagDb))
                         {
-                            _allItems.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
+                            ResortPoseItemsInPlace();
                             ApplyFilters();
-                            StartThumbnailLoading();
+                            MaybeStartThumbnailsAfterLoad();
                         }
                         _showRenamePosePopup = false;
                     }
@@ -1177,30 +1975,6 @@ namespace HS2SandboxPlugin
             _moveCopyPending = false;
             _moveCopyDestPath = null;
             ReloadCurrentView();
-        }
-
-        private void DrawTagPopup(List<PoseGridItem> selected)
-        {
-            GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label($"Add tags to {selected.Count} pose(s):");
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Tags:", GUILayout.Width(40f));
-            _tagPopupText = GUILayout.TextField(_tagPopupText, GUILayout.ExpandWidth(true));
-            GUILayout.EndHorizontal();
-            GUILayout.Label("(comma-separated)", GUILayout.Height(16f));
-
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Apply", GUILayout.Height(24f)))
-            {
-                var tags = _tagPopupText.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0);
-                foreach (var it in selected)
-                    _tagDb.AddTags(it, tags);
-                _showTagPopup = false;
-            }
-            if (GUILayout.Button("Cancel", GUILayout.Height(24f)))
-                _showTagPopup = false;
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
         }
 
         private void ShowUpdatePoseOptions(PoseGridItem item)
@@ -1251,37 +2025,60 @@ namespace HS2SandboxPlugin
         {
             StopThumbnailLoading();
             _viewAllPosesRecursive = false;
+            _browseFavoritesOnly = false;
             _allItems = _dataService.LoadPosesFromFolder(path);
             foreach (var item in _allItems)
                 _tagDb.ApplyToItem(item);
 
-            _allItems.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
+            ResortPoseItemsInPlace();
             ApplyFilters();
             _gridScroll = Vector2.zero;
             _lastClickedGlobalIndex = -1;
 
-            StartThumbnailLoading();
+            MaybeStartThumbnailsAfterLoad();
         }
 
         private void LoadAllPosesFromTreeRoot()
         {
             StopThumbnailLoading();
             _viewAllPosesRecursive = true;
+            _browseFavoritesOnly = false;
             _allItems = _dataService.LoadPosesRecursive(_folderTree.RootPath);
             foreach (var item in _allItems)
                 _tagDb.ApplyToItem(item);
 
-            _allItems.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
+            ResortPoseItemsInPlace();
             ApplyFilters();
             _gridScroll = Vector2.zero;
             _lastClickedGlobalIndex = -1;
 
-            StartThumbnailLoading();
+            MaybeStartThumbnailsAfterLoad();
+        }
+
+        private void LoadFavoritePosesFromTreeRoot()
+        {
+            StopThumbnailLoading();
+            _browseFavoritesOnly = true;
+            _viewAllPosesRecursive = false;
+            _folderTree.SelectedNode = null;
+            _allItems = _dataService.LoadPosesRecursive(_folderTree.RootPath);
+            foreach (var item in _allItems)
+                _tagDb.ApplyToItem(item);
+            _allItems = _allItems.Where(i => i.IsFavorite).ToList();
+
+            ResortPoseItemsInPlace();
+            ApplyFilters();
+            _gridScroll = Vector2.zero;
+            _lastClickedGlobalIndex = -1;
+
+            MaybeStartThumbnailsAfterLoad();
         }
 
         private void ReloadCurrentView()
         {
-            if (_viewAllPosesRecursive)
+            if (_browseFavoritesOnly)
+                LoadFavoritePosesFromTreeRoot();
+            else if (_viewAllPosesRecursive)
                 LoadAllPosesFromTreeRoot();
             else if (_folderTree.SelectedNode != null)
                 LoadFolder(_folderTree.SelectedNode.FullPath);
@@ -1351,6 +2148,7 @@ namespace HS2SandboxPlugin
 
             _currentPage = 1;
             ClampCurrentPage();
+            ClampCompactPoseIndex();
         }
 
         private void StartThumbnailLoading()
@@ -1391,7 +2189,7 @@ namespace HS2SandboxPlugin
             _thumbCapture.StartCapture(
                 this,
                 items,
-                onApplyPose: item => _dataService.ApplyPoseToSelected(item),
+                onApplyPose: ApplyPoseToSelectedWithUsage,
                 onCaptured: (item, pngBytes) =>
                 {
                     if (item.IsPng)
@@ -1477,8 +2275,14 @@ namespace HS2SandboxPlugin
             }
 
             _dataService.UpdatePose(item, chars[0], newPngBytes);
+            _tagDb.RecordLastUsed(item);
             for (int i = 1; i < chars.Count; i++)
                 _dataService.ApplyPose(item, chars[i]);
+            if (_poseSortMode == PoseSortMode.LastUsed)
+            {
+                ResortPoseItemsInPlace();
+                ApplyFilters();
+            }
             if (newPngBytes != null)
             {
                 var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
@@ -1508,57 +2312,65 @@ namespace HS2SandboxPlugin
 
         private void InitStyles()
         {
-            if (_selectedStyle != null) return;
-
-            _selectedStyle = new GUIStyle(GUI.skin.box)
+            if (_selectedStyle == null)
             {
-                normal = { background = MakeTex(2, 2, new Color(0.3f, 0.6f, 1f, 0.4f)) }
-            };
+                var skinBox = GUI.skin.box;
+                // Plain style + zero border: cloning skin.box keeps atlased 9-slice refs on some states and fights our flat tint.
+                _selectedStyle = CardTintStyle(skinBox, new Color(0.22f, 0.48f, 0.98f, 0.88f));
+                _favoriteCardStyle = CardTintStyle(skinBox, new Color(0.95f, 0.82f, 0.22f, 0.72f));
 
-            _favoriteStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 14,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(1f, 0.85f, 0f) }
-            };
+                _favoriteStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 14,
+                    fontStyle = FontStyle.Bold,
+                    normal = { textColor = new Color(1f, 0.85f, 0f) }
+                };
 
-            _treeNodeStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                padding = new RectOffset(4, 4, 0, 0)
-            };
+                _treeNodeStyle = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleLeft,
+                    padding = new RectOffset(4, 4, 0, 0)
+                };
 
-            _treeNodeSelectedStyle = new GUIStyle(_treeNodeStyle)
-            {
-                normal = { background = MakeTex(2, 2, new Color(0.3f, 0.6f, 1f, 0.4f)),
-                           textColor = Color.white }
-            };
+                var treeSelBg = MakeTex(4, 4, new Color(0.22f, 0.48f, 0.98f, 0.88f));
+                _treeNodeSelectedStyle = new GUIStyle(_treeNodeStyle);
+                ApplyFlatTint(_treeNodeSelectedStyle, treeSelBg, Color.white);
 
-            _tagWrapStyle = new GUIStyle(GUI.skin.label)
-            {
-                wordWrap = true,
-                fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
-                clipping = TextClipping.Clip,
-                normal = { textColor = new Color(0.72f, 0.72f, 0.72f) }
-            };
+                _tagWrapStyle = new GUIStyle(GUI.skin.label)
+                {
+                    wordWrap = true,
+                    fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
+                    clipping = TextClipping.Clip,
+                    normal = { textColor = new Color(0.72f, 0.72f, 0.72f) }
+                };
 
-            _headerSectionCaptionStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleLeft,
-                padding = new RectOffset(0, 6, 0, 0),
-                normal = { textColor = new Color(0.52f, 0.55f, 0.6f) }
-            };
+                _headerSectionCaptionStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleLeft,
+                    padding = new RectOffset(0, 6, 0, 0),
+                    normal = { textColor = new Color(0.52f, 0.55f, 0.6f) }
+                };
 
-            _characterHintStyle = new GUIStyle(GUI.skin.label)
+                _characterHintStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
+                    alignment = TextAnchor.MiddleLeft,
+                    wordWrap = false,
+                    clipping = TextClipping.Overflow,
+                    normal = { textColor = new Color(0.62f, 0.66f, 0.7f) }
+                };
+            }
+
+            if (_compactWordWrapStyle == null)
             {
-                fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
-                alignment = TextAnchor.MiddleLeft,
-                wordWrap = false,
-                clipping = TextClipping.Overflow,
-                normal = { textColor = new Color(0.62f, 0.66f, 0.7f) }
-            };
+                _compactWordWrapStyle = new GUIStyle(GUI.skin.label)
+                {
+                    wordWrap = true,
+                    alignment = TextAnchor.UpperLeft
+                };
+            }
         }
 
         private static GUIStyle? _poseBrowserTooltipStyle;
@@ -1588,13 +2400,60 @@ namespace HS2SandboxPlugin
             GUI.Label(new Rect(x, y, boxW, boxH), text, _poseBrowserTooltipStyle);
         }
 
+        private static GUIStyle CardTintStyle(GUIStyle skinBox, Color tint)
+        {
+            var s = new GUIStyle
+            {
+                margin = skinBox.margin,
+                padding = skinBox.padding,
+                border = new RectOffset(0, 0, 0, 0),
+                clipping = skinBox.clipping
+            };
+            Texture2D bg = MakeTex(4, 4, tint);
+            ApplyFlatBackgroundAllStates(s, bg);
+            return s;
+        }
+
+        private static void ApplyFlatBackgroundAllStates(GUIStyle s, Texture2D bg)
+        {
+            s.normal.background = bg;
+            s.hover.background = bg;
+            s.active.background = bg;
+            s.focused.background = bg;
+            s.onNormal.background = bg;
+            s.onHover.background = bg;
+            s.onActive.background = bg;
+            s.onFocused.background = bg;
+        }
+
+        private static void ApplyFlatTint(GUIStyle s, Texture2D bg, Color textColor)
+        {
+            void Apply(GUIStyleState st)
+            {
+                st.background = bg;
+                st.textColor = textColor;
+            }
+
+            Apply(s.normal);
+            Apply(s.hover);
+            Apply(s.active);
+            Apply(s.focused);
+            Apply(s.onNormal);
+            Apply(s.onHover);
+            Apply(s.onActive);
+            Apply(s.onFocused);
+        }
+
         private static Texture2D MakeTex(int w, int h, Color col)
         {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
             var pix = new Color[w * h];
             for (int i = 0; i < pix.Length; i++) pix[i] = col;
-            var tex = new Texture2D(w, h);
             tex.SetPixels(pix);
-            tex.Apply();
+            tex.Apply(false, false);
+            tex.hideFlags = HideFlags.DontSave;
             return tex;
         }
 
@@ -1619,8 +2478,9 @@ namespace HS2SandboxPlugin
                 "• <b>Search</b> — filter by name/path. <b>.*</b> = case-insensitive regex (bad patterns show in red).\n" +
                 "• <b>★</b> — only favorites.\n" +
                 "• <b>AND / OR</b> — combine tag filters.\n" +
-                "• <b>Tags (n)</b> — pick tags from the list; Clear All clears filters only.\n" +
-                "• <b>Save Pose</b> — save current character pose into the active folder (selected folder, pose root in <b>All poses</b> view).",
+                "• <b>Tags (n)</b> — opens a docked <b>Tag filter</b> window: search, toggle filters (AND/OR stays on the top bar), <b>Clear active filters</b>.\n" +
+                "• <b>Sort</b> — opens a docked sort panel: <b>Last used</b> (when poses are applied), <b>Last updated</b> / <b>Last created</b> (file times), <b>Name</b>. First click selects; click again on the same row toggles ↑ / ↓.\n" +
+                "• <b>Save Pose</b> — save current character pose into the active folder (selected folder, pose root in <b>All poses</b> or <b>Favorites</b> view).",
                 rich);
 
             GUILayout.Space(6f);
@@ -1630,10 +2490,19 @@ namespace HS2SandboxPlugin
                 rich);
 
             GUILayout.Space(8f);
+            GUILayout.Label("<b>Compact views</b>", rich);
+            GUILayout.Label(
+                "<b>View (…)</b> in the top bar (Window section) cycles <b>Full → List → Mini → Full</b>; choice is saved. Each mode remembers its own window size, position, and resize (stored in <b>pose_browser_options.json</b>).\n" +
+                "• <b>List</b> — folder tree + scrollable list of <b>filtered</b> poses (names only; no thumbnails, tags, search bar, or bottom selection bar). <b>Prev / Next</b> applies in list order and wraps. Click a row to apply.\n" +
+                "• <b>Mini</b> — <b>Folder</b> arrows walk <b>Root only</b>, every subfolder in depth-first order, <b>All poses</b>, then <b>Favorites</b>, wrapping; the <b>first filtered pose</b> in the new scope is applied immediately. <b>Pose</b> arrows walk the filtered list, apply each step, and wrap. <b>Reapply</b> repeats the current pose.",
+                rich);
+
+            GUILayout.Space(8f);
             GUILayout.Label("<b>Folders (left)</b>", rich);
             GUILayout.Label(
                 "• <b>↻</b> — refresh tree.\n" +
                 "• <b>All poses</b> — every subfolder, recursively (disabled while Move/Copy destination pick is active).\n" +
+                "• <b>Favorites</b> — all favorited poses in the library (same recursive scope as All poses).\n" +
                 "• <b>Root only</b> — files in the pose root only; during Move/Copy, also picks <b>pose root</b> as destination.\n" +
                 "• Click a folder name — browse that folder, or during Move/Copy sets <b>destination</b> without changing the grid.\n" +
                 "• Footer: <b>New folder</b>, <b>Rename</b> / <b>Delete</b> (empty only); during Move/Copy, <b>Apply</b>/<b>Cancel</b> appear at the top of this footer.",
@@ -1642,18 +2511,19 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Grid</b>", rich);
             GUILayout.Label(
-                "• Checkbox — select without applying.\n" +
+                "• Checkbox — select without applying; <b>Ctrl+click</b> and <b>Shift+click</b> work on the checkbox too (range = filtered list).\n" +
                 "• <b>Left-click</b> thumbnail — select one + apply pose.\n" +
                 "• <b>Ctrl+click</b> — add/remove from selection.\n" +
                 "• <b>Shift+click</b> — range select in the filtered list.\n" +
                 "• <b>Right-click</b> thumbnail — apply pose only (selection unchanged).\n" +
-                "• With pagination (Options), use ◀ ▶; card width slider controls minimum size; extra width fills the row or adds columns.",
+                "• With pagination (Options), use ◀ ▶; card width slider controls minimum size; extra width fills the row or adds columns.\n" +
+                "• <b>All</b> / <b>None</b> above the grid selects or clears every pose in the current view (folder, <b>All poses</b>, or <b>Favorites</b>) — not affected by search/tag filters.",
                 rich);
 
             GUILayout.Space(8f);
             GUILayout.Label("<b>Selection bar (bottom)</b>", rich);
             GUILayout.Label(
-                "Shown when something is selected: <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Fav Selected</b>, <b>Thumbs…</b> (capture overlay), <b>Move…</b> / <b>Copy…</b> (pick destination in the folder tree, then <b>Apply</b> in the left panel), <b>Delete…</b> (backup to <b>!_AutoBackup</b> then remove), <b>Deselect</b>.",
+                "Shown when something is selected: <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b> (tag editor window: mixed ◪ = partial overlap, click to unify), <b>Fav Selected</b>, <b>Thumbs…</b> (capture overlay), <b>Move…</b> / <b>Copy…</b> (pick destination in the folder tree, then <b>Apply</b> in the left panel), <b>Delete…</b> (backup to <b>!_AutoBackup</b> then remove), <b>Deselect</b>.",
                 rich);
 
             GUILayout.Space(8f);
@@ -1683,12 +2553,14 @@ namespace HS2SandboxPlugin
 
         private void DrawOptionsWindowContent(int id)
         {
-            GUILayout.Label("Card / thumbnail width (px)");
-            _cardCellSize = GUILayout.HorizontalSlider(_cardCellSize, MinCardSize, MaxCardSize);
+            GUILayout.Label("Card / thumbnail width (px). Same value is saved under BepInEx → Pose Browser → Card column width.");
+            float newCard = GUILayout.HorizontalSlider(_cardCellSize, MinCardSize, MaxCardSize);
+            if (Mathf.Abs(newCard - _cardCellSize) > 0.001f)
+                _cardCellSize = newCard;
             GUILayout.Label($"{Mathf.Round(_cardCellSize)} px column");
 
             GUILayout.Space(10f);
-            GUILayout.Label("Pagination: max items per page (0 = show all)");
+            GUILayout.Label("Pagination: max items per page (0 = show all). Config: Items per page (grid).");
             GUILayout.BeginHorizontal();
             _itemsPerPageEdit = GUILayout.TextField(_itemsPerPageEdit, GUILayout.Width(56f));
             if (GUILayout.Button("Apply", GUILayout.Width(52f), GUILayout.Height(22f)))
@@ -1702,6 +2574,17 @@ namespace HS2SandboxPlugin
                 }
             }
             GUILayout.EndHorizontal();
+
+            GUILayout.Space(14f);
+            GUILayout.Label("Keyboard shortcuts", GUI.skin.label);
+            GUILayout.Label(
+                "Assigned with the Configuration Manager key picker (BepInEx KeyboardShortcut — same style as Screenshot Manager). Defaults are unassigned (None).",
+                GUI.skin.label);
+            PoseBrowserConfig.Register(SandboxServices.Config);
+            DrawHotkeyReadonlyRow("Next browse (folder step)", PoseBrowserConfig.HotkeyNextBrowse);
+            DrawHotkeyReadonlyRow("Previous browse (folder step)", PoseBrowserConfig.HotkeyPrevBrowse);
+            DrawHotkeyReadonlyRow("Next pose", PoseBrowserConfig.HotkeyNextPose);
+            DrawHotkeyReadonlyRow("Previous pose", PoseBrowserConfig.HotkeyPrevPose);
 
             GUILayout.Space(12f);
             GUILayout.BeginHorizontal();
@@ -1749,13 +2632,15 @@ namespace HS2SandboxPlugin
             }
             else if (_isResizing && e.type == EventType.MouseDrag)
             {
-                windowRect.width = Mathf.Clamp(e.mousePosition.x - windowRect.x, MinWidth, MaxWidth);
-                windowRect.height = Mathf.Clamp(e.mousePosition.y - windowRect.y, MinHeight, MaxHeight);
+                windowRect.width = Mathf.Clamp(e.mousePosition.x - windowRect.x, LayoutMinWidth, LayoutMaxWidth);
+                windowRect.height = Mathf.Clamp(e.mousePosition.y - windowRect.y, LayoutMinHeight, LayoutMaxHeight);
                 e.Use();
             }
             else if (_isResizing && (e.type == EventType.MouseUp || e.rawType == EventType.MouseUp))
             {
                 _isResizing = false;
+                CaptureWindowRectForCurrentTier();
+                SavePersistedOptions();
                 e.Use();
             }
         }
@@ -1774,10 +2659,71 @@ namespace HS2SandboxPlugin
                 var data = JsonUtility.FromJson<PoseBrowserPersistedOptions>(json);
                 if (data == null) return;
 
-                _cardCellSize = Mathf.Clamp(data.cardCellSize, MinCardSize, MaxCardSize);
-                _itemsPerPage = Mathf.Max(0, data.itemsPerPage);
-                _itemsPerPageEdit = _itemsPerPage.ToString();
+                if (data.optionsVersion < PoseBrowserConfig.OptionsJsonVersion)
+                {
+                    PoseBrowserConfig.Register(SandboxServices.Config);
+                    if (PoseBrowserConfig.CardColumnWidth != null)
+                    {
+                        PoseBrowserConfig.CardColumnWidth.Value = Mathf.Clamp(data.cardCellSize, MinCardSize, MaxCardSize);
+                        PoseBrowserConfig.ItemsPerPage!.Value = Mathf.Max(0, data.itemsPerPage);
+                        SandboxServices.Config.Save();
+                    }
+                }
+
+                if (data.optionsVersion >= 1)
+                {
+                    _poseSortMode = (PoseSortMode)Mathf.Clamp(data.poseSortMode, 0, 3);
+                    _sortAscending = data.sortAscending;
+                }
+                else
+                {
+                    _poseSortMode = PoseSortMode.Name;
+                    _sortAscending = true;
+                }
+
+                if (data.optionsVersion >= 2)
+                {
+                    _layoutTier = (PoseBrowserLayoutTier)Mathf.Clamp(data.layoutTier, 0, 2);
+                    if (_layoutTier != PoseBrowserLayoutTier.Normal)
+                    {
+                        CloseTagWindow();
+                        _showOptionsPane = false;
+                        _showHelpPane = false;
+                        _showSortPane = false;
+                        StopThumbnailLoading();
+                    }
+                }
+                else
+                    _layoutTier = PoseBrowserLayoutTier.Normal;
+
+                if (data.optionsVersion >= 3)
+                {
+                    if (data.fullWindowW > 10f)
+                    {
+                        _savedFullW = data.fullWindowW;
+                        _savedFullH = data.fullWindowH;
+                        _savedFullX = data.fullWindowX;
+                        _savedFullY = data.fullWindowY;
+                    }
+                    if (data.listWindowW > 10f)
+                    {
+                        _savedListW = data.listWindowW;
+                        _savedListH = data.listWindowH;
+                        _savedListX = data.listWindowX;
+                        _savedListY = data.listWindowY;
+                    }
+                    if (data.miniWindowW > 10f)
+                    {
+                        _savedMiniW = data.miniWindowW;
+                        _savedMiniH = data.miniWindowH;
+                        _savedMiniX = data.miniWindowX;
+                        _savedMiniY = data.miniWindowY;
+                    }
+                }
+
                 ClampCurrentPage();
+                RestoreWindowRectForTier(_layoutTier);
+                SyncWindowTitleForLayoutTier();
             }
             catch (Exception ex)
             {
@@ -1789,6 +2735,7 @@ namespace HS2SandboxPlugin
         {
             try
             {
+                CaptureWindowRectForCurrentTier();
                 string path = PersistedOptionsPath;
                 string? dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -1796,22 +2743,153 @@ namespace HS2SandboxPlugin
 
                 var data = new PoseBrowserPersistedOptions
                 {
+                    optionsVersion = PoseBrowserConfig.OptionsJsonVersion,
                     cardCellSize = _cardCellSize,
-                    itemsPerPage = _itemsPerPage
+                    itemsPerPage = _itemsPerPage,
+                    poseSortMode = (int)_poseSortMode,
+                    sortAscending = _sortAscending,
+                    layoutTier = (int)_layoutTier,
+                    fullWindowW = _savedFullW,
+                    fullWindowH = _savedFullH,
+                    fullWindowX = _savedFullX,
+                    fullWindowY = _savedFullY,
+                    listWindowW = _savedListW,
+                    listWindowH = _savedListH,
+                    listWindowX = _savedListX,
+                    listWindowY = _savedListY,
+                    miniWindowW = _savedMiniW,
+                    miniWindowH = _savedMiniH,
+                    miniWindowX = _savedMiniX,
+                    miniWindowY = _savedMiniY
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                SyncPoseBrowserConfigFromFile();
             }
             catch (Exception ex)
             {
                 SandboxServices.Log.LogWarning($"PoseBrowser: Could not save pose_browser_options.json: {ex.Message}");
             }
         }
+
+        private void ApplyPoseBrowserConfigToUi()
+        {
+            try
+            {
+                PoseBrowserConfig.Register(SandboxServices.Config);
+                if (PoseBrowserConfig.CardColumnWidth == null) return;
+                _cardCellSize = Mathf.Clamp(PoseBrowserConfig.CardColumnWidth.Value, MinCardSize, MaxCardSize);
+                _itemsPerPage = Mathf.Max(0, PoseBrowserConfig.ItemsPerPage!.Value);
+                _itemsPerPageEdit = _itemsPerPage.ToString();
+                ClampCurrentPage();
+            }
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: ApplyPoseBrowserConfigToUi failed: {ex.Message}");
+            }
+        }
+
+        private void SyncPoseBrowserConfigFromFile()
+        {
+            try
+            {
+                if (PoseBrowserConfig.CardColumnWidth == null) return;
+                PoseBrowserConfig.CardColumnWidth.Value = Mathf.Clamp(_cardCellSize, MinCardSize, MaxCardSize);
+                PoseBrowserConfig.ItemsPerPage!.Value = Mathf.Max(0, _itemsPerPage);
+                SandboxServices.Config.Save();
+            }
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: Could not write BepInEx Pose Browser config: {ex.Message}");
+            }
+        }
+
+        private void MaybeProcessPoseBrowserHotkeys()
+        {
+            if (_thumbCapture.IsActive) return;
+            // Avoid firing while typing in any IMGUI field (search, options, etc.).
+            if (GUIUtility.keyboardControl != 0) return;
+
+            PoseBrowserConfig.Register(SandboxServices.Config);
+
+            if (PoseBrowserConfig.HotkeyNextBrowse!.Value.IsDown())
+            {
+                AdvanceMiniBrowse(1);
+                return;
+            }
+
+            if (PoseBrowserConfig.HotkeyPrevBrowse!.Value.IsDown())
+            {
+                AdvanceMiniBrowse(-1);
+                return;
+            }
+
+            if (_filteredItems.Count == 0) return;
+
+            if (PoseBrowserConfig.HotkeyNextPose!.Value.IsDown())
+            {
+                HotkeyStepPose(1);
+                return;
+            }
+
+            if (PoseBrowserConfig.HotkeyPrevPose!.Value.IsDown())
+                HotkeyStepPose(-1);
+        }
+
+        private void HotkeyStepPose(int delta)
+        {
+            if (_filteredItems.Count == 0) return;
+            int idx;
+            if (_layoutTier == PoseBrowserLayoutTier.Normal)
+                idx = GetPoseStepAnchorIndex();
+            else
+            {
+                ClampCompactPoseIndex();
+                idx = _compactPoseIndex;
+            }
+
+            idx = (idx + delta + _filteredItems.Count) % _filteredItems.Count;
+            _compactPoseIndex = idx;
+            var item = _filteredItems[idx];
+            ApplyPoseToSelectedWithUsage(item);
+            foreach (var it in _filteredItems)
+                it.IsSelected = false;
+            item.IsSelected = true;
+            _lastClickedGlobalIndex = idx;
+        }
+
+        private int GetPoseStepAnchorIndex()
+        {
+            if (_lastClickedGlobalIndex >= 0 && _lastClickedGlobalIndex < _filteredItems.Count)
+                return _lastClickedGlobalIndex;
+            for (int i = 0; i < _filteredItems.Count; i++)
+            {
+                if (_filteredItems[i].IsSelected) return i;
+            }
+
+            return 0;
+        }
+
+        private static void DrawHotkeyReadonlyRow(string label, ConfigEntry<KeyboardShortcut>? entry)
+        {
+            if (entry == null) return;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(new GUIContent(label, entry.Description.Description), GUILayout.Width(200f));
+            GUILayout.Label(entry.Value.ToString(), GUI.skin.label);
+            GUILayout.EndHorizontal();
+        }
     }
 
     [Serializable]
     internal sealed class PoseBrowserPersistedOptions
     {
+        public int optionsVersion;
         public float cardCellSize = 140f;
         public int itemsPerPage;
+        public int poseSortMode = 3;
+        public bool sortAscending = true;
+        public int layoutTier;
+        public float fullWindowW, fullWindowH, fullWindowX, fullWindowY;
+        public float listWindowW, listWindowH, listWindowX, listWindowY;
+        public float miniWindowW, miniWindowH, miniWindowX, miniWindowY;
     }
 }

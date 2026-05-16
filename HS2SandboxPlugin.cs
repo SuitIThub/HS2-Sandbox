@@ -16,7 +16,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox";
         public const string PluginName = "HS2 Sandbox Plugin";
-        public const string PluginVersion = "1.2.0";
+        public const string PluginVersion = "2.0.0";
 
         internal static ManualLogSource Log = null!;
         internal static HS2SandboxPlugin Instance = null!;
@@ -43,6 +43,7 @@ namespace HS2SandboxPlugin
         }
 
         private void initializeDefaultConfigs() {
+            PoseBrowserConfig.Register(Config);
             SandboxConfig.AdditionalSearchBarParentPaths = Config.Bind(
                 "Search Bars",
                 "Additional Parent Paths",

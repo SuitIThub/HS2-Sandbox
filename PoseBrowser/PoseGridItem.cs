@@ -11,6 +11,10 @@ namespace HS2SandboxPlugin
         public bool IsPng { get; set; }
         public int DataPosition { get; set; }
         public DateTime LastWriteTime { get; set; }
+        /// <summary>File creation time (UTC, from filesystem).</summary>
+        public DateTime CreationTimeUtc { get; set; }
+        /// <summary>When the pose was last applied in Studio (UTC); <see cref="DateTime.MinValue"/> if unknown.</summary>
+        public DateTime LastUsedUtc { get; set; }
         public Texture2D? Thumbnail { get; set; }
         public bool IsSelected { get; set; }
         public bool IsFavorite { get; set; }

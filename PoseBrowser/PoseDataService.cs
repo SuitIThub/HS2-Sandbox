@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using AIChara;
 using Studio;
 using UnityEngine;
 
@@ -239,6 +240,7 @@ namespace HS2SandboxPlugin
                 item.DisplayName = newPoseName;
                 item.IsPng = string.Equals(fi.Extension, ".png", StringComparison.OrdinalIgnoreCase);
                 item.LastWriteTime = fi.LastWriteTime;
+                item.CreationTimeUtc = fi.CreationTimeUtc;
                 if (item.Thumbnail != null)
                 {
                     UnityEngine.Object.Destroy(item.Thumbnail);
@@ -293,6 +295,7 @@ namespace HS2SandboxPlugin
 
             var fi = new FileInfo(item.FilePath);
             item.LastWriteTime = fi.LastWriteTime;
+            item.CreationTimeUtc = fi.CreationTimeUtc;
             tagDb.OnItemPathChanged(oldRel, item);
             tagDb.ApplyToItem(item);
             return true;
@@ -495,7 +498,8 @@ namespace HS2SandboxPlugin
                     DisplayName = name,
                     IsPng = isPng,
                     DataPosition = dataPos,
-                    LastWriteTime = file.LastWriteTime
+                    LastWriteTime = file.LastWriteTime,
+                    CreationTimeUtc = file.CreationTimeUtc
                 };
             }
             catch
@@ -614,21 +618,88 @@ namespace HS2SandboxPlugin
             }
         }
 
-        /// <summary>Workspace selection keys mapped to <see cref="OCIChar"/> only; props/items are ignored.</summary>
+        /// <summary>
+        /// Characters implied by workspace / gizmo selection. Includes FK/IK bone guides: resolves
+        /// <see cref="ChaControl"/> from <see cref="GuideObject.transformTarget"/> without changing tree or gizmo selection.
+        /// </summary>
         public IEnumerable<OCIChar> GetSelectedCharacters()
         {
+            var list = new List<OCIChar>();
             try
             {
-                return Singleton<GuideObjectManager>.Instance.selectObjectKey
-                    .Select(key => Studio.Studio.GetCtrlInfo(key) as OCIChar)
-                    .Where(c => c != null)
-                    .Cast<OCIChar>()
-                    .Distinct();
+                var gom = Singleton<GuideObjectManager>.Instance;
+                if (gom == null)
+                    return list;
+
+                foreach (var key in gom.selectObjectKey)
+                {
+                    try
+                    {
+                        if (Studio.Studio.GetCtrlInfo(key) is OCIChar oci)
+                            AddUniqueOCIChar(list, oci);
+                    }
+                    catch
+                    {
+                        // ignore bad key
+                    }
+                }
+
+                try
+                {
+                    if (gom.selectObject != null)
+                        AddUniqueOCIChar(list, TryGetOCICharFromGuideObject(gom.selectObject));
+                }
+                catch
+                {
+                    // ignored
+                }
+
+                return list;
             }
             catch
             {
-                return Enumerable.Empty<OCIChar>();
+                return list;
             }
+        }
+
+        private static void AddUniqueOCIChar(List<OCIChar> list, OCIChar? oci)
+        {
+            if (oci == null) return;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (ReferenceEquals(list[i], oci))
+                    return;
+            }
+            list.Add(oci);
+        }
+
+        private static OCIChar? TryGetOCICharFromGuideObject(GuideObject guide)
+        {
+            if (guide == null) return null;
+            Transform? t = guide.transformTarget;
+            return t != null ? FindOCICharFromTransform(t) : null;
+        }
+
+        private static OCIChar? FindOCICharFromTransform(Transform t)
+        {
+            if (t == null) return null;
+            ChaControl? cha = t.GetComponentInParent<ChaControl>();
+            if (cha == null) return null;
+
+            try
+            {
+                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
+                {
+                    if (kvp.Value is OCIChar oci && oci.charInfo == cha)
+                        return oci;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+
+            return null;
         }
 
         public IReadOnlyList<string> GetSelectedCharacterDisplayNames()
