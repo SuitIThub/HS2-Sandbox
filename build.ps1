@@ -156,6 +156,14 @@ $targets = @(
         BuiltDllRelPath = "Modules\Notebook\bin\Release\HS2Sandbox.Notebook.dll"
         DeployFileName = "HS2Sandbox.Notebook.dll"
         DeactivatedFileName = "HS2Sandbox.Notebook.dl_"
+    },
+    @{
+        Key = "PoseBrowser"
+        DisplayName = "PoseBrowser module (HS2Sandbox.PoseBrowser.dll)"
+        BuildPath = "Modules\PoseBrowser\HS2Sandbox.PoseBrowser.csproj"
+        BuiltDllRelPath = "Modules\PoseBrowser\bin\Release\HS2Sandbox.PoseBrowser.dll"
+        DeployFileName = "HS2Sandbox.PoseBrowser.dll"
+        DeactivatedFileName = "HS2Sandbox.PoseBrowser.dl_"
     }
 )
 

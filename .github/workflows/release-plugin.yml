@@ -85,6 +85,7 @@ jobs:
             [sonscale]="Modules/SonScale/SonScaleModulePlugin.cs"
             [workspacetreelock]="Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs"
             [notebook]="Modules/Notebook/NotebookModulePlugin.cs"
+            [posebrowser]="Modules/PoseBrowser/PoseBrowserModulePlugin.cs"
           )
 
           declare -A DLLS=(
@@ -95,13 +96,14 @@ jobs:
             [sonscale]="Modules/SonScale/bin/Release/HS2Sandbox.SonScale.dll"
             [workspacetreelock]="Modules/WorkspaceTreeLock/bin/Release/HS2Sandbox.WorkspaceTreeLock.dll"
             [notebook]="Modules/Notebook/bin/Release/HS2Sandbox.Notebook.dll"
+            [posebrowser]="Modules/PoseBrowser/bin/Release/HS2Sandbox.PoseBrowser.dll"
           )
 
           CHANGED=()
           NOTES=()
           CHANGELOG=()
 
-          for key in allinone copyscript timeline searchbarmanager sonscale workspacetreelock notebook; do
+          for key in allinone copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser; do
             f="${FILES[$key]}"
             old_v="$(extract_version "$BEFORE" "$f")"
             new_v="$(extract_version "$AFTER" "$f")"
@@ -149,10 +151,10 @@ jobs:
           fi
 
           if [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
-            CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook)
+            CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
             NOTES+=("- **manual force**: including all module DLLs plus all-in-one")
           elif [[ "$INITIAL_RELEASE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
-            CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook)
+            CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
             NOTES+=("- **initial GitHub release**: repository had no prior releases; publishing all module DLLs plus all-in-one")
           fi
 

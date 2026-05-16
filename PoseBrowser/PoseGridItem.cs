@@ -1,0 +1,45 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace HS2SandboxPlugin
+{
+    public class PoseGridItem
+    {
+        public string FilePath { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public bool IsPng { get; set; }
+        public int DataPosition { get; set; }
+        public DateTime LastWriteTime { get; set; }
+        public Texture2D? Thumbnail { get; set; }
+        public bool IsSelected { get; set; }
+        public bool IsFavorite { get; set; }
+        public HashSet<string> Tags { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Path relative to pose root (same boundary rules as <see cref="PoseTagDatabase"/> storage keys).</summary>
+        public string RelativePath(string rootPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(FilePath)) return "";
+                string full = System.IO.Path.GetFullPath(FilePath);
+                string root = System.IO.Path.GetFullPath(rootPath).TrimEnd(
+                    System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+                if (full.Length >= root.Length && full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                {
+                    int i = root.Length;
+                    if (i < full.Length && (full[i] == System.IO.Path.DirectorySeparatorChar ||
+                                            full[i] == System.IO.Path.AltDirectorySeparatorChar))
+                        i++;
+                    return full.Substring(i);
+                }
+
+                return full;
+            }
+            catch
+            {
+                return FilePath;
+            }
+        }
+    }
+}

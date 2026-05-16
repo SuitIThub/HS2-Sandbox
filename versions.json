@@ -6,5 +6,6 @@
   "searchBarManager": "1.0.0",
   "sonScale": "1.1.1",
   "workspaceTreeLock": "1.0.7",
-  "notebook": "1.0.0"
+  "notebook": "1.0.0",
+  "poseBrowser": "1.0.0"
 }

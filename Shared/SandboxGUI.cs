@@ -55,6 +55,7 @@ namespace HS2SandboxPlugin
 
         public bool IsSonScaleVisible => IsWindowVisible(SandboxWindowKeys.SonScale);
         public bool IsNotebookVisible => IsWindowVisible(SandboxWindowKeys.Notebook);
+        public bool IsPoseBrowserVisible => IsWindowVisible(SandboxWindowKeys.PoseBrowser);
 
         public bool IsWindowVisible(string key) =>
             _windowStates.TryGetValue(key, out var value) && value;
@@ -73,6 +74,7 @@ namespace HS2SandboxPlugin
         public void SetTimelineVisible(bool visible) => SetWindowVisible(SandboxWindowKeys.Timeline, visible);
         public void SetSonScaleVisible(bool visible) => SetWindowVisible(SandboxWindowKeys.SonScale, visible);
         public void SetNotebookVisible(bool visible) => SetWindowVisible(SandboxWindowKeys.Notebook, visible);
+        public void SetPoseBrowserVisible(bool visible) => SetWindowVisible(SandboxWindowKeys.PoseBrowser, visible);
     }
 }
 

@@ -14,6 +14,7 @@ on:
       - "Modules/SonScale/SonScaleModulePlugin.cs"
       - "Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs"
       - "Modules/Notebook/NotebookModulePlugin.cs"
+      - "Modules/PoseBrowser/PoseBrowserModulePlugin.cs"
   workflow_dispatch:
 
 permissions:
@@ -39,7 +40,8 @@ jobs:
             --arg sonScale "$(extract_version Modules/SonScale/SonScaleModulePlugin.cs)" \
             --arg workspaceTreeLock "$(extract_version Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs)" \
             --arg notebook "$(extract_version Modules/Notebook/NotebookModulePlugin.cs)" \
-            '{schemaVersion: 1, allInOne: $allInOne, copyScript: $copyScript, timeline: $timeline, searchBarManager: $searchBarManager, sonScale: $sonScale, workspaceTreeLock: $workspaceTreeLock, notebook: $notebook}' \
+            --arg poseBrowser "$(extract_version Modules/PoseBrowser/PoseBrowserModulePlugin.cs)" \
+            '{schemaVersion: 1, allInOne: $allInOne, copyScript: $copyScript, timeline: $timeline, searchBarManager: $searchBarManager, sonScale: $sonScale, workspaceTreeLock: $workspaceTreeLock, notebook: $notebook, poseBrowser: $poseBrowser}' \
             > versions.json
 
       - name: Commit if changed

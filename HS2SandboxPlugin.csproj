@@ -16,6 +16,7 @@
     <Compile Include="Notebook\**\*.cs" />
     <Compile Include="SonScale\**\*.cs" />
     <Compile Include="WorkspaceTreeLock\**\*.cs" />
+    <Compile Include="PoseBrowser\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,11 +24,15 @@
     <Content Include="timeline-icon.png" CopyToOutputDirectory="Always" />
     <Content Include="sonscale-icon.png" CopyToOutputDirectory="Always" />
     <Content Include="notes-icon.png" CopyToOutputDirectory="Always" />
+    <Content Include="pose-icon.png" CopyToOutputDirectory="Always" />
     <EmbeddedResource Include="sonscale-icon.png">
       <LogicalName>$(AssemblyName).sonscale-icon.png</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="notes-icon.png">
       <LogicalName>$(AssemblyName).notes-icon.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="pose-icon.png">
+      <LogicalName>$(AssemblyName).pose-icon.png</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 
