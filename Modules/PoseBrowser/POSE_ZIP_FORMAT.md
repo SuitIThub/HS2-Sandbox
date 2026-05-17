@@ -1,4 +1,4 @@
-# HS2 Sandbox Pose Browser — exchange ZIP format (v2)
+# HS2 Sandbox Pose Browser — exchange ZIP format (v3)
 
 This document describes the **`.zip` files** produced and consumed by **Pose Browser** pose import/export (`PosePackExchange` in the shared `PoseBrowser/` sources). It is meant for **other modders, tool authors, or power users** who want to build compatible packs without using the in-game UI.
 
@@ -25,9 +25,9 @@ Examples (conceptual — check your tool’s docs):
 - **Info-ZIP**: `zip -0` stores without compression.
 - **Programmatic .NET**: either duplicate the stored-only layout used in-repo or use a library that can force **stored** entries.
 
-## Top-level layout (v2)
+## Top-level layout (v2 / v3)
 
-A valid v2 pack contains at least:
+A valid pack contains at least:
 
 | Entry path | Required | Description |
 |------------|----------|-------------|
@@ -39,14 +39,14 @@ A valid v2 pack contains at least:
 
 All pose **binaries** live under **`poses/`**. Paths use **forward slashes** (`/`). The importer normalizes and matches entries in a case-insensitive dictionary, but you should still use consistent casing.
 
-### `manifest.json` (v2)
+### `manifest.json`
 
 UTF-8 JSON object. Parsed with Unity **`JsonUtility`** in-game, so keep it as a **flat** object (no deeply nested custom types). Fields:
 
 | Field | Type | Meaning |
 |-------|------|---------|
 | `schema` | string | Must be exactly **`HS2Sandbox.poseZip`**. |
-| `version` | number | Must be **`2`**. Future versions may change semantics. |
+| `version` | number | **`3`** on export (current). Import accepts **`2`** and **`3`**. |
 | `kind` | string | **`poses`** (flat pack) or **`treeBranch`** (hierarchical pack). |
 | `exportedUtc` | string | ISO-8601 UTC timestamp of export (informative). |
 | `branchRoot` | string | **Tree packs only:** single folder name segment (sanitized) matching the first directory under `poses/`. **Empty** for `kind: "poses"`. |
@@ -57,7 +57,7 @@ UTF-8 JSON object. Parsed with Unity **`JsonUtility`** in-game, so keep it as a 
 ```json
 {
   "schema": "HS2Sandbox.poseZip",
-  "version": 2,
+  "version": 3,
   "kind": "poses",
   "exportedUtc": "2026-05-17T12:00:00.0000000Z",
   "branchRoot": "",
@@ -70,7 +70,7 @@ UTF-8 JSON object. Parsed with Unity **`JsonUtility`** in-game, so keep it as a 
 ```json
 {
   "schema": "HS2Sandbox.poseZip",
-  "version": 2,
+  "version": 3,
   "kind": "treeBranch",
   "exportedUtc": "2026-05-17T12:00:00.0000000Z",
   "branchRoot": "MyPack",
@@ -112,6 +112,33 @@ Shape:
 
 Every `file` listed in `items` **must** exist as a **stored** ZIP entry with **exactly** that path (after trim/normalization). The importer loads bytes from that entry.
 
+### `groups` (v3, optional)
+
+From manifest **version 3**, `metadata.json` may include a **`groups`** array. Each element describes a Pose Browser pose group:
+
+```json
+{
+  "items": [ "…" ],
+  "groups": [
+    {
+      "id": "a1b2c3…",
+      "name": "My sequence",
+      "tags": ["combo"],
+      "members": ["poses/pose1.png", "poses/pose2.png"]
+    }
+  ]
+}
+```
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `id` | string | Stable group id (opaque string). |
+| `name` | string | Display name in Pose Browser. |
+| `tags` | string[] | Group-level tags (not pose tags). |
+| `members` | string[] | ZIP-internal paths (`poses/…`) listed in `items`. |
+
+Omit `groups` or use manifest **version 2** for packs without grouping. v2 packs import unchanged.
+
 ## Pose files under `poses/`
 
 - Studio pose assets are the usual **`.png`** (embedded pose + thumbnail) or **`.dat`** pose files used under `UserData/studio/pose`.
@@ -151,7 +178,7 @@ Violating these will fail import with an explicit error string.
 2. Choose **`kind`**:
    - **Flat:** place files as `poses/YourFile.png`, ensuring unique leaf names.
    - **Tree:** pick `<branchRoot>` (e.g. `MyPack`), place files under `poses/MyPack/...`.
-3. Write **`manifest.json`** with `schema`, `version: 2`, `kind`, timestamps, `branchRoot`, and `metadata`.
+3. Write **`manifest.json`** with `schema`, `version: 3` (or `2` without groups), `kind`, timestamps, `branchRoot`, and `metadata`.
 4. Write **`metadata.json`** with one `items[]` entry per file: matching `file` path, `tags`, `favorite`, timestamps (ISO UTC strings are fine).
 5. Build a **ZIP** with **all entries stored (method 0)**, UTF-8 names / EFS bit as appropriate.
 6. Name the archive **`.zip`** and import through Pose Browser.
@@ -160,15 +187,15 @@ You can also export a small pack from the game once and **replace** the contents
 
 ## Legacy v1 packs (still imported)
 
-Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility, but **new** exports are always v2 **`.zip`** as described here.
+Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility. **New** exports use manifest **version 3**; **version 2** packs (no `groups`) still import.
 
-For new tooling, **target v2 only**.
+For new tooling, **target version 3**.
 
 ## Reference implementation in this repository
 
 | File | Role |
 |------|------|
-| [`PoseBrowser/PosePackExchange.cs`](../../PoseBrowser/PosePackExchange.cs) | Manifest constants, export, import, v2 + legacy routing, metadata JSON serialization/parsing. |
+| [`PoseBrowser/PosePackExchange.cs`](../../PoseBrowser/PosePackExchange.cs) | Manifest constants, export (v3), import (v2–v3 + legacy), metadata JSON serialization/parsing. |
 | [`PoseBrowser/MinimalStoredZip.cs`](../../PoseBrowser/MinimalStoredZip.cs) | Stored-only ZIP reader/writer (no `System.IO.Compression`). |
 
 When in doubt, match the bytes and JSON emitted by `TryExportPosePack` / `TryExportTreePack` and accepted by `TryReadPack`.

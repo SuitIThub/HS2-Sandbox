@@ -9,10 +9,11 @@ namespace HS2SandboxPlugin
 {
     /// <summary>
     /// Pose ZIP exchange: original <c>.png</c>/<c>.dat</c> files under <c>poses/</c>, plus <c>manifest.json</c> (schema + kind)
-    /// and <c>metadata.json</c> (tags, favorites, paths). Import parses <c>metadata.json</c> with a small JSON reader — not
-    /// <see cref="JsonUtility"/> — so <c>items</c> arrays round-trip with export. Flat <c>poses</c> export uses only
-    /// <c>poses/&lt;filename&gt;</c> (no subfolders; collisions get <c>-01</c> suffixes). <c>treeBranch</c> keeps structure under
-    /// <c>poses/&lt;branchRoot&gt;/…</c>. Legacy blob packs (v1) still import.
+    /// and <c>metadata.json</c> (tags, favorites, paths; v3 adds optional <c>groups</c>). Import parses <c>metadata.json</c> with a
+    /// small JSON reader — not <see cref="JsonUtility"/> — so <c>items</c> arrays round-trip with export. Exports use manifest
+    /// <see cref="ManifestVersion"/> (3); imports accept 2 and 3. Flat <c>poses</c> export uses only <c>poses/&lt;filename&gt;</c>
+    /// (no subfolders; collisions get <c>-01</c> suffixes). <c>treeBranch</c> keeps structure under <c>poses/&lt;branchRoot&gt;/…</c>.
+    /// Legacy blob packs (v1) still import.
     /// </summary>
     public static class PosePackExchange
     {
@@ -25,7 +26,10 @@ namespace HS2SandboxPlugin
         public const string DefaultMetadataEntryName = "metadata.json";
 
         public const string SchemaId = "HS2Sandbox.poseZip";
-        public const int ManifestVersion = 2;
+        /// <summary>Manifest <c>version</c> written on export (current format).</summary>
+        public const int ManifestVersion = 3;
+        /// <summary>Oldest manifest <c>version</c> still accepted on import (v2 packs without <c>groups</c>).</summary>
+        public const int MinImportManifestVersion = 2;
 
         public const string KindPoses = "poses";
         public const string KindTreeBranch = "treeBranch";
@@ -61,6 +65,32 @@ namespace HS2SandboxPlugin
             public string creationTimeUtc = "";
         }
 
+        [Serializable]
+        public class PoseZipGroupJson
+        {
+            public string id = "";
+            public string name = "";
+            public string[] tags = Array.Empty<string>();
+            /// <summary>ZIP-internal pose paths (<c>poses/…</c>) belonging to this group.</summary>
+            public string[] members = Array.Empty<string>();
+        }
+
+        public sealed class PosePackReadGroup
+        {
+            public string Id { get; }
+            public string Name { get; }
+            public string[] Tags { get; }
+            public string[] MemberZipPaths { get; }
+
+            public PosePackReadGroup(string id, string name, string[] tags, string[] memberZipPaths)
+            {
+                Id = id;
+                Name = name;
+                Tags = tags;
+                MemberZipPaths = memberZipPaths;
+            }
+        }
+
         public sealed class PosePackReadEntry
         {
             public string Id { get; }
@@ -74,6 +104,8 @@ namespace HS2SandboxPlugin
             public bool Favorite { get; }
             public DateTime LastWriteUtc { get; }
             public DateTime CreationUtc { get; }
+            /// <summary>ZIP-internal path from metadata (<c>poses/…</c>).</summary>
+            public string ZipInternalPath { get; }
 
             public PosePackReadEntry(
                 string id,
@@ -85,7 +117,8 @@ namespace HS2SandboxPlugin
                 string[] tags,
                 bool favorite,
                 DateTime lastWriteUtc,
-                DateTime creationUtc)
+                DateTime creationUtc,
+                string zipInternalPath)
             {
                 Id = id;
                 SuggestedFileName = suggestedFileName;
@@ -97,6 +130,7 @@ namespace HS2SandboxPlugin
                 Favorite = favorite;
                 LastWriteUtc = lastWriteUtc;
                 CreationUtc = creationUtc;
+                ZipInternalPath = zipInternalPath;
             }
         }
 
@@ -106,17 +140,82 @@ namespace HS2SandboxPlugin
             public string TreeRootFolderName { get; }
             public string ExportedUtcIso { get; }
             public List<PosePackReadEntry> Entries { get; }
+            public List<PosePackReadGroup> Groups { get; }
 
-            public PosePackReadResult(bool isTreePack, string treeRootFolderName, string exportedUtcIso, List<PosePackReadEntry> entries)
+            public PosePackReadResult(
+                bool isTreePack,
+                string treeRootFolderName,
+                string exportedUtcIso,
+                List<PosePackReadEntry> entries,
+                List<PosePackReadGroup>? groups = null)
             {
                 IsTreePack = isTreePack;
                 TreeRootFolderName = treeRootFolderName;
                 ExportedUtcIso = exportedUtcIso;
                 Entries = entries;
+                Groups = groups ?? new List<PosePackReadGroup>();
             }
         }
 
-        public static bool TryExportPosePack(string zipPath, string poseLibraryRoot, IReadOnlyList<PoseGridItem> items)
+        /// <summary>Maps library-relative paths to flat <c>poses/…</c> ZIP entry paths (same rules as export).</summary>
+        public static Dictionary<string, string> MapItemsToTreeZipPaths(
+            string poseLibraryRoot,
+            string rootFolderNodeFullPath,
+            string treeRootFolderName,
+            IReadOnlyList<PoseGridItem> items)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string rootNorm = Path.GetFullPath(rootFolderNodeFullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string safeRootName = PoseDataService.SanitizeFileName(treeRootFolderName);
+            if (string.IsNullOrEmpty(safeRootName))
+                safeRootName = "folder";
+            string branchPrefix = PosesDirectoryPrefix + safeRootName.Trim('/').Replace('\\', '/') + "/";
+            foreach (var item in items)
+            {
+                string rel = item.RelativePath(poseLibraryRoot);
+                if (string.IsNullOrEmpty(rel)) continue;
+                string itemFull = Path.GetFullPath(item.FilePath);
+                string? itemDir = Path.GetDirectoryName(itemFull);
+                if (string.IsNullOrEmpty(itemDir))
+                    itemDir = rootNorm;
+                string relFromNode = PoseDataService.GetRelativePath(rootNorm, itemDir);
+                string fileName = Path.GetFileName(item.FilePath);
+                string relUnderBranch = string.IsNullOrEmpty(relFromNode)
+                    ? fileName
+                    : relFromNode.Replace('\\', '/') + "/" + fileName;
+                string normRel = PoseGroupDatabase.NormalizeMemberPath(rel);
+                if (!string.IsNullOrEmpty(normRel))
+                    map[normRel] = branchPrefix + relUnderBranch;
+            }
+
+            return map;
+        }
+
+        public static Dictionary<string, string> MapItemsToFlatZipPaths(
+            string poseLibraryRoot,
+            IReadOnlyList<PoseGridItem> items)
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var usedFlatLeaves = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string libNorm = Path.GetFullPath(poseLibraryRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            foreach (var item in items)
+            {
+                string rel = PoseDataService.GetRelativePath(libNorm, item.FilePath);
+                if (string.IsNullOrEmpty(rel)) continue;
+                string normRel = PoseGroupDatabase.NormalizeMemberPath(rel);
+                if (string.IsNullOrEmpty(normRel)) continue;
+                string leaf = MakeUniqueFlatZipEntryName(item.FilePath, usedFlatLeaves);
+                map[normRel] = PosesDirectoryPrefix + leaf;
+            }
+
+            return map;
+        }
+
+        public static bool TryExportPosePack(
+            string zipPath,
+            string poseLibraryRoot,
+            IReadOnlyList<PoseGridItem> items,
+            IReadOnlyList<PoseZipGroupJson>? groups = null)
         {
             try
             {
@@ -169,7 +268,7 @@ namespace HS2SandboxPlugin
                 };
 
                 parts.Add((ManifestEntryName, Encoding.UTF8.GetBytes(JsonUtility.ToJson(manifest))));
-                parts.Add((DefaultMetadataEntryName, SerializeMetadataUtf8(metaItems)));
+                parts.Add((DefaultMetadataEntryName, SerializeMetadataUtf8(metaItems, groups)));
 
                 MinimalStoredZip.Write(zipPath, parts);
                 return true;
@@ -193,7 +292,8 @@ namespace HS2SandboxPlugin
             string poseLibraryRoot,
             string rootFolderNodeFullPath,
             string treeRootFolderName,
-            IReadOnlyList<PoseGridItem> items)
+            IReadOnlyList<PoseGridItem> items,
+            IReadOnlyList<PoseZipGroupJson>? groups = null)
         {
             try
             {
@@ -257,7 +357,7 @@ namespace HS2SandboxPlugin
                 var metaArr = entryList.ToArray();
 
                 parts.Add((ManifestEntryName, Encoding.UTF8.GetBytes(JsonUtility.ToJson(manifest))));
-                parts.Add((DefaultMetadataEntryName, SerializeMetadataUtf8(metaArr)));
+                parts.Add((DefaultMetadataEntryName, SerializeMetadataUtf8(metaArr, groups)));
 
                 MinimalStoredZip.Write(zipPath, parts);
                 return true;
@@ -291,22 +391,22 @@ namespace HS2SandboxPlugin
 
                 string manifestJson = Encoding.UTF8.GetString(manifestBytes);
 
-                var v2 = JsonUtility.FromJson<PoseZipManifestJson>(manifestJson);
-                if (v2 != null && string.Equals(v2.schema, SchemaId, StringComparison.Ordinal))
+                var manifest = JsonUtility.FromJson<PoseZipManifestJson>(manifestJson);
+                if (manifest != null && string.Equals(manifest.schema, SchemaId, StringComparison.Ordinal))
                 {
-                    if (v2.version != ManifestVersion)
+                    if (!IsSupportedImportManifestVersion(manifest.version))
                     {
-                        error = $"Unsupported manifest version {v2.version} (expected {ManifestVersion}).";
+                        error = $"Unsupported manifest version {manifest.version} (supported: {MinImportManifestVersion}–{ManifestVersion}).";
                         return false;
                     }
 
-                    return TryReadPackV2(dict, v2, out result, out error);
+                    return TryReadPackV2(dict, manifest, out result, out error);
                 }
 
                 if (TryReadPackLegacy(dict, manifestJson, out result, out error))
                     return true;
 
-                error = error ?? "Unknown or unsupported pack (need manifest.schema \"HS2Sandbox.poseZip\" version 2, or a legacy Studio Sandbox pack).";
+                error = error ?? $"Unknown or unsupported pack (need manifest.schema \"{SchemaId}\" version {MinImportManifestVersion} or {ManifestVersion}, or a legacy Studio Sandbox pack).";
                 return false;
             }
             catch (Exception ex)
@@ -315,6 +415,9 @@ namespace HS2SandboxPlugin
                 return false;
             }
         }
+
+        public static bool IsSupportedImportManifestVersion(int version) =>
+            version >= MinImportManifestVersion && version <= ManifestVersion;
 
         private static bool TryReadPackV2(
             Dictionary<string, byte[]> dict,
@@ -357,7 +460,7 @@ namespace HS2SandboxPlugin
 
             string treePrefix = isTree ? $"{PosesDirectoryPrefix}{branchRoot}/" : "";
 
-            if (!TryParseMetadataUtf8(metaBytes, out PoseZipItemJson[] metaItems, out string? parseErr) || metaItems.Length == 0)
+            if (!TryParseMetadataUtf8(metaBytes, out PoseZipItemJson[] metaItems, out var readGroups, out string? parseErr) || metaItems.Length == 0)
             {
                 error = string.IsNullOrEmpty(parseErr) ? "Metadata has no items." : parseErr;
                 return false;
@@ -415,11 +518,17 @@ namespace HS2SandboxPlugin
                     it.tags ?? Array.Empty<string>(),
                     it.favorite,
                     ParseIsoOrMin(it.lastWriteTimeUtc),
-                    ParseIsoOrMin(it.creationTimeUtc)));
+                    ParseIsoOrMin(it.creationTimeUtc),
+                    fileKey));
                 idx++;
             }
 
-            result = new PosePackReadResult(isTree, branchRoot, manifest.exportedUtc ?? "", list);
+            var packGroups = readGroups.Select(g => new PosePackReadGroup(
+                g.id ?? "",
+                g.name ?? "",
+                g.tags ?? Array.Empty<string>(),
+                g.members ?? Array.Empty<string>())).ToList();
+            result = new PosePackReadResult(isTree, branchRoot, manifest.exportedUtc ?? "", list, packGroups);
             return true;
         }
 
@@ -461,7 +570,8 @@ namespace HS2SandboxPlugin
                         e.tags ?? Array.Empty<string>(),
                         e.favorite,
                         ParseIsoOrMin(e.lastWriteTimeUtc),
-                        ParseIsoOrMin(e.creationTimeUtc)));
+                        ParseIsoOrMin(e.creationTimeUtc),
+                        ""));
                 }
 
                 result = new PosePackReadResult(false, "", probePose.exportedUtc ?? "", list);
@@ -512,7 +622,8 @@ namespace HS2SandboxPlugin
                         e.tags ?? Array.Empty<string>(),
                         e.favorite,
                         ParseIsoOrMin(e.lastWriteTimeUtc),
-                        ParseIsoOrMin(e.creationTimeUtc)));
+                        ParseIsoOrMin(e.creationTimeUtc),
+                        ""));
                 }
 
                 result = new PosePackReadResult(true, probeTree.rootFolderName ?? "folder", probeTree.exportedUtc ?? "", list);
@@ -537,38 +648,84 @@ namespace HS2SandboxPlugin
         /// <summary>
         /// Unity <see cref="JsonUtility.ToJson"/> often drops arrays of nested serializable types; metadata must round-trip reliably.
         /// </summary>
-        private static byte[] SerializeMetadataUtf8(PoseZipItemJson[] items)
+        private static byte[] SerializeMetadataUtf8(PoseZipItemJson[] items, IReadOnlyList<PoseZipGroupJson>? groups = null)
         {
             var sb = new StringBuilder(Math.Max(64, items.Length * 160));
             sb.Append("{\"items\":[");
             for (int i = 0; i < items.Length; i++)
             {
                 if (i > 0) sb.Append(',');
-                PoseZipItemJson it = items[i];
-                sb.Append("{\"file\":");
-                AppendJsonString(sb, it.file);
-                sb.Append(",\"tags\":[");
-                string[]? tags = it.tags;
-                if (tags != null)
+                AppendMetadataItemJson(sb, items[i]);
+            }
+
+            sb.Append(']');
+            if (groups != null && groups.Count > 0)
+            {
+                sb.Append(",\"groups\":[");
+                for (int g = 0; g < groups.Count; g++)
                 {
-                    for (int t = 0; t < tags.Length; t++)
-                    {
-                        if (t > 0) sb.Append(',');
-                        AppendJsonString(sb, tags[t]);
-                    }
+                    if (g > 0) sb.Append(',');
+                    AppendMetadataGroupJson(sb, groups[g]);
                 }
 
-                sb.Append("],\"favorite\":");
-                sb.Append(it.favorite ? "true" : "false");
-                sb.Append(",\"lastWriteTimeUtc\":");
-                AppendJsonString(sb, it.lastWriteTimeUtc);
-                sb.Append(",\"creationTimeUtc\":");
-                AppendJsonString(sb, it.creationTimeUtc);
-                sb.Append('}');
+                sb.Append(']');
+            }
+
+            sb.Append('}');
+            return Encoding.UTF8.GetBytes(sb.ToString());
+        }
+
+        private static void AppendMetadataItemJson(StringBuilder sb, PoseZipItemJson it)
+        {
+            sb.Append("{\"file\":");
+            AppendJsonString(sb, it.file);
+            sb.Append(",\"tags\":[");
+            string[]? tags = it.tags;
+            if (tags != null)
+            {
+                for (int t = 0; t < tags.Length; t++)
+                {
+                    if (t > 0) sb.Append(',');
+                    AppendJsonString(sb, tags[t]);
+                }
+            }
+
+            sb.Append("],\"favorite\":");
+            sb.Append(it.favorite ? "true" : "false");
+            sb.Append(",\"lastWriteTimeUtc\":");
+            AppendJsonString(sb, it.lastWriteTimeUtc);
+            sb.Append(",\"creationTimeUtc\":");
+            AppendJsonString(sb, it.creationTimeUtc);
+            sb.Append('}');
+        }
+
+        private static void AppendMetadataGroupJson(StringBuilder sb, PoseZipGroupJson g)
+        {
+            sb.Append("{\"id\":");
+            AppendJsonString(sb, g.id);
+            sb.Append(",\"name\":");
+            AppendJsonString(sb, g.name);
+            sb.Append(",\"tags\":[");
+            if (g.tags != null)
+            {
+                for (int t = 0; t < g.tags.Length; t++)
+                {
+                    if (t > 0) sb.Append(',');
+                    AppendJsonString(sb, g.tags[t]);
+                }
+            }
+
+            sb.Append("],\"members\":[");
+            if (g.members != null)
+            {
+                for (int m = 0; m < g.members.Length; m++)
+                {
+                    if (m > 0) sb.Append(',');
+                    AppendJsonString(sb, g.members[m]);
+                }
             }
 
             sb.Append("]}");
-            return Encoding.UTF8.GetBytes(sb.ToString());
         }
 
         private static void AppendJsonString(StringBuilder sb, string? s)
@@ -629,14 +786,19 @@ namespace HS2SandboxPlugin
         /// <summary>
         /// <see cref="JsonUtility.FromJson"/> does not deserialize arrays of nested types reliably; parse the v2 metadata we emit.
         /// </summary>
-        private static bool TryParseMetadataUtf8(byte[] metaBytes, out PoseZipItemJson[] items, out string? error)
+        private static bool TryParseMetadataUtf8(
+            byte[] metaBytes,
+            out PoseZipItemJson[] items,
+            out PoseZipGroupJson[] groups,
+            out string? error)
         {
             items = Array.Empty<PoseZipItemJson>();
+            groups = Array.Empty<PoseZipGroupJson>();
             error = null;
             try
             {
                 string json = MetadataUtf8BytesToText(metaBytes);
-                if (!TryParsePoseZipMetadataJson(json, out items, out error))
+                if (!TryParsePoseZipMetadataJson(json, out items, out groups, out error))
                     return false;
                 return items.Length > 0;
             }
@@ -647,9 +809,14 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private static bool TryParsePoseZipMetadataJson(string json, out PoseZipItemJson[] items, out string? error)
+        private static bool TryParsePoseZipMetadataJson(
+            string json,
+            out PoseZipItemJson[] items,
+            out PoseZipGroupJson[] groups,
+            out string? error)
         {
             items = Array.Empty<PoseZipItemJson>();
+            groups = Array.Empty<PoseZipGroupJson>();
             error = null;
             int i = 0;
             MetadataJson_SkipWs(json, ref i);
@@ -661,6 +828,7 @@ namespace HS2SandboxPlugin
 
             i++;
             List<PoseZipItemJson>? parsed = null;
+            List<PoseZipGroupJson>? parsedGroups = null;
             while (true)
             {
                 MetadataJson_SkipWs(json, ref i);
@@ -688,6 +856,11 @@ namespace HS2SandboxPlugin
                 if (string.Equals(key, "items", StringComparison.Ordinal))
                 {
                     if (!MetadataJson_TryReadItemsArray(json, ref i, out parsed, out error))
+                        return false;
+                }
+                else if (string.Equals(key, "groups", StringComparison.Ordinal))
+                {
+                    if (!MetadataJson_TryReadGroupsArray(json, ref i, out parsedGroups, out error))
                         return false;
                 }
                 else
@@ -721,6 +894,7 @@ namespace HS2SandboxPlugin
             }
 
             items = parsed.ToArray();
+            groups = parsedGroups != null ? parsedGroups.ToArray() : Array.Empty<PoseZipGroupJson>();
             return true;
         }
 
@@ -1003,6 +1177,136 @@ namespace HS2SandboxPlugin
                 }
 
                 error = "Invalid items array.";
+                return false;
+            }
+        }
+
+        private static bool MetadataJson_TryReadGroupsArray(string json, ref int i, out List<PoseZipGroupJson>? groups, out string? error)
+        {
+            groups = null;
+            error = null;
+            if (i >= json.Length || json[i] != '[')
+            {
+                error = "Expected '[' for groups.";
+                return false;
+            }
+
+            i++;
+            var list = new List<PoseZipGroupJson>();
+            MetadataJson_SkipWs(json, ref i);
+            if (i < json.Length && json[i] == ']')
+            {
+                i++;
+                groups = list;
+                return true;
+            }
+
+            while (true)
+            {
+                if (!MetadataJson_TryReadGroupObject(json, ref i, out var one, out error))
+                    return false;
+                list.Add(one);
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == ',')
+                {
+                    i++;
+                    MetadataJson_SkipWs(json, ref i);
+                    continue;
+                }
+
+                if (i < json.Length && json[i] == ']')
+                {
+                    i++;
+                    groups = list;
+                    return true;
+                }
+
+                error = "Invalid groups array.";
+                return false;
+            }
+        }
+
+        private static bool MetadataJson_TryReadGroupObject(string json, ref int i, out PoseZipGroupJson group, out string? error)
+        {
+            group = new PoseZipGroupJson();
+            error = null;
+            var tagsList = new List<string>();
+            var membersList = new List<string>();
+            MetadataJson_SkipWs(json, ref i);
+            if (i >= json.Length || json[i] != '{')
+            {
+                error = "Expected group object.";
+                return false;
+            }
+
+            i++;
+            while (true)
+            {
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == '}')
+                {
+                    i++;
+                    group.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
+                    group.members = membersList.Count > 0 ? membersList.ToArray() : Array.Empty<string>();
+                    return true;
+                }
+
+                if (!MetadataJson_TryReadString(json, ref i, out string key, out error))
+                    return false;
+                MetadataJson_SkipWs(json, ref i);
+                if (i >= json.Length || json[i] != ':')
+                {
+                    error = "Invalid group (expected ':').";
+                    return false;
+                }
+
+                i++;
+                MetadataJson_SkipWs(json, ref i);
+                if (string.Equals(key, "id", StringComparison.Ordinal))
+                {
+                    if (!MetadataJson_TryReadString(json, ref i, out string v, out error))
+                        return false;
+                    group.id = v;
+                }
+                else if (string.Equals(key, "name", StringComparison.Ordinal))
+                {
+                    if (!MetadataJson_TryReadString(json, ref i, out string v, out error))
+                        return false;
+                    group.name = v;
+                }
+                else if (string.Equals(key, "tags", StringComparison.Ordinal))
+                {
+                    if (!MetadataJson_TryReadStringArray(json, ref i, tagsList, out error))
+                        return false;
+                }
+                else if (string.Equals(key, "members", StringComparison.Ordinal))
+                {
+                    if (!MetadataJson_TryReadStringArray(json, ref i, membersList, out error))
+                        return false;
+                }
+                else
+                {
+                    if (!MetadataJson_TrySkipValue(json, ref i, out error))
+                        return false;
+                }
+
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == ',')
+                {
+                    i++;
+                    continue;
+                }
+
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == '}')
+                {
+                    i++;
+                    group.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
+                    group.members = membersList.Count > 0 ? membersList.ToArray() : Array.Empty<string>();
+                    return true;
+                }
+
+                error = "Invalid group object.";
                 return false;
             }
         }

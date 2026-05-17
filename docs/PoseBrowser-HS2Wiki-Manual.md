@@ -16,11 +16,15 @@ The Pose Browser is a Studio utility that:
 - Stores **tags and favorites** in a config-side database (**TSV**), separate from game files.
 - Offers optional **thumbnail capture** for selected poses.
 - In **2.0.0** (all-in-one **HS2 Sandbox**): **Full / List / Mini** layouts, **Sort** panel (including **Last used** tracking), **★ Favorites** library view, docked tag filter window, optional **keyboard shortcuts** (BepInEx Configuration Manager), and expanded **`pose_browser_options.json`** (per-layout window geometry and sort).
-- In **2.1.0** (split **Pose Browser** module — same sources ship inside the all-in-one build): **v2 pose pack ZIP** **Import…** / **Export…**, branch/tree exports from the folder footer, and modder docs **`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`** (stored-only ZIP requirement).
+- In **2.1.0+**: **v2/v3 pose pack ZIP** **Import…** / **Export…**, branch/tree exports, modder docs **`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`** (stored-only ZIP requirement).
+- In **3.0.0** (split **Pose Browser** module — same sources ship inside the all-in-one build):
+- **Pose groups** — named sets of poses shown as grid segments, **group tags** for filtering, **pose_groups.tsv** persistence, and **groups[]** in v3 ZIP metadata.
+- **Tag filter include/exclude** — tri-state per-tag filters; exclude dims grouped members instead of hiding whole groups.
+- **Multi-character apply** — **Chars** priority lists (male/female), **Apply to characters…** for multiple poses or a whole group, driven by **Male** / **Female** pose tags and list order.
 
 ### 1.1 Version note
 
-The **all-in-one** plugin’s `PluginVersion` may read **2.0.0** while the **Pose Browser module** reads **2.1.0**; both builds compile the same Pose Browser code path, including ZIP exchange.
+The **all-in-one** plugin’s `PluginVersion` may read **2.0.0** while the **Pose Browser module** reads **3.0.0**; both builds compile the same Pose Browser code path.
 
 It is opened from the Sandbox **left toolbar** (pose icon) when using the full HS2 Sandbox plugin, or the standalone Pose Browser module.
 
@@ -30,14 +34,14 @@ It is opened from the Sandbox **left toolbar** (pose icon) when using the full H
 
 | Area | Role |
 |------|------|
-| **Top bar (Poses)** | Search, regex, favorites-only, AND/OR tag mode, **Tags (n)** (dock **Tag filter**), **Sort** (dock sort panel), **Save Pose**, **Import…** |
-| **Character row** | Shows Studio character selection (`Character: …`); tooltip lists names when multiple |
+| **Top bar (Poses)** | Search, regex, favorites-only, **Tags** (dock **Tag filter**: include/exclude per tag, AND/OR inside pane), **Sort**, **Save Pose**, **Import…** |
+| **Character row** | Studio selection summary; **Chars** (priority lists); **Apply to characters…** when 2+ poses or one group entity is selected |
 | **Folders (left)** | Tree under `studio/pose`, **All poses** / **★ Favorites** / **Root only**, refresh, folder footer actions |
 | **Grid** | Thumbnail cards, selection, pagination (if enabled in Options); **import preview** replaces the grid while a ZIP is open |
-| **Bottom bar** | Actions on current **library** selection (update, rename, tags, fav, thumbs, **Export…**, move, delete) or **import preview** hints |
+| **Bottom bar** | Pose actions, **Grouping** (Group… / Ungroup), or **group entity** bar (rename, group tags, export group); import preview hints |
 | **Window** | **View (Full/List/Mini)** — cycles compact layout modes; **Help** — compact manual; **Options** — card width, pagination, bulk select, hotkey listing |
 
-The main window can be **resized** from the bottom-right grip. In **Full** layout, **Help**, **Options**, **Tag filter**, and **Sort** open as separate IMGUI windows docked to the right of the main window (each offset if several are open). Compact **List** and **Mini** modes hide those side panels and remember their own **position and size** in **`pose_browser_options.json`**. **List** keeps the folder tree with a text list of filtered poses (no thumbnails). **Mini** is a minimal strip with **Folder** / **Pose** navigation arrows and **Reapply**—see the in-game **Help** panel for the exact stepping order.
+The main window can be **resized** from the bottom-right grip. In **Full** layout, **Help**, **Options**, **Tag filter**, **Chars**, and **Sort** open as docked IMGUI panes to the right of the main window (laid out in a single chain so they do not overlap). Compact **List** and **Mini** modes hide those side panels and remember their own **position and size** in **`pose_browser_options.json`**. **List** keeps the folder tree with a text list of filtered poses (no thumbnails). **Mini** is a minimal strip with **Folder** / **Pose** navigation arrows and **Reapply**—see the in-game **Help** panel for the exact stepping order.
 
 ---
 
@@ -48,7 +52,9 @@ The main window can be **resized** from the bottom-right grip. In **Full** layou
 - **Pose root**: `UserData/studio/pose` (internal type `PoseDataService` / `UserData.Path`).
 - **Config** (BepInEx): `BepInEx/config/com.hs2.sandbox/`
   - `pose_browser_options.json` — card width, items per page, **layout tier** (Full/List/Mini) with separate saved window rects, **sort mode** and direction.
-  - `pose_tags.tsv` — tags and favorites (see §10).
+  - `pose_tags.tsv` — per-pose tags and favorites (see §10).
+  - `pose_groups.tsv` — pose groups (membership, names, group tags).
+  - `pose_browser_character_config.json` — male/female priority lists for multi-character apply.
 
 ### 3.2 Tree modes
 
@@ -98,8 +104,12 @@ After **Move…** or **Copy…** in the selection bar, the folder panel enters d
 
 ### 4.3 Tags
 
-- **Tags (n)** opens a docked **Tag filter** window: searchable list of tags, toggles for active filters, and **Clear active filters** (clears filters only, not on-disk tag assignments).
-- **AND / OR** on the top bar controls whether a pose must match **all** selected tags or **any** one.
+- **Tags** opens a docked **Tag filter** window: search box, **AND / OR** for **include** rules, and a scrollable tag list.
+- Click each tag to cycle: **neutral** → **+ include** → **− exclude** → neutral. The top-bar label shows counts, e.g. `Tags (+2 −1)`.
+- **Include (+)** — a pose must match include rules (AND = every + tag; OR = any + tag). **Group tags** on a segment count for group-level filter tests.
+- **Exclude (−)** — **ungrouped** poses with an excluded tag are **hidden**. Inside a **visible group**, all members **remain** in the grid; poses with excluded tags are **dimmed** and matching tag names render in **red** on the card.
+- **Clear active filters** resets include/exclude only (not on-disk tag assignments).
+- **Tag Selected** / **Group tags…** use a separate docked window in **assign** mode (not the filter pane).
 
 ### 4.4 Sort
 
@@ -138,7 +148,38 @@ If **max items per page** in Options is **> 0**, the grid shows **one page** at 
 
 Apply uses whatever characters are currently selected in Studio **that count as characters** (accessories/props are ignored for that logic).
 
-### 5.4 Import preview (after **Import…**)
+### 5.4 Pose groups
+
+A **pose group** is a named collection of library poses stored in **`pose_groups.tsv`**. Grouped poses appear in the grid inside a **bordered segment** with a header row (`▦` name, optional **group tag** line).
+
+#### Creating and editing
+
+1. Select **two or more ungrouped** poses (bottom bar **Grouping** section).
+2. Click **Group…**, enter a name.
+3. **Ungroup** removes selected poses from their groups (files stay on disk).
+4. With a **group entity** selected (header click), use **Rename group**, **Group tags…**, or **Export group…** on the group action bar.
+
+#### Two selection modes
+
+| Mode | How | Used for |
+|------|-----|----------|
+| **Group entity** | Click the **group header** | Rename, group tags, export group, **Apply to characters…** (all members in display order) |
+| **Pose members** | Card checkboxes / thumbnail selection | Tag selected, move, copy, delete, partial export |
+
+- **Ctrl+click** / **Shift+click** on group headers work like pose selection (range within the filtered list).
+- During **import preview**, the group header toggles **import checkboxes** for all members.
+
+#### Filters and layout
+
+- **Group tags** affect whether the **segment** passes search/tag filters; **pose tags** still apply per card (e.g. Male/Female for multi-apply).
+- Sort treats each group as a **block**; large groups may span multiple grid rows (continuation headers).
+
+#### Move / copy / export
+
+- **Move…** / **Copy…** — ungrouped poses, or exactly **one full group** (every member selected).
+- **Export…** — includes group metadata in v3 ZIP when a full group is in the selection; **Export group…** from the group bar exports that group alone.
+
+### 5.5 Import preview (after **Import…**)
 
 The grid lists poses **from the ZIP**, not from disk. **Thumbnail click** toggles whether each pose is **checked** for import (the checkbox and **Ctrl+click** / **Shift+click** behave like normal). The bottom bar shows **Cancel import** and reminds you to **Apply** in the folder footer once a destination is chosen.
 
@@ -152,7 +193,68 @@ The **Character** row summarizes Studio selection:
 - **one** — name in the label; tooltip repeats it.
 - **n selected** — count in the label; tooltip lists **newline-separated** names.
 
-**Save Pose** and **apply** operations use **all** qualifying selected characters where the implementation supports it (multi-apply on load).
+Non-character Studio selections (props, accessories, etc.) are ignored.
+
+### 6.1 Single-pose apply (thumbnail click)
+
+- **Left-click** thumbnail — select one pose and **apply it to every** selected Studio character.
+- **Right-click** thumbnail — apply without changing the grid selection.
+
+This is independent of the **Chars** priority lists.
+
+### 6.2 Multi-character apply
+
+Use when you want **different poses on different characters** in one step (e.g. male/female pair poses, or a batch of untagged poses across a cast).
+
+#### When **Apply to characters…** appears
+
+| Selection | Button |
+|-----------|--------|
+| **2+** library poses (member checkboxes) | Yes |
+| **One group entity** (header only, all members implied) | Yes |
+| **1** pose only | No (use thumbnail apply) |
+| Import preview | No |
+
+You must also have **at least one character** selected in Studio.
+
+#### Chars window (priority lists)
+
+1. Click **Chars** (docked pane).
+2. **Load characters from scene** — fills **Male** and **Female** columns from the scene.
+3. **↑ / ↓** — priority within a column (**top = first**).
+4. **⇄** — move slot to the other column; **✕** — remove from lists.
+5. Persisted in **`pose_browser_character_config.json`**.
+
+Only characters that are **both** in Studio selection **and** on a list (or unlisted but selected) participate; matching rules depend on pose tags below.
+
+#### Assignment rules
+
+Poses are processed in **list order** (grid **display order** for a group). **Each character receives at most one pose per apply** — a later pose never overwrites an earlier one on the same character.
+
+**Male / Female pose tags** (case-insensitive on the **pose**, not the group):
+
+| Pose tags | Target |
+|-----------|--------|
+| **Male** only | Next free character from the **Male** list (priority order) |
+| **Female** only | Next free character from the **Female** list |
+| Both or neither | Treated as **untagged** |
+
+**Untagged poses:**
+
+1. Build order: interleave lists by rank (1st male, 1st female, 2nd male, …), then selected characters not on either list.
+2. **First pass:** pose 1 → first free slot, pose 2 → second, … Extra poses with no free character are **skipped**.
+3. **Second pass:** selected characters still without a pose may receive one by **cycling** through the pose list (only if eligible for that pose’s gender tag).
+
+#### Example scenarios
+
+| Scenario | Result |
+|----------|--------|
+| Group: Male-tagged + Female-tagged pose, 1 male + 1 female selected | Each pose goes to the matching list’s next character |
+| 5 untagged poses, 3 selected characters | First three priority characters get poses 1–3; poses 4–5 skipped |
+| 2 untagged poses, 4 selected characters | Two posed in pass 1; pass 2 may assign poses 1–2 to the remaining two |
+| 2 Male poses, 1 male on list | First pose applies; second skipped (no overwrite) |
+
+**Save Pose** still uses the current folder rules; it does not use multi-character mapping.
 
 ---
 
@@ -167,11 +269,12 @@ Visible when **at least one** selected card refers to an **on-disk** pose in you
 | **Selection: n** | Count of selected items |
 | **Update Pose** | One item only: overwrite file from scene; optional thumbnail refresh |
 | **Rename…** | One item: display name; optional rename file to safe name |
-| **Tag Selected** | Mass add/remove tags via popup |
+| **Group…** / **Ungroup** | Create a group from 2+ ungrouped poses, or remove membership |
+| **Tag Selected** | Mass add/remove **pose** tags via assign window |
 | **Fav Selected** | Toggle favorite flag for each selected item |
 | **Thumbs…** | Start thumbnail capture overlay for selection |
-| **Export…** | Save selected poses to a **v2 .zip** (tags/favorites metadata included) |
-| **Move…** / **Copy…** | Start destination pick: choose folder (or **Root only**) in the left tree — grid stays put so selection is kept — then **Apply** or **Cancel** in the folder footer. **All poses** is disabled while picking. |
+| **Export…** | Save selected poses to a **v3 .zip** (tags, favorites, **groups** when fully selected) |
+| **Move…** / **Copy…** | Ungrouped poses, or **one full group**; pick destination in the folder tree, then **Apply** / **Cancel** in the footer |
 | **Delete…** | Confirms; copies to **`!_AutoBackup`** then deletes files; refreshes data |
 | **Deselect** | Clears selection on filtered list |
 
@@ -181,9 +284,9 @@ After **Import…**, the bar shows import-specific text and **Cancel import**. C
 
 ---
 
-## 8. Import and export (ZIP v2)
+## 8. Import and export (ZIP v2 / v3)
 
-Pose Browser reads and writes **`.zip`** packs with `manifest.json`, `metadata.json`, and pose binaries under **`poses/`**. The runtime reader only accepts **compression method 0 (stored)**; archives produced with Deflate will **fail** to import—see **`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`** for tool guidance.
+Pose Browser reads and writes **`.zip`** packs with `manifest.json`, `metadata.json`, and pose binaries under **`poses/`**. **v3** adds optional **`groups[]`** in metadata (id, name, group tags, member paths). **v2** packs without groups still import. The runtime reader only accepts **compression method 0 (stored)**; archives produced with Deflate will **fail** to import—see **`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`** for tool guidance.
 
 ### 8.1 Import… (top bar)
 
@@ -194,7 +297,7 @@ Pose Browser reads and writes **`.zip`** packs with `manifest.json`, `metadata.j
 
 ### 8.2 Export… (selection bar)
 
-Select library poses, then **Export…** to write a **flat** v2 pack.
+Select library poses, then **Export…** to write a **flat** v3 pack (group metadata when a complete group is selected).
 
 ### 8.3 Export branch / library tree (folder footer, Full layout)
 
@@ -220,10 +323,15 @@ Select library poses, then **Export…** to write a **flat** v2 pack.
 
 ## 10. Tags, favorites, and persistence
 
-### 10.1 Primary store
+### 10.1 Primary stores
 
-- **`pose_tags.tsv`** in `BepInEx/config/com.hs2.sandbox/`
-- Keys are **stable relative paths** into the pose library so renames/moves can update metadata via the browser.
+| File | Contents |
+|------|----------|
+| **`pose_tags.tsv`** | Per-pose tags and favorites |
+| **`pose_groups.tsv`** | Group id, name, group tags, member relative paths |
+| **`pose_browser_character_config.json`** | Male/female priority slot lists (`dicKey`, display name) |
+
+All live under `BepInEx/config/com.hs2.sandbox/`. Keys use **stable relative paths** into the pose library so renames/moves can update metadata via the browser.
 
 ### 10.2 Legacy import
 
@@ -269,7 +377,7 @@ If capture is cancelled, files stay unchanged.
 3. Press **F3** (or your configured wiki key).
 4. Open category **HS2 Sandbox → Pose Browser**:
    - **Overview** — navigation hub; click the **pose icon** to open **`OpenImage`** viewer if `pose-icon.png` sits beside the DLL.
-   - Thematic pages: **Folders & library**, **Search & filters**, **Grid & selection**, **Pose files & actions**, **Import & export (ZIP)**, **Thumbnails**, **Options & data files**.
+   - Thematic pages: **Folders & library**, **Search & filters**, **Grid & selection**, **Pose groups**, **Multi-character apply**, **Pose files & actions**, **Import & export (ZIP)**, **Thumbnails**, **Options & data files**.
    - **Advanced → Tag storage & migration** — TSV vs JSON.
 
 Wiki pages use **IMGUI** and support **rich text**, **buttons** (`OpenPage` navigation), and **`OpenImage`** as in the upstream README.
@@ -298,8 +406,11 @@ To add a new wiki page:
 |--------|------------------|
 | Empty grid | Folder mode (**All poses** vs folder vs **★ Favorites**); search/tags too strict; **↻** refresh. |
 | Pose does not apply | **Character** row shows valid selection; click thumbnail (left or right) as intended. |
-| Tags lost | Prefer **`pose_tags.tsv`** backup; avoid editing JSON/TSV while the game runs. |
-| ZIP import fails or errors | Pack must use **stored** (uncompressed) ZIP entries; verify **v2** `manifest.json` per **`POSE_ZIP_FORMAT.md`**. |
+| Multi-apply wrong pairing | Set **Male** / **Female** on poses; load/reorder **Chars** lists; select characters in Studio; use **group header** for whole groups. |
+| Tag + Chars panes missing | Open both from **Full** layout; panes dock in a chain to the right of the browser (recent builds fix overlap). |
+| Group not in export | Select **all** members or use **Export group…**; v3 metadata required. |
+| Tags lost | Prefer **`pose_tags.tsv`** / **`pose_groups.tsv`** backup; avoid editing TSV while the game runs. |
+| ZIP import fails or errors | Pack must use **stored** (uncompressed) ZIP entries; verify **v2/v3** `manifest.json` per **`POSE_ZIP_FORMAT.md`**. |
 | Wiki pages missing | HS2Wiki installed? Log line *“Registered Pose Browser pages with HS2Wiki”* on startup? Restart after installing HS2Wiki. |
 | Image button does nothing | `pose-icon.png` must be next to the **same** DLL you run (or embedded — wiki **OpenImage** needs a **file path**, so the loose PNG next to the DLL is preferred). |
 

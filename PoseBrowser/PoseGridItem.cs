@@ -21,6 +21,8 @@ namespace HS2SandboxPlugin
         public HashSet<string> Tags { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>When non-null, this row is an import preview backed by <see cref="PosePackExchange"/> entry id.</summary>
         public string? ImportPackEntryId { get; set; }
+        /// <summary>When non-null, pose belongs to this group id (<see cref="PoseGroupDatabase"/>).</summary>
+        public string? GroupId { get; set; }
 
         /// <summary>Path relative to pose root (same boundary rules as <see cref="PoseTagDatabase"/> storage keys).</summary>
         public string RelativePath(string rootPath)

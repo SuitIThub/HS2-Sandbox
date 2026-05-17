@@ -23,6 +23,8 @@ namespace HS2SandboxPlugin
         public const string PagePoseFiles = "Pose files & actions";
         public const string PageImportExport = "Import & export (ZIP)";
         public const string PageThumbnails = "Thumbnails";
+        public const string PagePoseGroups = "Pose groups";
+        public const string PageMultiCharacterApply = "Multi-character apply";
         public const string PageOptionsData = "Options & data files";
 
         private static bool _registerSucceeded;
@@ -58,6 +60,8 @@ namespace HS2SandboxPlugin
                 InvokeRegister(WikiCategoryRoot, PagePoseFiles, DrawWikiPoseFiles);
                 InvokeRegister(WikiCategoryRoot, PageImportExport, DrawWikiImportExport);
                 InvokeRegister(WikiCategoryRoot, PageThumbnails, DrawWikiThumbnails);
+                InvokeRegister(WikiCategoryRoot, PagePoseGroups, DrawWikiPoseGroups);
+                InvokeRegister(WikiCategoryRoot, PageMultiCharacterApply, DrawWikiMultiCharacterApply);
                 InvokeRegister(WikiCategoryAdvanced, "Tag storage & migration", DrawWikiTagStorage);
                 InvokeRegister(WikiCategoryRoot, PageOptionsData, DrawWikiOptionsData);
 
@@ -159,7 +163,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6f);
             GUILayout.Label(
                 "<b>Recent releases:</b> <b>HS2 Sandbox 2.0.0</b> added compact <b>Full / List / Mini</b> layouts, a <b>Sort</b> panel (including <b>Last used</b> timestamps), the <b>★ Favorites</b> library view, docked tag filter/sort windows, BepInEx <b>keyboard shortcuts</b>, and richer persistence in <b>pose_browser_options.json</b>. " +
-                "<b>Pose Browser 2.1.0</b> (split module — same code is also in the all-in-one build) adds v2 <b>pose pack ZIP</b> import/export. See <b>Import & export (ZIP)</b> and <b>Options & data files</b>.");
+                "<b>Pose Browser 3.0.0</b> adds <b>pose groups</b> (grid segments, group tags, v3 ZIP metadata), tri-state tag <b>include/exclude</b> filters, and <b>multi-character apply</b> with male/female priority lists — see the dedicated pages below. v2/v3 ZIP import/export shipped in 2.1+.");
 
             GUILayout.Space(8f);
             var tex = WikiBannerTexture();
@@ -175,6 +179,8 @@ namespace HS2SandboxPlugin
             NavButton("→ Folders & library", WikiCategoryRoot, PageFolders);
             NavButton("→ Search & filters", WikiCategoryRoot, PageSearchFilters);
             NavButton("→ Grid & selection", WikiCategoryRoot, PageGridSelection);
+            NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
+            NavButton("→ Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
             NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
             NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
             NavButton("→ Thumbnails", WikiCategoryRoot, PageThumbnails);
@@ -221,12 +227,14 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Search</b> — filters by display name / path. Toggle <b>.*</b> for case-insensitive regex; invalid patterns show an error line under the bar.");
             GUILayout.Label("<b>★</b> — show only poses marked favorite (see Tags / Fav Selected).");
             GUILayout.Label("<b>AND / OR</b> — combines active tag filters: every selected tag must match (AND) or any one (OR).");
-            GUILayout.Label("<b>Tags (n)</b> — opens a docked <b>Tag filter</b> window (search, toggles, Clear active filters). <b>AND / OR</b> stays on the top bar.");
+            GUILayout.Label("<b>Tags (n)</b> — docked <b>Tag filter</b> window: click each tag to cycle <b>neutral → + include → − exclude</b>. <b>AND / OR</b> is inside the tag window for include rules.");
+            GUILayout.Label("<b>Exclude</b> — hides ungrouped poses with excluded tags; grouped segments stay visible with excluded members <b>dimmed</b> (red tag text on cards).");
             GUILayout.EndVertical();
 
             GUILayout.Space(8f);
             NavButton("← Folders & library", WikiCategoryRoot, PageFolders);
             NavButton("→ Grid & selection", WikiCategoryRoot, PageGridSelection);
+            NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
         }
 
         private static void DrawWikiGridSelection()
@@ -249,9 +257,14 @@ namespace HS2SandboxPlugin
             GUILayout.Label(
                 "<b>Import preview</b> — after <b>Import…</b>, cards from the ZIP appear in the grid; thumbnail click toggles whether a pose is checked (checkbox + Ctrl/Shift behave like normal). You are not browsing disk files until you cancel or finish the import.");
 
+            GUILayout.Space(6f);
+            GUILayout.Label(
+                "<b>Pose groups</b> — members of a group appear inside a bordered segment with a header row (▦ name, optional group tags). See <b>Pose groups</b> for selection vs group entity, filters, and export.");
+
             GUILayout.Space(8f);
             NavButton("← Search & filters", WikiCategoryRoot, PageSearchFilters);
-            NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
+            NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
+            NavButton("→ Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
         }
 
         private static void DrawWikiPoseFiles()
@@ -265,7 +278,8 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Save Pose</b> (top bar) — writes the current character pose into the <i>active save folder</i>: selected folder, pose root when <b>All poses</b> or <b>★ Favorites</b> is active.");
             GUILayout.Label("<b>Update Pose</b> (one selected) — overwrite file from the scene; choose keeping or regenerating the thumbnail.");
             GUILayout.Label("<b>Rename…</b> — optional rename of file to match display name.");
-            GUILayout.Label("<b>Tag Selected</b> — opens the same tag window in <b>assign</b> mode: search, add new tag from search when offered, and ✓ / ☐ / ◪ (mixed) rows to set tags on <i>all</i> selected poses.");
+            GUILayout.Label("<b>Grouping</b> — <b>Group…</b> (2+ ungrouped poses), <b>Ungroup</b>. Group header selection shows a separate bar: rename, <b>Group tags…</b>, <b>Export group…</b>. See <b>Pose groups</b>.");
+            GUILayout.Label("<b>Tag Selected</b> — tag window in <b>assign</b> mode for <i>pose</i> tags on all selected items.");
             GUILayout.Label("<b>Fav Selected</b> — toggle favorite flag (★ filter).");
             GUILayout.Label("<b>Export…</b> — writes selected on-disk poses to a v2 <b>.zip</b> (embedded tags/favorites metadata).");
             GUILayout.Label("<b>Move… / Copy…</b> — pick destination in the <b>Folders</b> tree (<b>Root only</b> or a folder; highlighted), then <b>Apply</b> or <b>Cancel</b> in the folder footer. The grid does not reload while picking, so your selection is preserved. <b>New folder…</b> still works. Tags move with paths when applicable.");
@@ -274,18 +288,142 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(6f);
             GUILayout.Label(
-                "<b>Character</b> row — shows Studio selection count and names (tooltip). Non-character selections are ignored for pose apply and save.");
+                "<b>Character</b> row — <b>Chars</b> opens priority lists; with multiple poses or one full group, <b>Apply to characters…</b> maps poses onto Studio-selected characters. See <b>Multi-character apply</b>.");
 
             GUILayout.Space(8f);
             NavButton("← Grid & selection", WikiCategoryRoot, PageGridSelection);
+            NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
+            NavButton("→ Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
             NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
+        }
+
+        private static void DrawWikiPoseGroups()
+        {
+            GUILayout.Label("<size=17><b>Pose groups</b></size>");
+            GUILayout.Label(
+                "A <b>pose group</b> is a named set of library poses that stay together in the grid, share optional <b>group tags</b>, and can be exported/imported inside v3 ZIP packs. Membership is stored in <b>pose_groups.tsv</b> (config folder), keyed by pose file paths.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Creating and editing groups</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("1. Select <b>two or more ungrouped</b> poses in the bottom bar (checkboxes or thumbnail selection).");
+            GUILayout.Label("2. Click <b>Group…</b>, enter a name, confirm.");
+            GUILayout.Label("3. To add poses later, select ungrouped poses + at least one member of the target group, then <b>Group…</b> again (merges into the existing group when applicable).");
+            GUILayout.Label("4. <b>Ungroup</b> removes selected poses from their groups (does not delete pose files).");
+            GUILayout.Label("5. <b>Rename group</b> / <b>Group tags…</b> / <b>Export group…</b> appear on the <b>group action bar</b> when the group header is selected as a group entity.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Two kinds of selection</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Group entity</b> — click the <b>group header</b> (▦ row). Highlights the segment; shows the group bar (rename, group tags, export, <b>Apply to characters…</b>). Ctrl+click toggles group entities; Shift+click range-selects group headers in the filtered list.");
+            GUILayout.Label("<b>Pose members</b> — checkboxes / thumbnail clicks on cards inside the segment. Used for move, copy, delete, tag selected, partial export, etc.");
+            GUILayout.Label("During <b>import preview</b>, clicking the group header toggles <b>all member checkboxes</b> for import (not group-entity mode).");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Group tags vs pose tags</b>");
+            GUILayout.Label(
+                "• <b>Group tags</b> — edited via <b>Group tags…</b>; used for <b>filtering</b> (include/exclude in the tag window) and shown on the group header.\n" +
+                "• <b>Pose tags</b> — per-card tags (e.g. <b>Male</b> / <b>Female</b> for multi-character apply).\n" +
+                "• <b>Exclude</b> filters: ungrouped poses with an excluded tag are hidden; inside a visible group <b>all members stay</b> but cards with excluded pose tags are <b>dimmed</b> and tag names show in <b>red</b>.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Grid layout</b>");
+            GUILayout.Label(
+                "Grouped poses render in a bordered block. Large groups may continue on the next row (continuation header without repeating tags). Sort order applies to <b>groups as blocks</b> and to ungrouped poses.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Move / copy / delete</b>");
+            GUILayout.Label(
+                "• <b>Move…</b> / <b>Copy…</b> — works on ungrouped poses, or when exactly <b>one full group</b> is selected (all members). The whole group moves/copies together.\n" +
+                "• <b>Delete…</b> — can remove group members or entire groups per confirmation.\n" +
+                "• <b>Export…</b> — include group metadata when every member of a group is selected, or use <b>Export group…</b> from the group bar.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Import / export (ZIP v3)</b>");
+            GUILayout.Label(
+                "v3 packs may include a <b>groups[]</b> section in <b>metadata.json</b>. On import preview, groups appear as segments; members import with correct membership. v2 packs without groups still import as flat poses.");
+
+            GUILayout.Space(8f);
+            NavButton("← Grid & selection", WikiCategoryRoot, PageGridSelection);
+            NavButton("→ Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
+            NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
+        }
+
+        private static void DrawWikiMultiCharacterApply()
+        {
+            GUILayout.Label("<size=17><b>Multi-character apply</b></size>");
+            GUILayout.Label(
+                "Use this workflow when a scene has <b>several characters</b> and you want to apply <b>multiple poses at once</b> (or an entire <b>group</b>) with predictable pairing — for example a male pose on the male character and a female pose on the female character.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>When the button appears</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Apply to characters…</b> shows on the character row or group bar when:");
+            GUILayout.Label("• <b>Two or more</b> library poses are selected (checkboxes), or");
+            GUILayout.Label("• Exactly <b>one group entity</b> is selected (group header) — all members in <b>display order</b> are used.");
+            GUILayout.Label("Not available during ZIP import preview. Requires at least one character selected in Studio.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Setup — Chars window</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("1. Open <b>Chars</b> (docked pane, like Tags / Sort).");
+            GUILayout.Label("2. Click <b>Load characters from scene</b> to fill <b>Male</b> and <b>Female</b> lists from the current scene.");
+            GUILayout.Label("3. Reorder with <b>↑</b> / <b>↓</b> — <b>top = highest priority</b>.");
+            GUILayout.Label("4. <b>⇄</b> moves a slot to the other list; <b>✕</b> removes it. Orange names are not found in the scene.");
+            GUILayout.Label("5. Lists are saved to <b>pose_browser_character_config.json</b> in the Sandbox config folder.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Studio selection</b>");
+            GUILayout.Label(
+                "Select the characters you want to pose in Studio (workspace / gizmo). The character row shows count and names. Only <b>characters</b> count — props and accessories are ignored. Multi-apply uses <b>intersection</b> of Studio selection and your priority lists (plus unlisted selected characters at the end for untagged poses).");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>How poses are assigned</b>");
+            GUILayout.Label("Processing follows the <b>pose list order</b> (grid display order for groups). Each character receives <b>at most one pose per apply</b> — later poses never overwrite an earlier assignment on the same character.");
+
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Male / Female pose tags</b> (case-insensitive, on the pose only)");
+            GUILayout.Label("• Pose tagged <b>Male</b> (not Female) → next available selected character from the <b>Male</b> list, in priority order.");
+            GUILayout.Label("• Pose tagged <b>Female</b> → same for the <b>Female</b> list.");
+            GUILayout.Label("• Characters not on the matching list are skipped for that pose.");
+            GUILayout.Label("• If both Male and Female tags are present, or neither tag is present, the pose is treated as <b>untagged</b> (see below).");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(4f);
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Untagged poses</b>");
+            GUILayout.Label("• Build priority order: interleave Male and Female lists by rank (1st male, 1st female, 2nd male, …), then any selected characters not in either list.");
+            GUILayout.Label("• First pass: pose 1 → first free slot, pose 2 → second free slot, etc. Extra poses with no free character are <b>skipped</b>.");
+            GUILayout.Label("• Second pass: any selected character still without a pose gets a pose by cycling through the pose list (only if eligible for that pose’s gender tag).");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Example workflows</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Couple (M + F tags)</b> — Group with two poses tagged Male and Female. Select both characters in Studio. Select the group header → <b>Apply to characters…</b>.");
+            GUILayout.Label("<b>Five generic poses, three characters</b> — Untagged poses; only the top three priority characters are posed; poses 4–5 skipped.");
+            GUILayout.Label("<b>Two poses, four characters</b> — After the first pass, two characters remain; second pass applies poses 1 and 2 again to them (different characters, not overwrites).");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label(
+                "<b>Single-pose apply</b> (left-click thumbnail) still applies one pose to <b>all</b> selected Studio characters at once — separate from multi-character mapping.");
+
+            GUILayout.Space(8f);
+            NavButton("← Pose groups", WikiCategoryRoot, PagePoseGroups);
+            NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
+            NavButton("↑ Overview", WikiCategoryRoot, PageOverview);
         }
 
         private static void DrawWikiImportExport()
         {
-            GUILayout.Label("<size=17><b>Import & export (ZIP v2)</b></size>");
+            GUILayout.Label("<size=17><b>Import & export (ZIP v2 / v3)</b></size>");
             GUILayout.Label(
-                "Pose Browser exchanges packs as <b>.zip</b> archives with <b>manifest.json</b>, <b>metadata.json</b>, and pose binaries under <b>poses/</b>. The reader only accepts <b>stored</b> (uncompressed) ZIP entries—recompressing with Deflate breaks import.");
+                "Pose Browser exchanges packs as <b>.zip</b> archives with <b>manifest.json</b>, <b>metadata.json</b>, and pose binaries under <b>poses/</b>. <b>v3</b> adds optional <b>groups[]</b> in metadata (names, group tags, member paths). The reader only accepts <b>stored</b> (uncompressed) ZIP entries—recompressing with Deflate breaks import.");
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Import…</b>");
@@ -296,7 +434,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Export…</b> (selection bar)");
-            GUILayout.Label("Select poses that already live in your library, then export a flat v2 ZIP with tags/favorites preserved in metadata.");
+            GUILayout.Label("Select poses that already live in your library, then export a flat v3 ZIP with tags/favorites and pose groups (when fully selected) in metadata.");
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Export branch…</b> / <b>Export library tree…</b>");
@@ -322,6 +460,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
+            NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
         }
 
@@ -341,7 +480,9 @@ namespace HS2SandboxPlugin
             string cfg = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox");
             GUILayout.Label($"<b>Config folder</b> <color=#cccc66>{cfg}</color>");
             GUILayout.Label("• <b>pose_browser_options.json</b> — layout tier (Full/List/Mini) with remembered window rects per mode, sort mode + direction, card width, items per page.");
-            GUILayout.Label("• <b>pose_tags.tsv</b> — primary tag database (atomic save).");
+            GUILayout.Label("• <b>pose_tags.tsv</b> — per-pose tags and favorites (atomic save).");
+            GUILayout.Label("• <b>pose_groups.tsv</b> — pose group membership, names, and group tags.");
+            GUILayout.Label("• <b>pose_browser_character_config.json</b> — male/female priority lists for multi-character apply.");
             GUILayout.Label("• BepInEx <b>Pose Browser</b> section — <b>Card column width</b> and <b>Items per page</b> mirrored from Options.");
 
             GUILayout.Space(8f);

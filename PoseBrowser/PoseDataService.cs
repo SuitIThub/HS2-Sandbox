@@ -761,6 +761,62 @@ namespace HS2SandboxPlugin
             }
         }
 
+        public List<(OCIChar oci, int dicKey)> GetSceneCharacters()
+        {
+            var list = new List<(OCIChar, int)>();
+            try
+            {
+                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
+                {
+                    if (kvp.Value is OCIChar oci)
+                        list.Add((oci, kvp.Key));
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            return list;
+        }
+
+        public static bool TryGetDicKey(OCIChar oci, out int dicKey)
+        {
+            dicKey = 0;
+            try
+            {
+                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
+                {
+                    if (ReferenceEquals(kvp.Value, oci))
+                    {
+                        dicKey = kvp.Key;
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            return false;
+        }
+
+        public static bool IsFemaleCharacter(OCIChar oci)
+        {
+            if (oci is OCICharFemale) return true;
+            try
+            {
+                return oci.oiCharInfo != null && oci.oiCharInfo.sex != 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool IsMaleCharacter(OCIChar oci) => !IsFemaleCharacter(oci);
+
         public static string GetOCICharDisplayName(OCIChar oci)
         {
             try
