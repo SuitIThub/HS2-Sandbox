@@ -21,10 +21,11 @@ The Pose Browser is a Studio utility that:
 - **Pose groups** — named sets of poses shown as grid segments, **group tags** for filtering, **pose_groups.tsv** persistence, and **groups[]** in v3 ZIP metadata.
 - **Tag filter include/exclude** — tri-state per-tag filters; exclude dims grouped members instead of hiding whole groups.
 - **Multi-character apply** — **Chars** priority lists (male/female), **Apply to characters…** for multiple poses or a whole group, driven by **Male** / **Female** pose tags and list order.
+- In **3.1.0**: **Auto-capture** for batch thumbnails (configurable pause in Options / BepInEx), grid layout and window-resize fixes, multi-group action bar improvements.
 
 ### 1.1 Version note
 
-The **all-in-one** plugin’s `PluginVersion` may read **2.0.0** while the **Pose Browser module** reads **3.0.1**; both builds compile the same Pose Browser code path.
+The **all-in-one** plugin’s `PluginVersion` may read **2.0.0** while the **Pose Browser module** reads **3.1.0**; both builds compile the same Pose Browser code path.
 
 It is opened from the Sandbox **left toolbar** (pose icon) when using the full HS2 Sandbox plugin, or the standalone Pose Browser module.
 

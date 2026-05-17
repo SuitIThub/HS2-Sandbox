@@ -18,6 +18,10 @@ namespace HS2SandboxPlugin
     {
         private const float ResizeHandleSize = 18f;
         private const float TreePanelWidth = 200f;
+        /// <summary>Padding between tree panel and grid (window inner chrome).</summary>
+        private const float GridPanelChromePad = 24f;
+        /// <summary>Sum of fixed top-bar control widths (must stay in sync with <see cref="DrawTopBar"/>).</summary>
+        private const float NormalTopBarMinWidth = 949f;
         private const float BottomBarHeight = 36f;
         private const float TopBarHeight = 32f;
         private const float MinCardSize = 96f;
@@ -72,10 +76,11 @@ namespace HS2SandboxPlugin
 
         private static float LayoutMinWidthFor(PoseBrowserLayoutTier tier) => tier switch
         {
-            PoseBrowserLayoutTier.Normal => 780f,
+            // Matches toolbar + tree/grid column minimum (see ComputeContentMinimumWindowWidth).
+            PoseBrowserLayoutTier.Normal => 980f,
             PoseBrowserLayoutTier.CompactList => 300f,
             PoseBrowserLayoutTier.CompactMini => 200f,
-            _ => 780f
+            _ => 980f
         };
 
         private static float LayoutMaxWidthFor(PoseBrowserLayoutTier tier) =>
@@ -99,6 +104,19 @@ namespace HS2SandboxPlugin
 
         private float _cardCellSize = 140f;
         private int _itemsPerPage;
+
+        /// <summary>Grid column metrics computed on the Layout pass and reused on Repaint (avoids resize flicker / IMGUI mismatches).</summary>
+        private struct PoseGridLayoutMetrics
+        {
+            public int Frame;
+            public float GridAvailW;
+            public float ContentWidth;
+            public int Columns;
+            public float ColumnFootprintW;
+            public float CellInnerW;
+        }
+
+        private PoseGridLayoutMetrics _poseGridLayout;
         private int _currentPage = 1;
 
         private bool _viewAllPosesRecursive;
@@ -119,6 +137,8 @@ namespace HS2SandboxPlugin
         private Vector2 _treeScroll;
         private Vector2 _gridScroll;
         private bool _isResizing;
+        /// <summary>IMGUI content min width (toolbar, etc.); updated when layout expands a narrower requested width.</summary>
+        private float _contentMinWindowWidth;
 
         // Search & filter state
         private string _searchText = "";
@@ -214,7 +234,6 @@ namespace HS2SandboxPlugin
         private GUIStyle? _treeNodeSelectedStyle;
         private GUIStyle? _tagWrapStyle;
         private GUIStyle? _tagWrapStyleRich;
-        private GUIStyle? _headerSectionCaptionStyle;
         private GUIStyle? _characterHintStyle;
         private GUIStyle? _compactWordWrapStyle;
 
@@ -318,12 +337,31 @@ namespace HS2SandboxPlugin
                 _thumbCapture.DrawOverlay();
 
             HandleResize();
-            windowRect.width = Mathf.Clamp(windowRect.width, LayoutMinWidth, LayoutMaxWidth);
-            windowRect.height = Mathf.Clamp(windowRect.height, LayoutMinHeight, LayoutMaxHeight);
+            float minW = EffectiveResizeMinWidth();
+            float minH = LayoutMinHeight;
+            windowRect.width = Mathf.Clamp(windowRect.width, minW, LayoutMaxWidth);
+            windowRect.height = Mathf.Clamp(windowRect.height, minH, LayoutMaxHeight);
             windowRect.x = Mathf.Clamp(windowRect.x, 4f, Mathf.Max(4f, Screen.width - windowRect.width - 4f));
             windowRect.y = Mathf.Clamp(windowRect.y, 4f, Mathf.Max(4f, Screen.height - windowRect.height - 4f));
 
-            windowRect = GUILayout.Window(windowID, windowRect, DrawWindowContent, windowTitle);
+            // GUILayout.Window grows to content min-size; that fights shrinking while dragging.
+            float lockedW = windowRect.width;
+            float lockedH = windowRect.height;
+            var windowIn = new Rect(windowRect.x, windowRect.y, lockedW, lockedH);
+
+            windowRect = GUILayout.Window(windowID, windowIn, DrawWindowContent, windowTitle);
+            RefreshContentMinWindowWidthFromLayout(windowIn.width, windowRect.width);
+
+            if (_isResizing)
+            {
+                windowRect.width = lockedW;
+                windowRect.height = lockedH;
+            }
+            else
+            {
+                windowRect.width = Mathf.Clamp(windowRect.width, minW, LayoutMaxWidth);
+                windowRect.height = Mathf.Clamp(windowRect.height, minH, LayoutMaxHeight);
+            }
 
             if (_layoutTier == PoseBrowserLayoutTier.Normal)
             {
@@ -716,6 +754,7 @@ namespace HS2SandboxPlugin
         {
             CaptureWindowRectForCurrentTier();
             _layoutTier = (PoseBrowserLayoutTier)(((int)_layoutTier + 1) % 3);
+            ResetContentMinWindowWidth();
 
             if (_layoutTier != PoseBrowserLayoutTier.Normal)
             {
@@ -1090,9 +1129,16 @@ namespace HS2SandboxPlugin
 
                 GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
                 DrawTreePanel(showFolderFooter: true);
-                float gridMaxW = Mathf.Max(120f, windowRect.width - TreePanelWidth - 24f);
-                GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MaxWidth(gridMaxW));
-                DrawGridPanel();
+                float gridAvailW = Mathf.Max(120f, windowRect.width - TreePanelWidth - GridPanelChromePad);
+                GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MaxWidth(gridAvailW));
+                Rect hostProbe = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.MaxWidth(gridAvailW));
+                float effectiveGridW = gridAvailW;
+                if (Event.current.type == EventType.Layout && hostProbe.width > 8f)
+                    effectiveGridW = hostProbe.width;
+                else if (_poseGridLayout.Frame == Time.frameCount)
+                    effectiveGridW = _poseGridLayout.GridAvailW;
+
+                DrawGridPanel(effectiveGridW);
                 DrawBottomBar();
                 DrawFolderPoseDialogs();
                 GUILayout.EndVertical();
@@ -1114,8 +1160,6 @@ namespace HS2SandboxPlugin
         private void DrawTopBar()
         {
             GUILayout.BeginHorizontal(GUILayout.Height(TopBarHeight));
-
-            DrawHeaderSectionCaption("Poses");
 
             GUILayout.Label("Search:", GUILayout.Width(46f));
             string newSearch = GUILayout.TextField(_searchText, GUILayout.MinWidth(160f), GUILayout.ExpandWidth(true));
@@ -1171,8 +1215,6 @@ namespace HS2SandboxPlugin
 
             DrawTopBarVerticalRule(22f);
 
-            DrawHeaderSectionCaption("Window");
-
             if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
                 CycleLayoutTier();
 
@@ -1194,11 +1236,6 @@ namespace HS2SandboxPlugin
 
             if (_showSavePopup)
                 DrawSavePopup();
-        }
-
-        private void DrawHeaderSectionCaption(string text)
-        {
-            GUILayout.Label(text, _headerSectionCaptionStyle!, GUILayout.MinWidth(36f), GUILayout.MaxWidth(80f), GUILayout.Height(TopBarHeight));
         }
 
         private static void DrawTopBarVerticalRule(float height)
@@ -1910,64 +1947,82 @@ namespace HS2SandboxPlugin
         /// Vertical scrollbar steals width from the scroll view client area; reserve it up-front so
         /// column × cell width never exceeds the inner width (no horizontal scrollbar).
         /// </summary>
-        private static float PoseCardHorizontalMarginBudget()
+        private static float CardHorizontalMarginBudget(GUIStyle style)
         {
-            var box = GUI.skin.box;
-            int m = box.margin.left + box.margin.right;
-            int b = box.border.left + box.border.right;
+            int m = style.margin.left + style.margin.right;
+            int b = style.border.left + style.border.right;
             // Boxed cells consume more width than GUILayout.Width (margins, borders; some skins under-report).
             return Mathf.Max(8f, m + b + 6f);
         }
 
-        private void ComputeGridCellLayout(float contentWidth, float marginH, out int columns, out float cellDrawW)
+        private static float PoseCardHorizontalMarginBudget() => CardHorizontalMarginBudget(GUI.skin.box);
+
+        private void ComputeGridCellLayout(
+            float contentWidth,
+            float marginH,
+            out int columns,
+            out float columnFootprintW,
+            out float cellInnerW)
         {
             contentWidth = Mathf.Max(80f, contentWidth);
             float target = Mathf.Clamp(_cardCellSize, MinCardSize, MaxCardSize);
 
-            // Fewest columns that respect the slider as a minimum card width (floor slots).
+            // Fewest columns that respect the slider as a minimum inner width per column.
             columns = Mathf.Max(1, Mathf.FloorToInt(contentWidth / (target + marginH)));
 
-            // Add columns while each cell can still be at least as wide as the slider (uses leftover width).
+            // Add columns while each column can still fit at least the slider minimum inner width.
             while (true)
             {
                 int next = columns + 1;
-                float cellIfNext = contentWidth / next - marginH;
-                if (cellIfNext + 0.02f < target) break;
-                if (cellIfNext < MinCardSize) break;
+                float footprintIfNext = contentWidth / next;
+                float innerIfNext = footprintIfNext - marginH;
+                if (innerIfNext + 0.02f < target) break;
+                if (innerIfNext < MinCardSize) break;
                 columns = next;
             }
 
-            float slot = contentWidth / columns;
-            cellDrawW = Mathf.Floor((slot - marginH) * 100f) / 100f;
-            // Fill the row up to MaxCardSize; slider is a minimum target, not a hard ceiling.
-            cellDrawW = Mathf.Clamp(cellDrawW, MinCardSize, MaxCardSize);
+            columnFootprintW = contentWidth / columns;
+            cellInnerW = Mathf.Clamp(columnFootprintW - marginH, MinCardSize, MaxCardSize);
 
-            const float slack = 1f;
-            while (columns > 1 && columns * (cellDrawW + marginH) > contentWidth + slack)
+            const float slack = 0.5f;
+            while (columns > 1 && columns * (cellInnerW + marginH) > contentWidth + slack)
             {
                 columns--;
-                slot = contentWidth / columns;
-                cellDrawW = Mathf.Floor((slot - marginH) * 100f) / 100f;
-                cellDrawW = Mathf.Clamp(cellDrawW, MinCardSize, MaxCardSize);
+                columnFootprintW = contentWidth / columns;
+                cellInnerW = Mathf.Clamp(columnFootprintW - marginH, MinCardSize, MaxCardSize);
             }
         }
 
-        private void DrawGridPanel()
+        private void UpdatePoseGridLayout(float gridAvailW)
+        {
+            float vsb = GUI.skin.verticalScrollbar != null ? GUI.skin.verticalScrollbar.fixedWidth : 15f;
+            if (vsb < 10f) vsb = 18f;
+            float marginH = PoseCardHorizontalMarginBudget();
+            float contentWidth = Mathf.Max(80f, gridAvailW - vsb);
+            ComputeGridCellLayout(contentWidth, marginH, out int columns, out float columnFootprintW, out float cellInnerW);
+            _poseGridLayout = new PoseGridLayoutMetrics
+            {
+                Frame = Time.frameCount,
+                GridAvailW = gridAvailW,
+                ContentWidth = contentWidth,
+                Columns = columns,
+                ColumnFootprintW = columnFootprintW,
+                CellInnerW = cellInnerW
+            };
+        }
+
+        private void DrawGridPanel(float gridAvailW)
         {
             InitGroupStyles();
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
-            float vsb = GUI.skin.verticalScrollbar != null ? GUI.skin.verticalScrollbar.fixedWidth : 15f;
-            if (vsb < 10f) vsb = 18f;
-            float marginH = PoseCardHorizontalMarginBudget();
-            const float windowChromePad = 20f;
-            const float layoutSlack = 8f;
-            float availableForGrid = windowRect.width - TreePanelWidth - windowChromePad - layoutSlack;
-            float contentWidth = Mathf.Max(80f, availableForGrid - vsb - 8f);
+            if (Event.current.type == EventType.Layout || _poseGridLayout.Frame != Time.frameCount)
+                UpdatePoseGridLayout(gridAvailW);
 
-            ComputeGridCellLayout(contentWidth, marginH, out int columns, out float cell);
-            cell = Mathf.Clamp(cell, MinCardSize, MaxCardSize);
-            float slotW = contentWidth / Mathf.Max(1, columns);
+            int columns = _poseGridLayout.Columns;
+            float contentWidth = _poseGridLayout.ContentWidth;
+            float columnFootprintW = _poseGridLayout.ColumnFootprintW;
+            float cellInnerW = _poseGridLayout.CellInnerW;
 
             var visibleEntries = GetVisibleDisplayEntries();
             ClampCurrentPage();
@@ -2005,8 +2060,8 @@ namespace HS2SandboxPlugin
 
             _gridScroll = GUILayout.BeginScrollView(
                 _gridScroll,
-                alwaysShowHorizontal: false,
-                alwaysShowVertical: false,
+                GUIStyle.none,
+                GUI.skin.verticalScrollbar,
                 GUILayout.Width(contentWidth),
                 GUILayout.MaxWidth(contentWidth),
                 GUILayout.ExpandHeight(true));
@@ -2026,17 +2081,17 @@ namespace HS2SandboxPlugin
                 foreach (var gridCell in gridRow.Cells)
                 {
                     if (gridCell.Kind == PoseBrowserGridCellKind.GroupSegment)
-                        DrawGroupSegmentCell(gridCell.GroupSegment!, cell, slotW, ref displayIdx);
+                        DrawGroupSegmentCell(gridCell.GroupSegment!, cellInnerW, columnFootprintW, ref displayIdx);
                     else
                     {
-                        DrawGridCell(gridCell.Pose!, displayIdx, cell);
+                        DrawGridCell(gridCell.Pose!, displayIdx, columnFootprintW, cellInnerW);
                         displayIdx++;
                     }
                 }
 
                 int usedCols = PoseBrowserGridLayout.RowColumnSpan(gridRow);
                 for (int p = usedCols; p < columns; p++)
-                    DrawGridCellPlaceholder(slotW);
+                    DrawGridCellPlaceholder(columnFootprintW);
 
                 GUILayout.EndHorizontal();
             }
@@ -2045,18 +2100,35 @@ namespace HS2SandboxPlugin
             GUILayout.EndVertical();
         }
 
-        /// <summary>Same boxed horizontal footprint as <see cref="DrawGridCell"/> for partial rows.</summary>
-        private static void DrawGridCellPlaceholder(float slotW)
+        /// <summary>Reserves one column footprint on partial rows without drawing a visible card.</summary>
+        private static void DrawGridCellPlaceholder(float columnFootprintW)
         {
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(slotW), GUILayout.MaxWidth(slotW), GUILayout.ExpandWidth(false));
-            GUILayout.Space(1f);
-            GUILayout.EndVertical();
+            GUILayoutUtility.GetRect(
+                GUIContent.none,
+                GUIStyle.none,
+                GUILayout.Width(columnFootprintW),
+                GUILayout.MaxWidth(columnFootprintW),
+                GUILayout.ExpandWidth(false));
         }
 
-        private void DrawGridCell(PoseBrowserDisplayEntry entry, int displayIndex, float cellW, GUIStyle? cardStyleOverride = null)
+        /// <summary>Repaint-only checkbox; unlike <see cref="GUI.Toggle"/> does not register extra GUILayout controls.</summary>
+        private static void DrawCheckboxVisual(Rect rect, bool on)
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+            GUI.skin.toggle.Draw(rect, GUIContent.none, false, false, on, false);
+        }
+
+        private void DrawGridCell(
+            PoseBrowserDisplayEntry entry,
+            int displayIndex,
+            float columnFootprintW,
+            float cellInnerW,
+            GUIStyle? cardStyleOverride = null)
         {
             var item = entry.Item;
             GUIStyle cardBox = cardStyleOverride ?? GUI.skin.box;
+            bool groupInnerCell = cardStyleOverride != null;
             if (cardStyleOverride == null)
             {
                 if (item.IsSelected)
@@ -2075,9 +2147,10 @@ namespace HS2SandboxPlugin
             }
 
             const float edge = 2f;
-            float innerW = Mathf.Max(40f, cellW - edge * 2f);
+            float layoutW = groupInnerCell ? columnFootprintW : cellInnerW;
+            float innerW = Mathf.Max(40f, (groupInnerCell ? columnFootprintW : cellInnerW) - edge * 2f);
 
-            GUILayout.BeginVertical(cardBox, GUILayout.Width(cellW), GUILayout.MaxWidth(cellW), GUILayout.ExpandWidth(false));
+            GUILayout.BeginVertical(cardBox, GUILayout.Width(layoutW), GUILayout.MaxWidth(layoutW), GUILayout.ExpandWidth(false));
 
             Rect thumbRect = GUILayoutUtility.GetRect(innerW, innerW);
             Texture2D tex = item.Thumbnail ?? _placeholderTex!;
@@ -2092,7 +2165,7 @@ namespace HS2SandboxPlugin
                     GUI.color = new Color(0.55f, 0.55f, 0.55f, 1f);
                 GUI.DrawTexture(thumbRect, tex, ScaleMode.ScaleToFit, false);
                 GUI.color = prev;
-                GUI.Toggle(cbRect, item.IsSelected, "");
+                DrawCheckboxVisual(cbRect, item.IsSelected);
             }
             else if (ev.type == EventType.MouseDown && ev.button == 0)
             {
@@ -2131,16 +2204,13 @@ namespace HS2SandboxPlugin
 
             bool favoriteCard = item.IsFavorite && !item.IsSelected;
 
-            GUILayout.BeginHorizontal();
-            if (item.IsFavorite)
-            {
-                var starStyle = favoriteCard ? _favoriteCardNameStyle! : _favoriteStyle!;
-                GUILayout.Label("★", starStyle, GUILayout.Width(14f), GUILayout.Height(20f));
-            }
+            GUILayout.BeginHorizontal(GUILayout.Height(20f));
+            var starStyle = favoriteCard ? _favoriteCardNameStyle! : _favoriteStyle!;
+            GUILayout.Label(item.IsFavorite ? "★" : " ", starStyle, GUILayout.Width(14f), GUILayout.Height(20f));
 
             string label = item.DisplayName;
             var nameStyle = favoriteCard ? _favoriteCardNameStyle! : GUI.skin.label;
-            GUILayout.Label(label, nameStyle, GUILayout.MaxWidth(innerW - (item.IsFavorite ? 18f : 4f)), GUILayout.Height(20f));
+            GUILayout.Label(label, nameStyle, GUILayout.MaxWidth(innerW - 18f), GUILayout.Height(20f));
             GUILayout.EndHorizontal();
 
             if (item.Tags.Count > 0)
@@ -3281,15 +3351,6 @@ namespace HS2SandboxPlugin
                     normal = { textColor = new Color(0.26f, 0.20f, 0.04f) }
                 };
 
-                _headerSectionCaptionStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleLeft,
-                    padding = new RectOffset(0, 6, 0, 0),
-                    normal = { textColor = new Color(0.52f, 0.55f, 0.6f) }
-                };
-
                 _characterHintStyle = new GUIStyle(GUI.skin.label)
                 {
                     fontSize = Mathf.Max(10, GUI.skin.label.fontSize - 1),
@@ -3543,6 +3604,18 @@ namespace HS2SandboxPlugin
             }
             GUILayout.EndHorizontal();
 
+            GUILayout.Space(10f);
+            GUILayout.Label("Thumbnail auto-capture: pause before each shot (seconds). Config: Auto-capture delay (seconds).");
+            PoseBrowserConfig.Register(SandboxServices.Config);
+            float captureDelay = PoseBrowserConfig.AutoCaptureDelaySeconds!.Value;
+            float newCaptureDelay = GUILayout.HorizontalSlider(captureDelay, 0.5f, 30f);
+            if (Mathf.Abs(newCaptureDelay - captureDelay) > 0.01f)
+            {
+                PoseBrowserConfig.AutoCaptureDelaySeconds!.Value = newCaptureDelay;
+                SavePersistedOptions();
+            }
+            GUILayout.Label($"{newCaptureDelay:0.0} s");
+
             GUILayout.Space(14f);
             GUILayout.Label("Keyboard shortcuts", GUI.skin.label);
             GUILayout.Label(
@@ -3583,11 +3656,47 @@ namespace HS2SandboxPlugin
 
         // ── Resize ──
 
+        private static float WindowChromeHorizontalPadding()
+        {
+            var w = GUI.skin.window;
+            return w.padding.left + w.padding.right + w.border.left + w.border.right + 8f;
+        }
+
+        private float ComputeContentMinimumWindowWidth()
+        {
+            if (_layoutTier != PoseBrowserLayoutTier.Normal)
+                return LayoutMinWidthFor(_layoutTier);
+
+            float vsb = GUI.skin.verticalScrollbar != null ? GUI.skin.verticalScrollbar.fixedWidth : 15f;
+            if (vsb < 10f) vsb = 18f;
+            float treeGrid = TreePanelWidth + GridPanelChromePad + MinCardSize + PoseCardHorizontalMarginBudget() + vsb;
+            return Mathf.Max(NormalTopBarMinWidth, treeGrid) + WindowChromeHorizontalPadding();
+        }
+
+        private float EffectiveResizeMinWidth()
+        {
+            float baseline = ComputeContentMinimumWindowWidth();
+            if (_contentMinWindowWidth < 1f)
+                _contentMinWindowWidth = baseline;
+            return Mathf.Max(LayoutMinWidth, baseline, _contentMinWindowWidth);
+        }
+
+        private void RefreshContentMinWindowWidthFromLayout(float widthPassedToWindow, float widthAfterWindow)
+        {
+            if (Event.current.type != EventType.Layout)
+                return;
+            if (widthAfterWindow > widthPassedToWindow + 0.5f)
+                _contentMinWindowWidth = Mathf.Max(_contentMinWindowWidth, widthAfterWindow);
+        }
+
+        private void ResetContentMinWindowWidth() => _contentMinWindowWidth = 0f;
+
         private void HandleResize()
         {
             Event e = Event.current;
             if (e == null) return;
 
+            float minW = EffectiveResizeMinWidth();
             var handleRect = new Rect(
                 windowRect.x + windowRect.width - ResizeHandleSize,
                 windowRect.y + windowRect.height - ResizeHandleSize,
@@ -3600,13 +3709,15 @@ namespace HS2SandboxPlugin
             }
             else if (_isResizing && e.type == EventType.MouseDrag)
             {
-                windowRect.width = Mathf.Clamp(e.mousePosition.x - windowRect.x, LayoutMinWidth, LayoutMaxWidth);
+                windowRect.width = Mathf.Clamp(e.mousePosition.x - windowRect.x, minW, LayoutMaxWidth);
                 windowRect.height = Mathf.Clamp(e.mousePosition.y - windowRect.y, LayoutMinHeight, LayoutMaxHeight);
                 e.Use();
             }
             else if (_isResizing && (e.type == EventType.MouseUp || e.rawType == EventType.MouseUp))
             {
                 _isResizing = false;
+                windowRect.width = Mathf.Clamp(windowRect.width, minW, LayoutMaxWidth);
+                windowRect.height = Mathf.Clamp(windowRect.height, LayoutMinHeight, LayoutMaxHeight);
                 CaptureWindowRectForCurrentTier();
                 SavePersistedOptions();
                 e.Use();
@@ -3634,8 +3745,17 @@ namespace HS2SandboxPlugin
                     {
                         PoseBrowserConfig.CardColumnWidth.Value = Mathf.Clamp(data.cardCellSize, MinCardSize, MaxCardSize);
                         PoseBrowserConfig.ItemsPerPage!.Value = Mathf.Max(0, data.itemsPerPage);
+                        float delay = data.autoCaptureDelaySeconds > 0f ? data.autoCaptureDelaySeconds : 2f;
+                        PoseBrowserConfig.AutoCaptureDelaySeconds!.Value = Mathf.Clamp(delay, 0.5f, 30f);
                         SandboxServices.Config.Save();
                     }
+                }
+
+                if (data.optionsVersion >= 5)
+                {
+                    PoseBrowserConfig.Register(SandboxServices.Config);
+                    float delay = data.autoCaptureDelaySeconds > 0f ? data.autoCaptureDelaySeconds : 2f;
+                    PoseBrowserConfig.AutoCaptureDelaySeconds!.Value = Mathf.Clamp(delay, 0.5f, 30f);
                 }
 
                 if (data.optionsVersion >= 1)
@@ -3715,6 +3835,7 @@ namespace HS2SandboxPlugin
                     optionsVersion = PoseBrowserConfig.OptionsJsonVersion,
                     cardCellSize = _cardCellSize,
                     itemsPerPage = _itemsPerPage,
+                    autoCaptureDelaySeconds = PoseBrowserConfig.AutoCaptureDelaySeconds?.Value ?? 2f,
                     poseSortMode = (int)_poseSortMode,
                     sortAscending = _sortAscending,
                     layoutTier = (int)_layoutTier,
@@ -3855,6 +3976,7 @@ namespace HS2SandboxPlugin
         public int optionsVersion;
         public float cardCellSize = 140f;
         public int itemsPerPage;
+        public float autoCaptureDelaySeconds = 2f;
         public int poseSortMode = 3;
         public bool sortAscending = true;
         public int layoutTier;

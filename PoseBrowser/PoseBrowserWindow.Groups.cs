@@ -981,28 +981,27 @@ namespace HS2SandboxPlugin
 
         private void DrawGroupSegmentCell(
             PoseBrowserGroupSegment segment,
-            float cellW,
-            float slotW,
+            float cellInnerW,
+            float columnFootprintW,
             ref int displayIndex)
         {
             int poseCount = segment.Poses.Count;
-            float innerCellW = Mathf.Min(cellW, Mathf.Clamp(slotW - PoseCardHorizontalMarginBudget(), MinCardSize, MaxCardSize));
-            float segmentW = poseCount > 0 ? poseCount * innerCellW : innerCellW;
+            float segmentFootprintW = Mathf.Max(columnFootprintW, poseCount * columnFootprintW);
 
             var cardStyle = IsGroupCardHighlighted(segment.GroupId) ? _groupCardSelectedStyle! : _groupCardStyle!;
-            GUILayout.BeginVertical(cardStyle, GUILayout.Width(segmentW), GUILayout.MaxWidth(segmentW), GUILayout.ExpandWidth(false));
+            GUILayout.BeginVertical(cardStyle, GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW), GUILayout.ExpandWidth(false));
 
             if (segment.ShowHeader)
             {
                 int anchorIdx = displayIndex;
-                var headerRect = GUILayoutUtility.GetRect(segmentW, 22f, GUILayout.Width(segmentW), GUILayout.MaxWidth(segmentW));
+                var headerRect = GUILayoutUtility.GetRect(segmentFootprintW, 22f, GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW));
                 var headerCbRect = new Rect(headerRect.x + 2f, headerRect.y + 2f, 16f, 16f);
                 Event evHdr = Event.current;
                 if (evHdr.type == EventType.Repaint)
                 {
                     bool mixed = IsGroupMemberPoseSelectionPartial(segment.GroupId);
                     bool groupOn = IsGroupHeaderChecked(segment.GroupId);
-                    GUI.Toggle(headerCbRect, groupOn, "");
+                    DrawCheckboxVisual(headerCbRect, groupOn);
                     if (mixed || IsGroupMemberPoseSelectionAny(segment.GroupId))
                     {
                         var prev = GUI.color;
@@ -1028,17 +1027,17 @@ namespace HS2SandboxPlugin
                 {
                     string tagStr = string.Join(" · ", segment.GroupTags);
                     var tagStyle = _tagWrapStyle!;
-                    float tagH = MeasureTagBlockHeight(tagStr, tagStyle, segmentW);
-                    GUILayout.Label(tagStr, tagStyle, GUILayout.Width(segmentW), GUILayout.MaxWidth(segmentW), GUILayout.Height(tagH));
+                    float tagH = MeasureTagBlockHeight(tagStr, tagStyle, segmentFootprintW);
+                    GUILayout.Label(tagStr, tagStyle, GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW), GUILayout.Height(tagH));
                 }
 
                 GUILayout.Space(2f);
             }
 
-            GUILayout.BeginHorizontal(GUILayout.Width(segmentW), GUILayout.MaxWidth(segmentW), GUILayout.ExpandWidth(false));
+            GUILayout.BeginHorizontal(GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW), GUILayout.ExpandWidth(false));
             for (int p = 0; p < segment.Poses.Count; p++)
             {
-                DrawGridCell(segment.Poses[p], displayIndex, innerCellW, _groupInnerCardStyle);
+                DrawGridCell(segment.Poses[p], displayIndex, columnFootprintW, cellInnerW, _groupInnerCardStyle);
                 displayIndex++;
             }
             GUILayout.EndHorizontal();

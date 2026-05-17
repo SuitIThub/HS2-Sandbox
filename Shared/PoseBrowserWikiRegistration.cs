@@ -163,7 +163,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6f);
             GUILayout.Label(
                 "<b>Recent releases:</b> <b>HS2 Sandbox 2.0.0</b> added compact <b>Full / List / Mini</b> layouts, a <b>Sort</b> panel (including <b>Last used</b> timestamps), the <b>★ Favorites</b> library view, docked tag filter/sort windows, BepInEx <b>keyboard shortcuts</b>, and richer persistence in <b>pose_browser_options.json</b>. " +
-                "<b>Pose Browser 3.0.0</b> adds <b>pose groups</b> (grid segments, group tags, v3 ZIP metadata), tri-state tag <b>include/exclude</b> filters, and <b>multi-character apply</b> with male/female priority lists — see the dedicated pages below. v2/v3 ZIP import/export shipped in 2.1+.");
+                "<b>Pose Browser 3.1.0</b> adds <b>auto-capture</b> for batch thumbnails (configurable delay). <b>3.0.0</b> added <b>pose groups</b> (grid segments, group tags, v3 ZIP metadata), tri-state tag <b>include/exclude</b> filters, and <b>multi-character apply</b> — see the dedicated pages below. v2/v3 ZIP import/export shipped in 2.1+.");
 
             GUILayout.Space(8f);
             var tex = WikiBannerTexture();

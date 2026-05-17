@@ -6,13 +6,14 @@ namespace HS2SandboxPlugin
     /// <summary>BepInEx ConfigurationManager entries for Pose Browser (mirrored in the in-game Options panel).</summary>
     internal static class PoseBrowserConfig
     {
-        public const int OptionsJsonVersion = 4;
+        public const int OptionsJsonVersion = 5;
 
         /// <summary>Config section used for <see cref="KeyboardShortcut"/> entries (ConfigurationManager key picker).</summary>
         public const string KeyboardSection = "Pose Browser · Keyboard shortcuts";
 
         public static ConfigEntry<float>? CardColumnWidth;
         public static ConfigEntry<int>? ItemsPerPage;
+        public static ConfigEntry<float>? AutoCaptureDelaySeconds;
         public static ConfigEntry<KeyboardShortcut>? HotkeyNextPose;
         public static ConfigEntry<KeyboardShortcut>? HotkeyPrevPose;
         public static ConfigEntry<KeyboardShortcut>? HotkeyNextBrowse;
@@ -38,6 +39,14 @@ namespace HS2SandboxPlugin
                 new ConfigDescription(
                     "Maximum poses per page in the thumbnail grid; 0 shows all. Editable in Pose Browser → Options.",
                     new AcceptableValueRange<int>(0, 5000)));
+
+            AutoCaptureDelaySeconds = cfg.Bind(
+                "Pose Browser",
+                "Auto-capture delay (seconds)",
+                2f,
+                new ConfigDescription(
+                    "Pause after applying each pose before taking a thumbnail during Auto-capture. Editable in Pose Browser → Options.",
+                    new AcceptableValueRange<float>(0.5f, 30f)));
 
             const string hk =
                 "Active while Pose Browser is open. Uses BepInEx KeyboardShortcut (main key + optional modifiers in Configuration Manager). " +

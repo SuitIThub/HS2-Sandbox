@@ -41,6 +41,7 @@ namespace HS2SandboxPlugin
             _onComplete = onComplete;
             TotalCount = items.Count;
             CurrentIndex = 0;
+            Mode = CaptureMode.Manual;
             IsActive = true;
             IsCapturing = false;
 
@@ -78,21 +79,48 @@ namespace HS2SandboxPlugin
             CurrentItem = _queue[CurrentIndex];
             _onApplyPose?.Invoke(CurrentItem);
 
-            if (Mode == CaptureMode.Auto && _runner != null)
-                _activeCoroutine = _runner.StartCoroutine(AutoCaptureCoroutine());
+            if (Mode == CaptureMode.Auto)
+                ScheduleAutoCapture();
+        }
+
+        private static float ResolveAutoCaptureDelaySeconds()
+        {
+            PoseBrowserConfig.Register(SandboxServices.Config);
+            var entry = PoseBrowserConfig.AutoCaptureDelaySeconds;
+            if (entry == null)
+                return 2f;
+            return Mathf.Clamp(entry.Value, 0.5f, 30f);
+        }
+
+        private void ScheduleAutoCapture()
+        {
+            if (_runner == null) return;
+            if (_activeCoroutine != null)
+                _runner.StopCoroutine(_activeCoroutine);
+            _activeCoroutine = _runner.StartCoroutine(AutoCaptureCoroutine());
         }
 
         private IEnumerator AutoCaptureCoroutine()
         {
             yield return null;
+            yield return new WaitForSeconds(ResolveAutoCaptureDelaySeconds());
             yield return new WaitForEndOfFrame();
-            DoCapture();
+            if (IsActive && Mode == CaptureMode.Auto && !IsCapturing)
+                DoCapture();
         }
 
         public void ConfirmCapture()
         {
             if (!IsActive || IsCapturing) return;
             DoCapture();
+        }
+
+        /// <summary>Capture the current pose, then auto-capture all remaining poses in the queue.</summary>
+        public void StartAutoCaptureChain()
+        {
+            if (!IsActive || IsCapturing) return;
+            Mode = CaptureMode.Auto;
+            ScheduleAutoCapture();
         }
 
         public void SkipCurrent()
@@ -173,7 +201,7 @@ namespace HS2SandboxPlugin
             float labelH = 20f;
             float padV = 7f;
             float panelH = padV + labelH + btnH + padV;
-            float panelW = Mathf.Min(300f, Screen.width - 16f);
+            float panelW = Mathf.Min(Mode == CaptureMode.Manual ? 420f : 300f, Screen.width - 16f);
 
             float panelX = CaptureRect.center.x - panelW * 0.5f;
             panelX = Mathf.Clamp(panelX, 8f, Mathf.Max(8f, Screen.width - panelW - 8f));
@@ -189,7 +217,10 @@ namespace HS2SandboxPlugin
             }
 
             GUILayout.BeginArea(new Rect(panelX, panelY, panelW, panelH), GUI.skin.box);
-            GUILayout.Label($"Capture {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}", GUILayout.Height(labelH));
+            string status = Mode == CaptureMode.Auto
+                ? $"Auto {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}"
+                : $"Capture {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}";
+            GUILayout.Label(status, GUILayout.Height(labelH));
 
             GUILayout.BeginHorizontal();
             if (Mode == CaptureMode.Manual)
@@ -199,6 +230,15 @@ namespace HS2SandboxPlugin
                 GUILayout.Space(btnGap);
                 if (GUILayout.Button("Skip", GUILayout.Height(btnH), GUILayout.Width(72f)))
                     SkipCurrent();
+                GUILayout.Space(btnGap);
+                bool canAuto = CurrentIndex < TotalCount;
+                GUI.enabled = canAuto && !IsCapturing;
+                if (GUILayout.Button(
+                        new GUIContent("Auto-capture", "Capture this pose, then capture all remaining poses automatically"),
+                        GUILayout.Height(btnH),
+                        GUILayout.Width(104f)))
+                    StartAutoCaptureChain();
+                GUI.enabled = true;
                 GUILayout.Space(btnGap);
             }
             if (GUILayout.Button("Cancel", GUILayout.Height(btnH), GUILayout.Width(78f)))
