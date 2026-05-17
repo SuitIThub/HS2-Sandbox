@@ -1,0 +1,238 @@
+# Single entry point for main-branch automation:
+#   - sync versions.json when PluginVersion constants change
+#   - build and publish GitHub releases when versions bump (or on first release / manual force)
+#   - refresh README download links after a release is published
+#
+# Bot-only commits (versions.json / README.md) do not re-trigger this workflow.
+
+name: Main
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "versions.json"
+      - "README.md"
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Create a release even if no PluginVersion was bumped"
+        required: false
+        default: false
+        type: boolean
+      sync_versions:
+        description: "Regenerate versions.json from PluginVersion constants"
+        required: false
+        default: false
+        type: boolean
+      update_readme:
+        description: "Refresh README download links (without releasing)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      versions_changed: ${{ steps.detect.outputs.versions_changed }}
+      should_release: ${{ steps.detect.outputs.should_release }}
+      notes: ${{ steps.detect.outputs.notes }}
+      asset_paths: ${{ steps.detect.outputs.asset_paths }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve comparison refs
+        id: refs
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.event.after }}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            AFTER="$(git rev-parse HEAD)"
+            BEFORE="$(git rev-parse HEAD~1)"
+          elif [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
+            AFTER="$(git rev-parse HEAD)"
+            BEFORE="$(git rev-parse HEAD~1)"
+          fi
+
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER" >> "$GITHUB_OUTPUT"
+
+      - name: Detect PluginVersion bumps
+        id: detect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          FORCE="false"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && \
+             [[ "${{ github.event.inputs.force_release }}" == "true" ]]; then
+            FORCE="true"
+          fi
+          bash .github/scripts/detect_plugin_versions.sh \
+            "${{ steps.refs.outputs.before }}" \
+            "${{ steps.refs.outputs.after }}" \
+            "$FORCE"
+
+  sync-versions:
+    needs: detect
+    if: >-
+      needs.detect.outputs.versions_changed == 'true' ||
+      (github.event_name == 'workflow_dispatch' && inputs.sync_versions == true)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate versions.json
+        run: bash .github/scripts/sync_versions_json.sh
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add versions.json
+          if git diff --cached --quiet; then
+            echo "versions.json already matches source."
+          else
+            git commit -m "chore: sync versions.json from PluginVersion constants"
+            git push
+          fi
+
+  release:
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.set_released.outputs.released }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check existing release for this commit
+        id: existing
+        run: |
+          set -euo pipefail
+          TAG="release-${{ github.sha }}"
+          CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}")
+          if [[ "$CODE" == "200" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip (release tag already exists)
+        if: steps.existing.outputs.exists == 'true'
+        run: echo "Tag release-${{ github.sha }} already has a GitHub release; skipping build."
+
+      - name: Setup .NET
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore and build solution (Release)
+        if: steps.existing.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          dotnet restore HS2-Sandbox.sln
+          dotnet build HS2-Sandbox.sln -c Release --no-incremental
+
+      - name: Stage release files
+        if: steps.existing.outputs.exists != 'true'
+        id: stage
+        run: |
+          set -euo pipefail
+          mkdir -p release-staging
+          IFS=',' read -ra PATHS <<< "${{ needs.detect.outputs.asset_paths }}"
+          for rel in "${PATHS[@]}"; do
+            [[ -z "${rel// }" ]] && continue
+            if [[ ! -f "$rel" ]]; then
+              echo "::error::Expected artifact missing: $rel"
+              exit 1
+            fi
+            cp -a "$rel" "release-staging/$(basename "$rel")"
+          done
+
+      - name: Create GitHub Release (grouped assets)
+        id: publish
+        if: steps.existing.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-${{ github.sha }}
+          name: HS2 Sandbox — grouped release (${{ github.sha }})
+          body: |
+            ${{ needs.detect.outputs.notes }}
+
+            **Commit:** ${{ github.sha }}
+            **Workflow:** ${{ github.run_id }}
+          files: release-staging/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+      - name: Set released output
+        id: set_released
+        if: always()
+        run: |
+          if [[ "${{ steps.existing.outputs.exists }}" == "true" ]]; then
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ steps.publish.outcome }}" == "success" ]]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  update-readme:
+    needs: [detect, release]
+    if: >-
+      always() &&
+      !cancelled() &&
+      (
+        (needs.release.result == 'success' && needs.release.outputs.released == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.update_readme == true)
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Refresh README download links
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          README_PATH: README.md
+        run: python3 .github/scripts/update_readme_downloads.py
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "README.md download links already current."
+          else
+            git commit -m "chore: refresh README module download links"
+            git push
+          fi

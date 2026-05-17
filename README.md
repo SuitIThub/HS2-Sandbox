@@ -1,7 +1,7 @@
 # HS2 Sandbox Plugin
 
 [![License: MIT](https://img.shields.io/github/license/SuitIThub/HS2-Sandbox?style=flat-square)](LICENSE)
-[![Release CI](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/release-plugin.yml/badge.svg?branch=main)](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/release-plugin.yml)
+[![CI](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/main.yml)
 
 [![All-in-one](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=All-in-one&query=%24.allInOne&style=flat-square&color=0366d6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/HS2SandboxPlugin.cs)
 [![CopyScript](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=CopyScript&query=%24.copyScript&style=flat-square&color=2ea043)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/CopyScript/CopyScriptModulePlugin.cs)
@@ -12,7 +12,7 @@
 [![Notebook](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Notebook&query=%24.notebook&style=flat-square&color=8b5cf6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Notebook/NotebookModulePlugin.cs)
 [![Pose Browser](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser&query=%24.poseBrowser&style=flat-square&color=0d9488)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/PoseBrowser/PoseBrowserModulePlugin.cs)
 
-*Version badges read [`versions.json`](versions.json); CI regenerates it when `PluginVersion` constants change. Each module’s **Download …** line links to the newest GitHub Release asset for that DLL (grouped releases may ship different DLLs on different tags); CI refreshes those URLs after successful publish runs (workflow **Update README download links**).*
+*Version badges read [`versions.json`](versions.json); CI regenerates it when `PluginVersion` constants change. Each module’s **Download …** line links to the newest GitHub Release asset for that DLL (grouped releases may ship different DLLs on different tags); CI refreshes those URLs after a successful release in the **Main** workflow.*
 
 BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared sidebar UI, optional automation (CopyScript / Timeline), a **pose library** browser, a simple **notebook**, search bars on manipulate panels, and split **Son** (member) scaling.
 
