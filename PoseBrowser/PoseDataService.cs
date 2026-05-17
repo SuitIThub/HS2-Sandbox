@@ -112,6 +112,53 @@ namespace HS2SandboxPlugin
             }
         }
 
+        /// <summary>Yields between file batches so the index can be built without blocking the main thread.</summary>
+        public IEnumerator LoadPosesRecursiveCoroutine(string rootPath, List<PoseGridItem> target, int filesPerYield = 8)
+        {
+            target.Clear();
+            if (!Directory.Exists(rootPath)) yield break;
+
+            var dirStack = new Stack<DirectoryInfo>();
+            dirStack.Push(new DirectoryInfo(rootPath));
+            int filesThisFrame = 0;
+
+            while (dirStack.Count > 0)
+            {
+                DirectoryInfo dir = dirStack.Pop();
+                FileInfo[] files;
+                DirectoryInfo[] subs;
+                try
+                {
+                    files = dir.GetFiles();
+                    subs = dir.GetDirectories();
+                }
+                catch
+                {
+                    continue;
+                }
+
+                foreach (var file in files)
+                {
+                    var item = TryLoadPoseItem(file);
+                    if (item != null)
+                        target.Add(item);
+                    filesThisFrame++;
+                    if (filesThisFrame >= filesPerYield)
+                    {
+                        filesThisFrame = 0;
+                        yield return null;
+                    }
+                }
+
+                foreach (var sub in subs.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (string.Equals(sub.Name, BackupFolder, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    dirStack.Push(sub);
+                }
+            }
+        }
+
         public static IEnumerable<string> ListSubfoldersRecursive(string rootPath, string backupFolderName)
         {
             if (!Directory.Exists(rootPath)) yield break;

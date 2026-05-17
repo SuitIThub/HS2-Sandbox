@@ -37,7 +37,22 @@ namespace HS2SandboxPlugin
             RootPath = rootPath;
         }
 
+        /// <summary>Rebuild from disk and keep the current folder selected and visible in the tree.</summary>
         public void Refresh()
+        {
+            string? keepPath = SelectedNode?.FullPath;
+            RebuildFromDisk();
+            RestoreSelection(keepPath);
+        }
+
+        /// <summary>Rebuild from disk, then select <paramref name="folderFullPath"/> (null = library root scope).</summary>
+        public void RefreshAndSelect(string? folderFullPath)
+        {
+            RebuildFromDisk();
+            RestoreSelection(folderFullPath);
+        }
+
+        private void RebuildFromDisk()
         {
             RootNodes.Clear();
             if (!Directory.Exists(RootPath)) return;
@@ -50,6 +65,25 @@ namespace HS2SandboxPlugin
                 var node = BuildNode(dir, 0);
                 RootNodes.Add(node);
             }
+        }
+
+        private void RestoreSelection(string? folderFullPath)
+        {
+            if (string.IsNullOrEmpty(folderFullPath))
+            {
+                SelectedNode = null;
+                return;
+            }
+
+            var node = FindNodeByFullPath(folderFullPath);
+            if (node == null)
+            {
+                SelectedNode = null;
+                return;
+            }
+
+            EnsureExpandedToShow(node);
+            SelectNode(node);
         }
 
         private PoseFolderNode BuildNode(DirectoryInfo dirInfo, int depth)

@@ -21,6 +21,7 @@ namespace HS2SandboxPlugin
         public const string PageSearchFilters = "Search & filters";
         public const string PageGridSelection = "Grid & selection";
         public const string PagePoseFiles = "Pose files & actions";
+        public const string PageImportExport = "Import & export (ZIP)";
         public const string PageThumbnails = "Thumbnails";
         public const string PageOptionsData = "Options & data files";
 
@@ -55,6 +56,7 @@ namespace HS2SandboxPlugin
                 InvokeRegister(WikiCategoryRoot, PageSearchFilters, DrawWikiSearchFilters);
                 InvokeRegister(WikiCategoryRoot, PageGridSelection, DrawWikiGridSelection);
                 InvokeRegister(WikiCategoryRoot, PagePoseFiles, DrawWikiPoseFiles);
+                InvokeRegister(WikiCategoryRoot, PageImportExport, DrawWikiImportExport);
                 InvokeRegister(WikiCategoryRoot, PageThumbnails, DrawWikiThumbnails);
                 InvokeRegister(WikiCategoryAdvanced, "Tag storage & migration", DrawWikiTagStorage);
                 InvokeRegister(WikiCategoryRoot, PageOptionsData, DrawWikiOptionsData);
@@ -155,7 +157,11 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<size=18><b>Pose Browser</b></size>");
             GUILayout.Label("<i>Browse, tag, and manage Studio pose files under UserData/studio/pose.</i>");
             GUILayout.Space(6f);
+            GUILayout.Label(
+                "<b>Recent releases:</b> <b>HS2 Sandbox 2.0.0</b> added compact <b>Full / List / Mini</b> layouts, a <b>Sort</b> panel (including <b>Last used</b> timestamps), the <b>★ Favorites</b> library view, docked tag filter/sort windows, BepInEx <b>keyboard shortcuts</b>, and richer persistence in <b>pose_browser_options.json</b>. " +
+                "<b>Pose Browser 2.1.0</b> (split module — same code is also in the all-in-one build) adds v2 <b>pose pack ZIP</b> import/export. See <b>Import & export (ZIP)</b> and <b>Options & data files</b>.");
 
+            GUILayout.Space(8f);
             var tex = WikiBannerTexture();
             if (tex != null && tex.width > 4)
             {
@@ -170,6 +176,7 @@ namespace HS2SandboxPlugin
             NavButton("→ Search & filters", WikiCategoryRoot, PageSearchFilters);
             NavButton("→ Grid & selection", WikiCategoryRoot, PageGridSelection);
             NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
+            NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
             NavButton("→ Thumbnails", WikiCategoryRoot, PageThumbnails);
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
             NavButton("→ Tag storage & migration", WikiCategoryAdvanced, "Tag storage & migration");
@@ -187,15 +194,17 @@ namespace HS2SandboxPlugin
                 "The left pane mirrors folders under <b>UserData/studio/pose</b>. Use <b>↻</b> to rescan the tree after changes outside the browser.");
 
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("<b>All poses</b> — recursive listing from the pose root (every .png/.dat pose in subfolders).");
+            GUILayout.Label("<b>All poses</b> — recursive listing from the pose root (every supported pose in subfolders).");
+            GUILayout.Label("<b>★ Favorites</b> — every favorited pose library-wide (virtual view; <b>Save Pose</b> while this row is active writes into the pose root).");
             GUILayout.Label("<b>Root only</b> — files directly in the pose root, no subfolders.");
             GUILayout.Label("<b>Folder rows</b> — click the name to show only that folder (non-recursive). Use ►/▼ to expand or collapse.");
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Footer actions</b> (under the tree)");
-            GUILayout.Label("• <b>Library root</b>: only <b>New folder…</b> (creates a subfolder under the pose root).");
-            GUILayout.Label("• <b>Selected folder</b>: <b>Rename…</b>, <b>New folder…</b>, <b>Delete folder…</b> (only if the folder is empty).");
+            GUILayout.Label("• <b>Library root</b>: <b>New folder…</b>; in <b>Full</b> layout, <b>Export library tree…</b> saves a v2 branch ZIP of the entire library tree.");
+            GUILayout.Label("• <b>Selected folder</b>: <b>Rename…</b>, <b>New folder…</b>, <b>Delete folder…</b> (only if the folder is empty). In <b>Full</b> layout, <b>Export branch…</b> exports that subtree as a v2 ZIP.");
+            GUILayout.Label("• During <b>Move</b>/<b>Copy</b>/<b>import</b>, <b>Apply</b> / <b>Cancel</b> appear at the <i>top</i> of the footer after you pick a destination.");
 
             GUILayout.Space(8f);
             NavButton("← Overview", WikiCategoryRoot, PageOverview);
@@ -205,14 +214,14 @@ namespace HS2SandboxPlugin
         private static void DrawWikiSearchFilters()
         {
             GUILayout.Label("<size=17><b>Search & filters</b></size>");
-            GUILayout.Label("Filters apply to the <i>current folder view</i> or <i>All poses</i>, then affect the grid and counts.");
+            GUILayout.Label("Filters apply to the <i>current folder view</i>, <i>All poses</i>, or <i>★ Favorites</i>, then affect the grid and counts. Use <b>Sort</b> on the top bar for order (Name, file dates, Last used).");
 
             GUILayout.Space(4f);
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("<b>Search</b> — filters by display name / path. Toggle <b>.*</b> for case-insensitive regex; invalid patterns show an error line under the bar.");
             GUILayout.Label("<b>★</b> — show only poses marked favorite (see Tags / Fav Selected).");
             GUILayout.Label("<b>AND / OR</b> — combines active tag filters: every selected tag must match (AND) or any one (OR).");
-            GUILayout.Label("<b>Tags (n)</b> — opens a side <b>Tag filter</b> window (search, toggles). <b>AND / OR</b> stays on the top bar.");
+            GUILayout.Label("<b>Tags (n)</b> — opens a docked <b>Tag filter</b> window (search, toggles, Clear active filters). <b>AND / OR</b> stays on the top bar.");
             GUILayout.EndVertical();
 
             GUILayout.Space(8f);
@@ -236,6 +245,10 @@ namespace HS2SandboxPlugin
             GUILayout.Label(
                 "<b>Pagination</b> — when <i>max items per page</i> is set in Options, use ◀ ▶ and the page label. Column count grows with window width (see Options).");
 
+            GUILayout.Space(6f);
+            GUILayout.Label(
+                "<b>Import preview</b> — after <b>Import…</b>, cards from the ZIP appear in the grid; thumbnail click toggles whether a pose is checked (checkbox + Ctrl/Shift behave like normal). You are not browsing disk files until you cancel or finish the import.");
+
             GUILayout.Space(8f);
             NavButton("← Search & filters", WikiCategoryRoot, PageSearchFilters);
             NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
@@ -244,14 +257,17 @@ namespace HS2SandboxPlugin
         private static void DrawWikiPoseFiles()
         {
             GUILayout.Label("<size=17><b>Pose files & actions</b></size>");
-            GUILayout.Label("Appears when at least one card is selected.");
+            GUILayout.Label(
+                "<b>Import…</b> is always on the top bar. The <b>selection bar</b> actions below need at least one selected <i>library</i> pose (import preview uses its own bottom-bar hints).");
 
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("<b>Save Pose</b> (top bar) — writes the current character pose into the <i>active save folder</i>: selected folder, or root when using <b>All poses</b>.");
+            GUILayout.Label("<b>Import…</b> (top bar) — read a v2 pose pack <b>.zip</b>; see <b>Import & export (ZIP)</b> for the workflow.");
+            GUILayout.Label("<b>Save Pose</b> (top bar) — writes the current character pose into the <i>active save folder</i>: selected folder, pose root when <b>All poses</b> or <b>★ Favorites</b> is active.");
             GUILayout.Label("<b>Update Pose</b> (one selected) — overwrite file from the scene; choose keeping or regenerating the thumbnail.");
             GUILayout.Label("<b>Rename…</b> — optional rename of file to match display name.");
             GUILayout.Label("<b>Tag Selected</b> — opens the same tag window in <b>assign</b> mode: search, add new tag from search when offered, and ✓ / ☐ / ◪ (mixed) rows to set tags on <i>all</i> selected poses.");
             GUILayout.Label("<b>Fav Selected</b> — toggle favorite flag (★ filter).");
+            GUILayout.Label("<b>Export…</b> — writes selected on-disk poses to a v2 <b>.zip</b> (embedded tags/favorites metadata).");
             GUILayout.Label("<b>Move… / Copy…</b> — pick destination in the <b>Folders</b> tree (<b>Root only</b> or a folder; highlighted), then <b>Apply</b> or <b>Cancel</b> in the folder footer. The grid does not reload while picking, so your selection is preserved. <b>New folder…</b> still works. Tags move with paths when applicable.");
             GUILayout.Label("<b>Delete…</b> — copies into <b>!_AutoBackup</b> then removes files; confirmations are required.");
             GUILayout.EndVertical();
@@ -262,6 +278,36 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Grid & selection", WikiCategoryRoot, PageGridSelection);
+            NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
+        }
+
+        private static void DrawWikiImportExport()
+        {
+            GUILayout.Label("<size=17><b>Import & export (ZIP v2)</b></size>");
+            GUILayout.Label(
+                "Pose Browser exchanges packs as <b>.zip</b> archives with <b>manifest.json</b>, <b>metadata.json</b>, and pose binaries under <b>poses/</b>. The reader only accepts <b>stored</b> (uncompressed) ZIP entries—recompressing with Deflate breaks import.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Import…</b>");
+            GUILayout.Label("1. Choose a pack file. A <b>preview grid</b> replaces the normal listing.");
+            GUILayout.Label("2. Check poses to import (thumbnail toggles; or checkbox with Ctrl/Shift range). <b>Cancel import</b> in the bottom bar abandons the operation.");
+            GUILayout.Label("3. Pick a destination: click <b>Root only</b> or a folder name in <b>Folders</b> so the footer shows <b>Apply</b>/<b>Cancel</b> for the import.");
+            GUILayout.Label("4. <b>Apply</b> writes files. <b>Tree branch</b> packs create one new subfolder (named in the manifest) under the folder you picked.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Export…</b> (selection bar)");
+            GUILayout.Label("Select poses that already live in your library, then export a flat v2 ZIP with tags/favorites preserved in metadata.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Export branch…</b> / <b>Export library tree…</b>");
+            GUILayout.Label("In <b>Full</b> layout, the folder footer offers <b>Export branch…</b> when a folder is selected, and <b>Export library tree…</b> at library root—hierarchical branch packs for sharing whole subtrees.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label(
+                "Modders: full field reference and JSON examples — <b>Modules/PoseBrowser/POSE_ZIP_FORMAT.md</b> in the HS2-Sandbox repository.");
+
+            GUILayout.Space(8f);
+            NavButton("← Pose files & actions", WikiCategoryRoot, PagePoseFiles);
             NavButton("→ Thumbnails", WikiCategoryRoot, PageThumbnails);
         }
 
@@ -275,7 +321,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("Missing thumbnails use a neutral placeholder until a file is loaded or regenerated.");
 
             GUILayout.Space(8f);
-            NavButton("← Pose files & actions", WikiCategoryRoot, PagePoseFiles);
+            NavButton("← Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
         }
 
@@ -288,13 +334,15 @@ namespace HS2SandboxPlugin
             GUILayout.Label("• <b>Card width slider</b> — minimum card width; the grid adds columns or stretches cards to fill the row.");
             GUILayout.Label("• <b>Pagination</b> — 0 = infinite scroll; otherwise cap items per page.");
             GUILayout.Label("• <b>Select all filtered / Deselect all</b> — bulk selection in the current filtered list.");
+            GUILayout.Label("• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target matching Mini/List folder stepping). Active while the browser is focused unless a text field holds keyboard focus.");
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
             string cfg = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox");
             GUILayout.Label($"<b>Config folder</b> <color=#cccc66>{cfg}</color>");
-            GUILayout.Label("• <b>pose_browser_options.json</b> — card width, items per page.");
+            GUILayout.Label("• <b>pose_browser_options.json</b> — layout tier (Full/List/Mini) with remembered window rects per mode, sort mode + direction, card width, items per page.");
             GUILayout.Label("• <b>pose_tags.tsv</b> — primary tag database (atomic save).");
+            GUILayout.Label("• BepInEx <b>Pose Browser</b> section — <b>Card column width</b> and <b>Items per page</b> mirrored from Options.");
 
             GUILayout.Space(8f);
             NavButton("← Thumbnails", WikiCategoryRoot, PageThumbnails);
