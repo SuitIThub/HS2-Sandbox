@@ -25,6 +25,7 @@ namespace HS2SandboxPlugin
 
         private bool _tagWindowForGroup;
         private string? _tagWindowGroupId;
+        private readonly List<string> _tagWindowGroupIds = new List<string>();
         private string? _renameGroupTargetId;
 
         /// <summary>Group entities selected in the grid (independent of pose <see cref="PoseGridItem.IsSelected"/>).</summary>
@@ -92,11 +93,7 @@ namespace HS2SandboxPlugin
             }
 
             if (GUILayout.Button("Group tags…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
-            {
-                _tagWindowForGroup = true;
-                _tagWindowGroupId = group.Id;
-                OpenTagAssignWindow();
-            }
+                OpenGroupTagsForGroupIds(new[] { group.Id });
 
             if (GUILayout.Button("Ungroup", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
                 UngroupEntity(group);
@@ -105,20 +102,108 @@ namespace HS2SandboxPlugin
                 ExportGroupToDisk(group);
 
             if (GUILayout.Button("Move group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
-            {
-                _pendingFolderOp = PendingFolderOperation.MovePoses;
-                _pendingFolderDestPath = SaveTargetFolderPath;
-            }
+                BeginFolderOpForGroupEntities(PendingFolderOperation.MovePoses);
 
             if (GUILayout.Button("Copy group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
-            {
-                _pendingFolderOp = PendingFolderOperation.CopyPoses;
-                _pendingFolderDestPath = SaveTargetFolderPath;
-            }
+                BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses);
 
             DrawMultiCharacterApplyButton(barBtnH, barBtnMinW);
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
+        }
+
+        private void DrawMultiGroupEntityActionBar(float barBtnH, float barBtnMinW)
+        {
+            var groups = GetSelectedGroupEntities();
+            var members = CollectMemberItemsFromSelectedGroups();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"Groups: {groups.Count}", GUILayout.MinWidth(88f), GUILayout.Height(barBtnH));
+            GUILayout.Label($"({members.Count} poses)", GUILayout.Width(72f), GUILayout.Height(barBtnH));
+            GUILayout.Space(8f);
+
+            if (GUILayout.Button("Group tags…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                OpenGroupTagsForSelectedGroupEntities();
+
+            if (GUILayout.Button("Ungroup", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                UngroupSelectedEntities();
+
+            if (GUILayout.Button("Export…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+            {
+                string title = groups.Count == 1
+                    ? $"Export group \"{groups[0].Name}\" (ZIP)"
+                    : $"Export {groups.Count} groups ({members.Count} poses, ZIP)";
+                ExportItemsToDisk(members, title);
+            }
+
+            if (GUILayout.Button("Move to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                BeginFolderOpForGroupEntities(PendingFolderOperation.MovePoses);
+
+            if (GUILayout.Button("Copy to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses);
+
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
+
+        private List<PoseGroup> GetSelectedGroupEntities()
+        {
+            var list = new List<PoseGroup>();
+            foreach (var gid in _selectedGroupIds)
+            {
+                var g = _groupDb.TryGetGroup(gid);
+                if (g != null)
+                    list.Add(g);
+            }
+
+            return list;
+        }
+
+        private List<PoseGridItem> CollectMemberItemsFromSelectedGroups()
+        {
+            var list = new List<PoseGridItem>();
+            var seen = new HashSet<PoseGridItem>();
+            foreach (var gid in _selectedGroupIds)
+            {
+                foreach (var item in GetGroupMemberItems(gid))
+                {
+                    if (seen.Add(item))
+                        list.Add(item);
+                }
+            }
+
+            return list;
+        }
+
+        private void OpenGroupTagsForSelectedGroupEntities()
+        {
+            OpenGroupTagsForGroupIds(_selectedGroupIds);
+        }
+
+        private void OpenGroupTagsForGroupIds(IEnumerable<string> groupIds)
+        {
+            _tagWindowGroupIds.Clear();
+            foreach (var gid in groupIds)
+            {
+                if (_groupDb.TryGetGroup(gid) != null)
+                    _tagWindowGroupIds.Add(gid);
+            }
+
+            if (_tagWindowGroupIds.Count == 0)
+                return;
+
+            _tagWindowForGroup = true;
+            _tagWindowGroupId = _tagWindowGroupIds.Count == 1 ? _tagWindowGroupIds[0] : null;
+            OpenTagAssignWindow();
+        }
+
+        private void UngroupSelectedEntities()
+        {
+            foreach (var gid in _selectedGroupIds.ToList())
+            {
+                var group = _groupDb.TryGetGroup(gid);
+                if (group != null)
+                    UngroupEntity(group);
+            }
         }
 
         private void DrawPoseGroupingActions(IReadOnlyList<PoseGridItem> librarySelected, float barBtnH, float barBtnMinW, bool hideUngroup)
@@ -152,21 +237,7 @@ namespace HS2SandboxPlugin
         private void ExportGroupToDisk(PoseGroup group)
         {
             var members = GetGroupMemberItems(group.Id);
-            if (members.Count == 0) return;
-            foreach (var it in members)
-                _tagDb.ApplyToItem(it);
-
-            string extNoDot = PosePackExchange.ZipExtension.TrimStart('.');
-            string filter =
-                $"HS2 Sandbox pose export (*.zip)\0*.zip\0All files (*.*)\0*.*\0";
-            string? path = NativeFileDialog.SaveFile($"Export group \"{group.Name}\" (ZIP)", extNoDot, filter, _dataService.PoseRootPath);
-            if (string.IsNullOrEmpty(path)) return;
-            if (!path.EndsWith(PosePackExchange.ZipExtension, StringComparison.OrdinalIgnoreCase))
-                path += PosePackExchange.ZipExtension;
-
-            var relToZip = PosePackExchange.MapItemsToFlatZipPaths(_dataService.PoseRootPath, members);
-            var groups = BuildExportGroupsForItems(members, relToZip);
-            PosePackExchange.TryExportPosePack(path, _dataService.PoseRootPath, members, groups);
+            ExportItemsToDisk(members, $"Export group \"{group.Name}\" (ZIP)");
         }
 
         private bool TryGetDisplayGroup(string groupId, out PoseGroup? group)
@@ -236,6 +307,58 @@ namespace HS2SandboxPlugin
         private bool IsGroupEntitySelected(string groupId) => _selectedGroupIds.Contains(groupId);
 
         private void ClearGroupSelection() => _selectedGroupIds.Clear();
+
+        /// <summary>Distinct group ids for poses in the current folder/library scope (<see cref="_allItems"/>).</summary>
+        private HashSet<string> CollectGroupIdsInCurrentFolderView()
+        {
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var it in _allItems)
+            {
+                if (!string.IsNullOrEmpty(it.GroupId))
+                    ids.Add(it.GroupId);
+            }
+
+            return ids;
+        }
+
+        private void SelectAllGroupsInCurrentFolderView()
+        {
+            ClearPoseSelection();
+            ClearGroupSelection();
+
+            if (ImportPreviewActive)
+            {
+                foreach (var gid in _importPreviewGroupsById.Keys)
+                {
+                    foreach (var m in GetGroupMemberItems(gid))
+                        m.IsSelected = true;
+                }
+
+                return;
+            }
+
+            foreach (var gid in CollectGroupIdsInCurrentFolderView())
+            {
+                if (_groupDb.TryGetGroup(gid) != null)
+                    _selectedGroupIds.Add(gid);
+            }
+        }
+
+        private void DeselectAllGroupsInCurrentFolderView()
+        {
+            if (ImportPreviewActive)
+            {
+                foreach (var gid in _importPreviewGroupsById.Keys)
+                {
+                    foreach (var m in GetGroupMemberItems(gid))
+                        m.IsSelected = false;
+                }
+
+                return;
+            }
+
+            ClearGroupSelection();
+        }
 
         private void ClearPoseSelection()
         {
@@ -503,9 +626,25 @@ namespace HS2SandboxPlugin
 
         private bool CanMoveCopyAsWholeGroup(IReadOnlyList<PoseGridItem> librarySelected, out PoseGroup? group)
         {
+            group = null;
+            if (librarySelected.Count == 0 && _selectedGroupIds.Count > 0)
+                return true;
             if (TryGetSingleSelectedGroup(out group) && librarySelected.Count == 0)
                 return true;
             return SelectionIsExactlyOneFullGroup(librarySelected, out group);
+        }
+
+        private void MoveCopyGroupsById(IReadOnlyList<string> groupIds, string destFolder, bool copy)
+        {
+            foreach (var gid in groupIds)
+            {
+                var group = _groupDb.TryGetGroup(gid);
+                if (group == null) continue;
+                if (copy)
+                    CopyGroupToFolder(group, destFolder);
+                else
+                    MoveGroupToFolder(group, destFolder);
+            }
         }
 
         private bool SelectionHasGroupedPose(IReadOnlyList<PoseGridItem> selected)
@@ -675,14 +814,7 @@ namespace HS2SandboxPlugin
 
         private void MoveGroupToFolder(PoseGroup group, string destFolder)
         {
-            var members = new List<PoseGridItem>();
-            foreach (var rel in group.MemberRelativePaths)
-            {
-                var item = _allItems.FirstOrDefault(i =>
-                    string.Equals(i.RelativePath(_dataService.PoseRootPath), rel, StringComparison.OrdinalIgnoreCase));
-                if (item != null) members.Add(item);
-            }
-
+            var members = GetGroupMemberItems(group.Id);
             foreach (var it in members)
             {
                 string oldPath = it.FilePath;
@@ -698,11 +830,8 @@ namespace HS2SandboxPlugin
         private void CopyGroupToFolder(PoseGroup group, string destFolder)
         {
             var copies = new List<PoseGridItem>();
-            foreach (var rel in group.MemberRelativePaths)
+            foreach (var item in GetGroupMemberItems(group.Id))
             {
-                var item = _allItems.FirstOrDefault(i =>
-                    string.Equals(i.RelativePath(_dataService.PoseRootPath), rel, StringComparison.OrdinalIgnoreCase));
-                if (item == null) continue;
                 var copy = _dataService.CopyPoseFileToFolder(item, destFolder, _tagDb);
                 if (copy != null) copies.Add(copy);
             }
@@ -713,6 +842,65 @@ namespace HS2SandboxPlugin
                 foreach (var c in copies)
                     NotifyLibraryCachePoseCopied(c);
             }
+        }
+
+        private void DrawTagWindowAssignMultiGroupBody(string searchNormFold)
+        {
+            var groups = new List<PoseGroup>();
+            foreach (var gid in _tagWindowGroupIds)
+            {
+                var g = _groupDb.TryGetGroup(gid);
+                if (g != null)
+                    groups.Add(g);
+            }
+
+            if (groups.Count == 0)
+            {
+                GUILayout.Label("No groups selected — closing.");
+                CloseTagWindow();
+                return;
+            }
+
+            var hintStyle = new GUIStyle(GUI.skin.label) { wordWrap = true };
+            GUILayout.Label(
+                $"Groups: {groups.Count} — toggling a tag updates every selected group.",
+                hintStyle,
+                GUILayout.Height(36f));
+
+            var union = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var g in groups)
+            {
+                foreach (var t in g.Tags)
+                    union.Add(t);
+            }
+
+            var allTags = _tagDb.GetAllKnownTags().Union(union).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+            var visible = string.IsNullOrEmpty(searchNormFold)
+                ? allTags
+                : allTags.Where(t => t.IndexOf(searchNormFold, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            _tagWindowScroll = GUILayout.BeginScrollView(_tagWindowScroll, GUILayout.ExpandHeight(true));
+            foreach (var tag in visible)
+            {
+                int withTag = groups.Count(g => g.Tags.Contains(tag));
+                bool allOn = withTag == groups.Count;
+                bool mixed = withTag > 0 && !allOn;
+                bool nv = GUILayout.Toggle(allOn, mixed ? $"◪ {tag}" : tag, GUILayout.Height(22f));
+                if (nv == allOn && !mixed)
+                    continue;
+
+                foreach (var g in groups)
+                {
+                    if (nv)
+                        g.Tags.Add(tag);
+                    else
+                        g.Tags.Remove(tag);
+                    _groupDb.SetGroupTags(g.Id, g.Tags);
+                }
+            }
+
+            GUILayout.EndScrollView();
+            ApplyFilters();
         }
 
         private void DrawTagWindowAssignGroupBody(PoseGroup group, string searchNormFold)
@@ -808,28 +996,29 @@ namespace HS2SandboxPlugin
             {
                 int anchorIdx = displayIndex;
                 var headerRect = GUILayoutUtility.GetRect(segmentW, 22f, GUILayout.Width(segmentW), GUILayout.MaxWidth(segmentW));
-                if (Event.current.type == EventType.Repaint)
+                var headerCbRect = new Rect(headerRect.x + 2f, headerRect.y + 2f, 16f, 16f);
+                Event evHdr = Event.current;
+                if (evHdr.type == EventType.Repaint)
                 {
                     bool mixed = IsGroupMemberPoseSelectionPartial(segment.GroupId);
                     bool groupOn = IsGroupHeaderChecked(segment.GroupId);
-                    var cbRect = new Rect(headerRect.x + 2f, headerRect.y + 2f, 16f, 16f);
-                    GUI.Toggle(cbRect, groupOn, "");
+                    GUI.Toggle(headerCbRect, groupOn, "");
                     if (mixed || IsGroupMemberPoseSelectionAny(segment.GroupId))
                     {
                         var prev = GUI.color;
                         GUI.color = new Color(1f, 1f, 1f, 0.85f);
-                        GUI.Label(new Rect(cbRect.x + 3f, cbRect.y + 1f, 12f, 12f), "◪");
+                        GUI.Label(new Rect(headerCbRect.x + 3f, headerCbRect.y + 1f, 12f, 12f), "◪");
                         GUI.color = prev;
                     }
 
                     string prefix = segment.IsContinuation ? "→ " : "";
                     string title = prefix + segment.GroupName;
-                    var titleStyle = _groupTitleStyle!;
-                    GUI.Label(new Rect(cbRect.xMax + 4f, headerRect.y, headerRect.width - cbRect.width - 8f, headerRect.height), title, titleStyle);
+                    GUI.Label(
+                        new Rect(headerCbRect.xMax + 4f, headerRect.y, headerRect.width - headerCbRect.width - 8f, headerRect.height),
+                        title,
+                        _groupTitleStyle!);
                 }
-
-                Event evHdr = Event.current;
-                if (evHdr.type == EventType.MouseDown && evHdr.button == 0 && headerRect.Contains(evHdr.mousePosition))
+                else if (evHdr.type == EventType.MouseDown && evHdr.button == 0 && headerRect.Contains(evHdr.mousePosition))
                 {
                     HandleGroupHeaderClick(segment.GroupId, anchorIdx);
                     evHdr.Use();

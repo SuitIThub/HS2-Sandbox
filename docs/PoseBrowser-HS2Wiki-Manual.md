@@ -24,7 +24,7 @@ The Pose Browser is a Studio utility that:
 
 ### 1.1 Version note
 
-The **all-in-one** plugin’s `PluginVersion` may read **2.0.0** while the **Pose Browser module** reads **3.0.0**; both builds compile the same Pose Browser code path.
+The **all-in-one** plugin’s `PluginVersion` may read **2.0.0** while the **Pose Browser module** reads **3.0.1**; both builds compile the same Pose Browser code path.
 
 It is opened from the Sandbox **left toolbar** (pose icon) when using the full HS2 Sandbox plugin, or the standalone Pose Browser module.
 

@@ -168,6 +168,8 @@ namespace HS2SandboxPlugin
 
         private PendingFolderOperation _pendingFolderOp;
         private string? _pendingFolderDestPath;
+        /// <summary>When move/copy was started from group-entity selection, apply to these groups (not pose checkboxes).</summary>
+        private readonly List<string> _pendingFolderOpGroupIds = new List<string>();
 
         private PosePackExchange.PosePackReadResult? _importReadResult;
         private readonly Dictionary<string, PosePackExchange.PosePackReadEntry> _importEntryById = new Dictionary<string, PosePackExchange.PosePackReadEntry>(StringComparer.Ordinal);
@@ -474,6 +476,7 @@ namespace HS2SandboxPlugin
             _tagWindowPurpose = TagWindowPurpose.None;
             _tagWindowForGroup = false;
             _tagWindowGroupId = null;
+            _tagWindowGroupIds.Clear();
         }
 
         private void OpenTagFilterWindow()
@@ -497,6 +500,7 @@ namespace HS2SandboxPlugin
         {
             _pendingFolderOp = PendingFolderOperation.None;
             _pendingFolderDestPath = null;
+            _pendingFolderOpGroupIds.Clear();
         }
 
         /// <summary>Clears destination pick state without restoring browse (e.g. replacing an in-progress import pack).</summary>
@@ -504,6 +508,23 @@ namespace HS2SandboxPlugin
         {
             _pendingFolderOp = PendingFolderOperation.None;
             _pendingFolderDestPath = null;
+            _pendingFolderOpGroupIds.Clear();
+        }
+
+        private void BeginFolderOpForPoses(PendingFolderOperation op)
+        {
+            _pendingFolderOp = op;
+            _pendingFolderDestPath = SaveTargetFolderPath;
+            _pendingFolderOpGroupIds.Clear();
+        }
+
+        private void BeginFolderOpForGroupEntities(PendingFolderOperation op)
+        {
+            _pendingFolderOp = op;
+            _pendingFolderDestPath = SaveTargetFolderPath;
+            _pendingFolderOpGroupIds.Clear();
+            foreach (var gid in _selectedGroupIds)
+                _pendingFolderOpGroupIds.Add(gid);
         }
 
         private string SaveTargetFolderPath =>
@@ -1239,13 +1260,28 @@ namespace HS2SandboxPlugin
                 DrawTagWindowFilterBody(searchNormFold);
             else if (_tagWindowPurpose == TagWindowPurpose.EditSelection)
             {
-                if (_tagWindowForGroup && !string.IsNullOrEmpty(_tagWindowGroupId))
+                if (_tagWindowForGroup)
                 {
-                    var group = _groupDb.TryGetGroup(_tagWindowGroupId);
-                    if (group == null)
-                        CloseTagWindow();
+                    if (_tagWindowGroupIds.Count > 1)
+                        DrawTagWindowAssignMultiGroupBody(searchNormFold);
                     else
-                        DrawTagWindowAssignGroupBody(group, searchNormFold);
+                    {
+                        string? gid = _tagWindowGroupIds.Count == 1
+                            ? _tagWindowGroupIds[0]
+                            : _tagWindowGroupId;
+                        if (string.IsNullOrEmpty(gid))
+                        {
+                            CloseTagWindow();
+                        }
+                        else
+                        {
+                            var group = _groupDb.TryGetGroup(gid);
+                            if (group == null)
+                                CloseTagWindow();
+                            else
+                                DrawTagWindowAssignGroupBody(group, searchNormFold);
+                        }
+                    }
                 }
                 else
                 {
@@ -1941,6 +1977,11 @@ namespace HS2SandboxPlugin
                 SelectAllInCurrentFolderView();
             if (GUILayout.Button(new GUIContent("None", "Deselect all poses in the current folder / library view"), GUILayout.Width(44f)))
                 DeselectAllInCurrentFolderView();
+            GUILayout.Space(6f);
+            if (GUILayout.Button(new GUIContent("▦ All", "Select all pose groups in the current folder / library view (group headers)"), GUILayout.Width(40f)))
+                SelectAllGroupsInCurrentFolderView();
+            if (GUILayout.Button(new GUIContent("▦ None", "Deselect all pose groups (group header selection)"), GUILayout.Width(52f)))
+                DeselectAllGroupsInCurrentFolderView();
             GUILayout.Label(
                 new GUIContent($"{_allItems.Count} in folder", "Total poses in the current tree scope (before search / tag filters)."),
                 GUILayout.Width(78f));
@@ -2041,48 +2082,51 @@ namespace HS2SandboxPlugin
             Rect thumbRect = GUILayoutUtility.GetRect(innerW, innerW);
             Texture2D tex = item.Thumbnail ?? _placeholderTex!;
 
-            Color prev = GUI.color;
-            if (entry.IsDimmed)
-                GUI.color = new Color(0.55f, 0.55f, 0.55f, 1f);
-            if (Event.current.type == EventType.Repaint)
-                GUI.DrawTexture(thumbRect, tex, ScaleMode.ScaleToFit, false);
-            GUI.color = prev;
-
             const float cbSize = 18f;
             var cbRect = new Rect(thumbRect.xMax - cbSize - 3f, thumbRect.y + 3f, cbSize, cbSize);
-            Event evCb = Event.current;
-            if (evCb.type == EventType.MouseDown && evCb.button == 0 && cbRect.Contains(evCb.mousePosition))
-            {
-                int g = DisplayIndexToGlobal(displayIndex);
-                if (evCb.shift && _lastClickedGlobalIndex >= 0)
-                {
-                    ClearGroupSelection();
-                    int start = Mathf.Min(_lastClickedGlobalIndex, g);
-                    int end = Mathf.Max(_lastClickedGlobalIndex, g);
-                    for (int i = start; i <= end && i < _filteredItems.Count; i++)
-                        _filteredItems[i].IsSelected = true;
-                }
-                else if (evCb.control)
-                {
-                    ClearGroupSelection();
-                    item.IsSelected = !item.IsSelected;
-                    _lastClickedGlobalIndex = g;
-                }
-                else
-                {
-                    ClearGroupSelection();
-                    item.IsSelected = !item.IsSelected;
-                    _lastClickedGlobalIndex = g;
-                }
-                evCb.Use();
-            }
-            GUI.Toggle(cbRect, item.IsSelected, "");
-
             Event ev = Event.current;
-            if (ev.type == EventType.MouseDown && thumbRect.Contains(ev.mousePosition) && !cbRect.Contains(ev.mousePosition))
+            if (ev.type == EventType.Repaint)
             {
-                HandleItemClick(item, displayIndex);
-                ev.Use();
+                Color prev = GUI.color;
+                if (entry.IsDimmed)
+                    GUI.color = new Color(0.55f, 0.55f, 0.55f, 1f);
+                GUI.DrawTexture(thumbRect, tex, ScaleMode.ScaleToFit, false);
+                GUI.color = prev;
+                GUI.Toggle(cbRect, item.IsSelected, "");
+            }
+            else if (ev.type == EventType.MouseDown && ev.button == 0)
+            {
+                if (cbRect.Contains(ev.mousePosition))
+                {
+                    int g = DisplayIndexToGlobal(displayIndex);
+                    if (ev.shift && _lastClickedGlobalIndex >= 0)
+                    {
+                        ClearGroupSelection();
+                        int start = Mathf.Min(_lastClickedGlobalIndex, g);
+                        int end = Mathf.Max(_lastClickedGlobalIndex, g);
+                        for (int i = start; i <= end && i < _filteredItems.Count; i++)
+                            _filteredItems[i].IsSelected = true;
+                    }
+                    else if (ev.control)
+                    {
+                        ClearGroupSelection();
+                        item.IsSelected = !item.IsSelected;
+                        _lastClickedGlobalIndex = g;
+                    }
+                    else
+                    {
+                        ClearGroupSelection();
+                        item.IsSelected = !item.IsSelected;
+                        _lastClickedGlobalIndex = g;
+                    }
+
+                    ev.Use();
+                }
+                else if (thumbRect.Contains(ev.mousePosition))
+                {
+                    HandleItemClick(item, displayIndex);
+                    ev.Use();
+                }
             }
 
             bool favoriteCard = item.IsFavorite && !item.IsSelected;
@@ -2255,12 +2299,18 @@ namespace HS2SandboxPlugin
             const float barBtnMinW = 96f;
             bool oneGroupEntity = TryGetSingleSelectedGroup(out var fullGroup);
             var groupMembers = oneGroupEntity && fullGroup != null ? GetGroupMemberItems(fullGroup.Id) : null;
+            bool multiGroupEntity = _selectedGroupIds.Count > 1;
 
             GUILayout.BeginVertical(GUI.skin.box);
 
             if (oneGroupEntity && fullGroup != null && groupMembers != null)
             {
                 DrawGroupEntityActionBar(fullGroup, groupMembers, barBtnH, barBtnMinW);
+                DrawActionBarSeparator();
+            }
+            else if (multiGroupEntity)
+            {
+                DrawMultiGroupEntityActionBar(barBtnH, barBtnMinW);
                 DrawActionBarSeparator();
             }
 
@@ -2319,16 +2369,10 @@ namespace HS2SandboxPlugin
                     ExportSelectedPosesToDisk();
 
                 if (GUILayout.Button("Move to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                {
-                    _pendingFolderOp = PendingFolderOperation.MovePoses;
-                    _pendingFolderDestPath = SaveTargetFolderPath;
-                }
+                    BeginFolderOpForPoses(PendingFolderOperation.MovePoses);
 
                 if (GUILayout.Button("Copy to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                {
-                    _pendingFolderOp = PendingFolderOperation.CopyPoses;
-                    _pendingFolderDestPath = SaveTargetFolderPath;
-                }
+                    BeginFolderOpForPoses(PendingFolderOperation.CopyPoses);
 
                 GUI.enabled = true;
 
@@ -2585,7 +2629,7 @@ namespace HS2SandboxPlugin
             if ((_pendingFolderOp == PendingFolderOperation.MovePoses || _pendingFolderOp == PendingFolderOperation.CopyPoses))
             {
                 var sel = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
-                if (sel.Count == 0 && !CanMoveCopyAsWholeGroup(sel, out _))
+                if (_pendingFolderOpGroupIds.Count == 0 && sel.Count == 0 && !CanMoveCopyAsWholeGroup(sel, out _))
                 {
                     CancelPendingFolderOperation();
                     return;
@@ -2600,8 +2644,10 @@ namespace HS2SandboxPlugin
                 case PendingFolderOperation.MovePoses:
                 {
                     var sel = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
-                    if (CanMoveCopyAsWholeGroup(sel, out var moveGroup))
-                        MoveGroupToFolder(moveGroup!, dest);
+                    if (_pendingFolderOpGroupIds.Count > 0)
+                        MoveCopyGroupsById(_pendingFolderOpGroupIds, dest, copy: false);
+                    else if (CanMoveCopyAsWholeGroup(sel, out var moveGroup) && moveGroup != null)
+                        MoveGroupToFolder(moveGroup, dest);
                     else
                     {
                         foreach (var it in sel)
@@ -2621,8 +2667,10 @@ namespace HS2SandboxPlugin
                 case PendingFolderOperation.CopyPoses:
                 {
                     var sel = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
-                    if (CanMoveCopyAsWholeGroup(sel, out var copyGroup))
-                        CopyGroupToFolder(copyGroup!, dest);
+                    if (_pendingFolderOpGroupIds.Count > 0)
+                        MoveCopyGroupsById(_pendingFolderOpGroupIds, dest, copy: true);
+                    else if (CanMoveCopyAsWholeGroup(sel, out var copyGroup) && copyGroup != null)
+                        CopyGroupToFolder(copyGroup, dest);
                     else
                     {
                         foreach (var it in sel)
@@ -2812,20 +2860,30 @@ namespace HS2SandboxPlugin
         private void ExportSelectedPosesToDisk()
         {
             var sel = _allItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
-            if (sel.Count == 0)
+            ExportItemsToDisk(sel);
+        }
+
+        private void ExportItemsToDisk(IReadOnlyList<PoseGridItem> items, string? saveDialogTitle = null)
+        {
+            if (items.Count == 0)
                 return;
-            foreach (var it in sel)
+            foreach (var it in items)
                 _tagDb.ApplyToItem(it);
             string extNoDot = PosePackExchange.ZipExtension.TrimStart('.');
             string filter =
                 $"HS2 Sandbox pose export (*.zip)\0*.zip\0All files (*.*)\0*.*\0";
-            string? path = NativeFileDialog.SaveFile("Export poses (ZIP)", extNoDot, filter, _dataService.PoseRootPath);
+            string? path = NativeFileDialog.SaveFile(
+                saveDialogTitle ?? "Export poses (ZIP)",
+                extNoDot,
+                filter,
+                _dataService.PoseRootPath);
             if (string.IsNullOrEmpty(path)) return;
             if (!path.EndsWith(PosePackExchange.ZipExtension, StringComparison.OrdinalIgnoreCase))
                 path += PosePackExchange.ZipExtension;
-            var relToZip = PosePackExchange.MapItemsToFlatZipPaths(_dataService.PoseRootPath, sel);
-            var groups = BuildExportGroupsForItems(sel, relToZip);
-            PosePackExchange.TryExportPosePack(path, _dataService.PoseRootPath, sel, groups);
+            var list = items as List<PoseGridItem> ?? items.ToList();
+            var relToZip = PosePackExchange.MapItemsToFlatZipPaths(_dataService.PoseRootPath, list);
+            var groups = BuildExportGroupsForItems(list, relToZip);
+            PosePackExchange.TryExportPosePack(path, _dataService.PoseRootPath, list, groups);
         }
 
         private void ExportFolderBranchToDisk(PoseFolderNode node)
@@ -3418,7 +3476,7 @@ namespace HS2SandboxPlugin
                 "• <b>Shift+click</b> — range select in the filtered list.\n" +
                 "• <b>Right-click</b> thumbnail — apply pose only (selection unchanged).\n" +
                 "• With pagination (Options), use ◀ ▶; card width slider controls minimum size; extra width fills the row or adds columns.\n" +
-                "• <b>All</b> / <b>None</b> above the grid selects or clears every pose in the current view (folder, <b>All poses</b>, or <b>Favorites</b>) — not affected by search/tag filters.",
+                "• <b>All</b> / <b>None</b> — every pose in the current folder view (not search/tag filtered). <b>▦ All</b> / <b>▦ None</b> — every group header in that scope (import preview: check/uncheck all group members).",
                 rich);
 
             GUILayout.Space(8f);
