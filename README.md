@@ -12,7 +12,7 @@
 [![Notebook](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Notebook&query=%24.notebook&style=flat-square&color=8b5cf6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Notebook/NotebookModulePlugin.cs)
 [![Pose Browser](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser&query=%24.poseBrowser&style=flat-square&color=0d9488)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/PoseBrowser/PoseBrowserModulePlugin.cs)
 
-*Version badges read [`versions.json`](versions.json); CI regenerates it when `PluginVersion` constants change.*
+*Version badges read [`versions.json`](versions.json); CI regenerates it when `PluginVersion` constants change. Each module’s **Download …** line links to the newest GitHub Release asset for that DLL (grouped releases may ship different DLLs on different tags); CI refreshes those URLs after successful publish runs (workflow **Update README download links**).*
 
 BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared sidebar UI, optional automation (CopyScript / Timeline), a **pose library** browser, a simple **notebook**, search bars on manipulate panels, and split **Son** (member) scaling.
 
@@ -94,6 +94,7 @@ Most users already have **HS2API** (KKAPI for HS2) and BepInEx installed. This p
 Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; other mods or configs can reference them.
 
 ### HS2 Sandbox — CopyScript (`HS2Sandbox.CopyScript.dll`)
+[Download CopyScript](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-7b8d4a7644041b03247048c2b11a40ecad637664/HS2Sandbox.CopyScript.dll)
 
 | | |
 |--|--|
@@ -104,6 +105,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Typical issues** | Firewall / wrong URL; API version skew; giving up after the built-in connection timeout (see `CopyScriptWindow` constants). |
 
 ### HS2 Sandbox — Timeline (`HS2Sandbox.Timeline.dll`)
+[Download Timeline](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-7b8d4a7644041b03247048c2b11a40ecad637664/HS2Sandbox.Timeline.dll)
 
 | | |
 |--|--|
@@ -114,6 +116,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Typical issues** | Large/complex timelines and reflection-based Studio hooks can break on game updates; external command targets missing. |
 
 ### HS2 Sandbox — SearchBarManager (`HS2Sandbox.SearchBarManager.dll`)
+[Download SearchBarManager](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-7b8d4a7644041b03247048c2b11a40ecad637664/HS2Sandbox.SearchBarManager.dll)
 
 | | |
 |--|--|
@@ -124,6 +127,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Typical issues** | Game or mod updates rename or move `GameObject` paths → bindings never attach until paths are updated. |
 
 ### HS2 Sandbox — Son scale (`HS2Sandbox.SonScale.dll`)
+[Download Son scale](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-540780726abd2c94d745ff12f54cc72521d6684b/HS2Sandbox.SonScale.dll)
 
 | | |
 |--|--|
@@ -134,6 +138,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Typical issues** | BP fork with renamed types/methods can break reflection/Harmony (check BepInEx log for “BP integration” messages). BP’s own girth/scale UI may stack visually with Son scale if both are used aggressively. UI injection path must still match `SonScaleManipulateUi` constants after game updates. |
 
 ### HS2 Sandbox — Workspace tree lock (`HS2Sandbox.WorkspaceTreeLock.dll`)
+[Download Workspace tree lock](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-745349e6470d993a35181964caccc8839106d6ea/HS2Sandbox.WorkspaceTreeLock.dll)
 
 | | |
 |--|--|
@@ -144,6 +149,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Typical issues** | Illusion changes to the workspace tree implementation could require updated patch targets; pinned rows are only a UI affordance—if Studio’s internal tree model changes, behavior may drift until the mod is updated. |
 
 ### HS2 Sandbox — Notebook (`HS2Sandbox.Notebook.dll`)
+[Download Notebook](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-f316b62761d9722b82c601ae6944dfc71d4650e1/HS2Sandbox.Notebook.dll)
 
 | | |
 |--|--|
@@ -154,6 +160,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Typical issues** | Same as all-in-one notebook: window state and content are local to the plugin instance; duplicate plugins would duplicate the feature—avoid loading **Notebook** together with the all-in-one. |
 
 ### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)
+[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c8d9c62d56857933d1eaf8dbc26300ab29393cf8/HS2Sandbox.PoseBrowser.dll)
 
 | | |
 |--|--|
@@ -166,6 +173,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 ---
 
 ## All-in-one build
+[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c8d9c62d56857933d1eaf8dbc26300ab29393cf8/HS2SandboxPlugin.dll)
 
 | | |
 |--|--|
