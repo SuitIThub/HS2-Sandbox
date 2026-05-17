@@ -160,7 +160,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Typical issues** | Same as all-in-one notebook: window state and content are local to the plugin instance; duplicate plugins would duplicate the feature—avoid loading **Notebook** together with the all-in-one. |
 
 ### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)
-[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c8d9c62d56857933d1eaf8dbc26300ab29393cf8/HS2Sandbox.PoseBrowser.dll)
+[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-b7e1ea5ba7dedf730a1b1b1b3c7cc49449194113/HS2Sandbox.PoseBrowser.dll)
 
 | | |
 |--|--|
@@ -173,7 +173,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 ---
 
 ## All-in-one build
-[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c8d9c62d56857933d1eaf8dbc26300ab29393cf8/HS2SandboxPlugin.dll)
+[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-b7e1ea5ba7dedf730a1b1b1b3c7cc49449194113/HS2SandboxPlugin.dll)
 
 | | |
 |--|--|

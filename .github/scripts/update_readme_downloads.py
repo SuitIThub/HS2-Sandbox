@@ -63,12 +63,17 @@ def _http_json(url: str, token: str) -> object:
         return json.loads(resp.read().decode())
 
 
+def _release_timestamp(rel: dict) -> str:
+    """Sort key: GitHub's list order is not reliably newest-first."""
+    return str(rel.get("published_at") or rel.get("created_at") or "")
+
+
 def fetch_latest_urls_per_dll(repo: str, token: str) -> dict[str, str]:
-    """Newest release first per GitHub API; record first sighting of each DLL basename."""
+    """Pick the asset URL from the newest release that contains each DLL basename."""
     want = {dll for _, dll, _ in SECTIONS}
-    found: dict[str, str] = {}
+    releases: list[dict] = []
     page = 1
-    while page <= 20 and len(found) < len(want):
+    while page <= 20:
         url = f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
         try:
             data = _http_json(url, token)
@@ -77,18 +82,25 @@ def fetch_latest_urls_per_dll(repo: str, token: str) -> dict[str, str]:
             raise
         if not isinstance(data, list) or len(data) == 0:
             break
-        for rel in data:
-            assets = rel.get("assets") or []
-            for a in assets:
-                name = a.get("name")
-                dl = a.get("browser_download_url")
-                if not name or not dl or name not in want:
-                    continue
-                if name not in found:
-                    found[name] = dl
-        if len(found) >= len(want):
+        releases.extend(data)
+        if len(data) < 100:
             break
         page += 1
+
+    releases.sort(key=_release_timestamp, reverse=True)
+
+    found: dict[str, str] = {}
+    for rel in releases:
+        assets = rel.get("assets") or []
+        for a in assets:
+            name = a.get("name")
+            dl = a.get("browser_download_url")
+            if not name or not dl or name not in want:
+                continue
+            if name not in found:
+                found[name] = dl
+        if len(found) >= len(want):
+            break
     return found
 
 
