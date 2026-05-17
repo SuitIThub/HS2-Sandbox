@@ -901,6 +901,26 @@ namespace HS2SandboxPlugin
             return result;
         }
 
+        /// <summary>Returns <paramref name="directoryPath"/> if it does not exist; otherwise a sibling <c>name-01</c>, <c>name-02</c>, …</summary>
+        public static string GetUniqueDirectoryPath(string directoryPath)
+        {
+            directoryPath = Path.GetFullPath(directoryPath);
+            if (!Directory.Exists(directoryPath))
+                return directoryPath;
+            string? parent = Path.GetDirectoryName(directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrEmpty(parent))
+                return directoryPath;
+            string name = Path.GetFileName(directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            int counter = 1;
+            string candidate;
+            do
+            {
+                candidate = Path.Combine(parent, $"{name}-{counter:D2}");
+                counter++;
+            } while (Directory.Exists(candidate));
+            return candidate;
+        }
+
         public Texture2D? LoadThumbnailTexture(PoseGridItem item)
         {
             if (!item.IsPng) return null;

@@ -49,7 +49,7 @@ namespace HS2SandboxPlugin
 
         private static readonly string DefaultTimelineFolder = @"D:\Honey Select\UserData\Timeline";
 
-        private static string GetInitialDir()
+        private static string GetTimelineInitialDir()
         {
             try
             {
@@ -67,8 +67,13 @@ namespace HS2SandboxPlugin
         /// Shows a save file dialog. Returns the chosen path or null if cancelled.
         /// Restores the process current directory after the dialog closes (Windows changes it when navigating).
         /// </summary>
-        public static string? SaveFile(string title, string defaultExt, string filter)
+        /// <param name="initialDirectory">If non-null and the directory exists, the dialog starts here.</param>
+        public static string? SaveFile(string title, string defaultExt, string filter, string? initialDirectory = null)
         {
+            string startDir = initialDirectory ?? "";
+            if (string.IsNullOrEmpty(startDir) || !Directory.Exists(startDir))
+                startDir = GetTimelineInitialDir();
+
             string? cwd = null;
             try
             {
@@ -89,7 +94,7 @@ namespace HS2SandboxPlugin
                     nFilterIndex = 1,
                     lpstrFile = filePtr,
                     nMaxFile = MaxPath + 1,
-                    lpstrInitialDir = GetInitialDir(),
+                    lpstrInitialDir = startDir,
                     lpstrTitle = title ?? "Save",
                     Flags = OfnOverwriteprompt | OfnPathmustexist,
                     lpstrDefExt = defaultExt ?? ""
@@ -132,7 +137,7 @@ namespace HS2SandboxPlugin
         {
             string startDir = initialDirectory ?? "";
             if (string.IsNullOrEmpty(startDir) || !Directory.Exists(startDir))
-                startDir = GetInitialDir();
+                startDir = GetTimelineInitialDir();
 
             string? cwd = null;
             try

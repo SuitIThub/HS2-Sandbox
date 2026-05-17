@@ -34,6 +34,7 @@ BepInEx plugins for **Honey Select 2** that extend **StudioNeoV2** with a shared
 - [Workspace tree lock](#workspace-tree-lock)
 - [Notebook](#notebook)
 - [Pose Browser](#pose-browser)
+- [Pose Browser exchange ZIP (modder docs)](#pose-browser-exchange-zip-modder-docs)
 - [Troubleshooting and known issues](#troubleshooting-and-known-issues)
 - [License](#license)
 - [Contributing](#contributing)
@@ -160,7 +161,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`). GUIDs are stable; o
 | **Declared BepIn dependencies** | None. |
 | **Purpose** | **Pose library** for Studio neo: folder tree for `UserData/studio/pose`, thumbnail grid, search / tags / favorites, save & apply poses for selected characters, move & copy on disk, thumbnails, optional **HS2Wiki** help pages (soft dependency). Same `PoseBrowser/` UI as the all-in-one. |
 | **Runtime needs** | Studio; `pose-icon.png` beside the DLL (or embedded fallback). Config under `BepInEx/config/com.hs2.sandbox/` for options and tag DB. |
-| **Typical issues** | Do not load **with** the all-in-one—you would register a **second** Pose Browser (same split-module rule as CopyScript / Timeline). Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** adds F3 documentation when installed. Longer **in-repo** manual: [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md). |
+| **Typical issues** | Do not load **with** the all-in-one—you would register a **second** Pose Browser (same split-module rule as CopyScript / Timeline). Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** adds F3 documentation when installed. Longer **in-repo** manual: [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md). **Exchange ZIP format (v2) for tool authors:** [`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`](Modules/PoseBrowser/POSE_ZIP_FORMAT.md). |
 
 ---
 
@@ -270,6 +271,10 @@ If BP integration fails at startup, check the BepInEx log for lines starting wit
 - **Split build:** `HS2Sandbox.PoseBrowser.dll` + `pose-icon.png` beside it (see Installation).
 - **All-in-one:** same feature; do not install the Pose Browser module on top of it.
 - Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** registers extended help under **F3**; details in [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md).
+
+### Pose Browser exchange ZIP (modder docs)
+
+Import/export uses a documented **`.zip`** layout (`manifest.json`, `metadata.json`, pose binaries under `poses/`). For **stored-only** ZIP constraints, field-by-field JSON, flat vs tree layouts, and how to hand-assemble packs, see **[`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`](Modules/PoseBrowser/POSE_ZIP_FORMAT.md)**.
 
 ---
 

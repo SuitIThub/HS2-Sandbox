@@ -19,6 +19,8 @@ namespace HS2SandboxPlugin
         public bool IsSelected { get; set; }
         public bool IsFavorite { get; set; }
         public HashSet<string> Tags { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>When non-null, this row is an import preview backed by <see cref="PosePackExchange"/> entry id.</summary>
+        public string? ImportPackEntryId { get; set; }
 
         /// <summary>Path relative to pose root (same boundary rules as <see cref="PoseTagDatabase"/> storage keys).</summary>
         public string RelativePath(string rootPath)

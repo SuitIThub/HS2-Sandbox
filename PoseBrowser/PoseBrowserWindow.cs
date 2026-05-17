@@ -156,9 +156,24 @@ namespace HS2SandboxPlugin
         private string _renamePoseText = "";
         private bool _renamePoseAlsoFile = true;
 
-        private bool _moveCopyPending;
-        private bool _moveCopyIsCopy = true;
-        private string? _moveCopyDestPath;
+        private enum PendingFolderOperation
+        {
+            None,
+            MovePoses,
+            CopyPoses,
+            ImportPosePack,
+            ImportTreePack
+        }
+
+        private PendingFolderOperation _pendingFolderOp;
+        private string? _pendingFolderDestPath;
+
+        private PosePackExchange.PosePackReadResult? _importReadResult;
+        private readonly Dictionary<string, PosePackExchange.PosePackReadEntry> _importEntryById = new Dictionary<string, PosePackExchange.PosePackReadEntry>(StringComparer.Ordinal);
+        private bool _importBrowseSnapshotValid;
+        private bool _snapBrowseFavoritesOnly;
+        private bool _snapViewAllRecursive;
+        private string? _snapSelectedNodeFullPath;
         private string _itemsPerPageEdit = "0";
         private bool _didAutoLoadBrowse;
 
@@ -384,6 +399,23 @@ namespace HS2SandboxPlugin
             _tagWindowScroll = Vector2.zero;
         }
 
+        private bool IsPickingFolderDestination => _pendingFolderOp != PendingFolderOperation.None;
+
+        private bool ImportPreviewActive => _importReadResult != null;
+
+        private void ClearPendingFolderOperation()
+        {
+            _pendingFolderOp = PendingFolderOperation.None;
+            _pendingFolderDestPath = null;
+        }
+
+        /// <summary>Clears destination pick state without restoring browse (e.g. replacing an in-progress import pack).</summary>
+        private void ClearPendingFolderPickOnly()
+        {
+            _pendingFolderOp = PendingFolderOperation.None;
+            _pendingFolderDestPath = null;
+        }
+
         private string SaveTargetFolderPath =>
             _viewAllPosesRecursive || _browseFavoritesOnly
                 ? _folderTree.RootPath
@@ -582,8 +614,19 @@ namespace HS2SandboxPlugin
 
             if (_layoutTier != PoseBrowserLayoutTier.Normal)
             {
-                _moveCopyPending = false;
-                _moveCopyDestPath = null;
+                if (ImportPreviewActive || _pendingFolderOp == PendingFolderOperation.ImportPosePack || _pendingFolderOp == PendingFolderOperation.ImportTreePack)
+                {
+                    ClearPendingFolderOperation();
+                    RestoreImportBrowseSnapshot();
+                }
+                else if (_pendingFolderOp == PendingFolderOperation.MovePoses || _pendingFolderOp == PendingFolderOperation.CopyPoses)
+                {
+                    ClearPendingFolderOperation();
+                    ReloadCurrentView();
+                }
+                else
+                    ClearPendingFolderOperation();
+
                 CloseTagWindow();
                 _showOptionsPane = false;
                 _showHelpPane = false;
@@ -923,6 +966,9 @@ namespace HS2SandboxPlugin
                 _savePoseName = "";
             }
 
+            if (GUILayout.Button("Import…", GUILayout.Width(70f), GUILayout.Height(24f)))
+                PromptImportPoseOrTreePack();
+
             GUILayout.FlexibleSpace();
 
             DrawTopBarVerticalRule(22f);
@@ -1250,9 +1296,9 @@ namespace HS2SandboxPlugin
 
             _treeScroll = GUILayout.BeginScrollView(_treeScroll, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
-            bool allViewSelected = !_moveCopyPending && _viewAllPosesRecursive && !_browseFavoritesOnly;
+            bool allViewSelected = !IsPickingFolderDestination && _viewAllPosesRecursive && !_browseFavoritesOnly;
             var allStyle = allViewSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
-            GUI.enabled = !_moveCopyPending;
+            GUI.enabled = !IsPickingFolderDestination;
             if (GUILayout.Button("All poses", allStyle, GUILayout.Height(22f)))
             {
                 _viewAllPosesRecursive = true;
@@ -1263,9 +1309,9 @@ namespace HS2SandboxPlugin
             }
             GUI.enabled = true;
 
-            bool favSelected = !_moveCopyPending && _browseFavoritesOnly;
+            bool favSelected = !IsPickingFolderDestination && _browseFavoritesOnly;
             var favStyle = favSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
-            GUI.enabled = !_moveCopyPending;
+            GUI.enabled = !IsPickingFolderDestination;
             if (GUILayout.Button("★ Favorites", favStyle, GUILayout.Height(22f)))
             {
                 _browseFavoritesOnly = true;
@@ -1276,15 +1322,15 @@ namespace HS2SandboxPlugin
             }
             GUI.enabled = true;
 
-            bool rootOnlyNormalSelected = !_moveCopyPending && !_viewAllPosesRecursive && !_browseFavoritesOnly && _folderTree.SelectedNode == null;
-            bool rootOnlyMoveDest = _moveCopyPending && !string.IsNullOrEmpty(_moveCopyDestPath) &&
-                Path.GetFullPath(_moveCopyDestPath).Equals(Path.GetFullPath(_folderTree.RootPath), StringComparison.OrdinalIgnoreCase);
+            bool rootOnlyNormalSelected = !IsPickingFolderDestination && !_viewAllPosesRecursive && !_browseFavoritesOnly && _folderTree.SelectedNode == null;
+            bool rootOnlyMoveDest = IsPickingFolderDestination && !string.IsNullOrEmpty(_pendingFolderDestPath) &&
+                Path.GetFullPath(_pendingFolderDestPath).Equals(Path.GetFullPath(_folderTree.RootPath), StringComparison.OrdinalIgnoreCase);
             var rootOnlyStyle = (rootOnlyNormalSelected || rootOnlyMoveDest) ? _treeNodeSelectedStyle! : _treeNodeStyle!;
             if (GUILayout.Button($"📁 Root only", rootOnlyStyle, GUILayout.Height(22f)))
             {
-                if (_moveCopyPending)
+                if (IsPickingFolderDestination)
                 {
-                    _moveCopyDestPath = _folderTree.RootPath;
+                    _pendingFolderDestPath = _folderTree.RootPath;
                     _folderTree.SelectedNode = null;
                     ClearTreeFolderActionUi();
                 }
@@ -1315,15 +1361,15 @@ namespace HS2SandboxPlugin
                     GUILayout.Space(24f);
                 }
 
-                bool normalSel = !_moveCopyPending && !_viewAllPosesRecursive && !_browseFavoritesOnly && _folderTree.SelectedNode == node;
-                bool moveDestSel = _moveCopyPending && !string.IsNullOrEmpty(_moveCopyDestPath) &&
-                    Path.GetFullPath(node.FullPath).Equals(Path.GetFullPath(_moveCopyDestPath), StringComparison.OrdinalIgnoreCase);
+                bool normalSel = !IsPickingFolderDestination && !_viewAllPosesRecursive && !_browseFavoritesOnly && _folderTree.SelectedNode == node;
+                bool moveDestSel = IsPickingFolderDestination && !string.IsNullOrEmpty(_pendingFolderDestPath) &&
+                    Path.GetFullPath(node.FullPath).Equals(Path.GetFullPath(_pendingFolderDestPath), StringComparison.OrdinalIgnoreCase);
                 var style = (normalSel || moveDestSel) ? _treeNodeSelectedStyle! : _treeNodeStyle!;
                 if (GUILayout.Button(node.Name, style, GUILayout.Height(20f), GUILayout.ExpandWidth(true)))
                 {
-                    if (_moveCopyPending)
+                    if (IsPickingFolderDestination)
                     {
-                        _moveCopyDestPath = node.FullPath;
+                        _pendingFolderDestPath = node.FullPath;
                         _folderTree.SelectNode(node);
                         ClearTreeFolderActionUi();
                     }
@@ -1342,7 +1388,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.EndScrollView();
 
-            if (showFolderFooter && ((!_viewAllPosesRecursive && !_browseFavoritesOnly) || _moveCopyPending))
+            if (showFolderFooter && ((!_viewAllPosesRecursive && !_browseFavoritesOnly) || IsPickingFolderDestination))
             {
                 GUILayout.Space(6f);
                 DrawTreeFolderActions();
@@ -1360,22 +1406,42 @@ namespace HS2SandboxPlugin
 
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.ExpandWidth(true));
 
-            if (_moveCopyPending)
+            if (IsPickingFolderDestination)
             {
                 var capStyle = new GUIStyle(GUI.skin.label)
                 {
                     richText = true,
                     wordWrap = true
                 };
-                GUILayout.Label(_moveCopyIsCopy ? "<b>Copy to folder</b>" : "<b>Move to folder</b>", capStyle);
-                string rel = PoseDataService.GetRelativePath(_folderTree.RootPath, _moveCopyDestPath ?? "");
+                switch (_pendingFolderOp)
+                {
+                    case PendingFolderOperation.MovePoses:
+                        GUILayout.Label("<b>Move to folder</b>", capStyle);
+                        break;
+                    case PendingFolderOperation.CopyPoses:
+                        GUILayout.Label("<b>Copy to folder</b>", capStyle);
+                        break;
+                    case PendingFolderOperation.ImportPosePack:
+                        GUILayout.Label("<b>Import poses</b> — checked items in the grid are written into:", capStyle);
+                        break;
+                    case PendingFolderOperation.ImportTreePack:
+                        string branch = string.IsNullOrEmpty(_importReadResult?.TreeRootFolderName)
+                            ? "folder"
+                            : _importReadResult.TreeRootFolderName;
+                        GUILayout.Label(
+                            $"<b>Import tree branch</b> — pack creates subfolder <b>{branch}</b> with checked poses (pick parent below):",
+                            capStyle);
+                        break;
+                }
+
+                string rel = PoseDataService.GetRelativePath(_folderTree.RootPath, _pendingFolderDestPath ?? "");
                 if (string.IsNullOrEmpty(rel)) rel = "(pose root)";
                 GUILayout.Label($"Into: <b>{rel}</b>", capStyle);
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Apply", GUILayout.Height(24f)))
-                    ApplyMoveCopyOperation();
+                    ApplyPendingFolderOperation();
                 if (GUILayout.Button("Cancel", GUILayout.Height(24f)))
-                    CancelMoveCopyOperation();
+                    CancelPendingFolderOperation();
                 GUILayout.EndHorizontal();
                 GUILayout.Space(8f);
             }
@@ -1422,6 +1488,13 @@ namespace HS2SandboxPlugin
 
                 if (!empty && !_showDeleteFolderConfirm)
                     GUILayout.Label("(Delete: empty only)", GUILayout.MinHeight(18f));
+
+                if (!IsPickingFolderDestination && _layoutTier == PoseBrowserLayoutTier.Normal && node != null)
+                {
+                    GUILayout.Space(4f);
+                    if (GUILayout.Button("Export branch…", GUILayout.Height(22f)))
+                        ExportFolderBranchToDisk(node);
+                }
             }
             else
             {
@@ -1431,6 +1504,13 @@ namespace HS2SandboxPlugin
                     _newChildFolderName = "";
                     _showDeleteFolderConfirm = false;
                     _folderActionError = "";
+                }
+
+                if (!IsPickingFolderDestination && _layoutTier == PoseBrowserLayoutTier.Normal)
+                {
+                    GUILayout.Space(4f);
+                    if (GUILayout.Button("Export library tree…", GUILayout.Height(22f)))
+                        ExportLibraryRootTreeToDisk();
                 }
             }
 
@@ -1451,16 +1531,16 @@ namespace HS2SandboxPlugin
                             {
                                 _folderTree.EnsureExpandedToShow(nn);
                                 _folderTree.SelectNode(nn);
-                                if (_moveCopyPending)
-                                    _moveCopyDestPath = created;
+                                if (IsPickingFolderDestination)
+                                    _pendingFolderDestPath = created;
                                 else
                                     LoadFolder(created!);
                             }
                             else
                             {
-                                if (_moveCopyPending && !string.IsNullOrEmpty(created))
-                                    _moveCopyDestPath = created;
-                                else if (!_moveCopyPending)
+                                if (IsPickingFolderDestination && !string.IsNullOrEmpty(created))
+                                    _pendingFolderDestPath = created;
+                                else if (!IsPickingFolderDestination)
                                     ReloadCurrentView();
                             }
                         }
@@ -1496,8 +1576,7 @@ namespace HS2SandboxPlugin
                             _folderTree.Refresh();
                             _folderTree.SelectedNode = null;
                             _folderActionError = "";
-                            _moveCopyPending = false;
-                            _moveCopyDestPath = null;
+                            ClearPendingFolderOperation();
                             LoadFolder(string.IsNullOrEmpty(parent) ? _folderTree.RootPath : parent);
                         }
                         else
@@ -1720,6 +1799,31 @@ namespace HS2SandboxPlugin
             Event e = Event.current;
             int globalIdx = DisplayIndexToGlobal(displayIndex);
 
+            if (ImportPreviewActive)
+            {
+                if (e != null && e.button == 1)
+                    return;
+                if (e != null && e.control)
+                {
+                    item.IsSelected = !item.IsSelected;
+                    _lastClickedGlobalIndex = globalIdx;
+                }
+                else if (e != null && e.shift && _lastClickedGlobalIndex >= 0)
+                {
+                    int start = Mathf.Min(_lastClickedGlobalIndex, globalIdx);
+                    int end = Mathf.Max(_lastClickedGlobalIndex, globalIdx);
+                    for (int i = start; i <= end && i < _filteredItems.Count; i++)
+                        _filteredItems[i].IsSelected = true;
+                }
+                else
+                {
+                    item.IsSelected = !item.IsSelected;
+                    _lastClickedGlobalIndex = globalIdx;
+                }
+
+                return;
+            }
+
             if (e != null && e.button == 1)
             {
                 ApplyPoseToSelectedWithUsage(item);
@@ -1752,18 +1856,35 @@ namespace HS2SandboxPlugin
 
         private void DrawBottomBar()
         {
-            var selected = _filteredItems.Where(i => i.IsSelected).ToList();
-            if (selected.Count == 0)
+            var librarySelected = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
+
+            if (ImportPreviewActive)
+            {
+                int total = _importReadResult?.Entries.Count ?? 0;
+                int check = _filteredItems.Count(i => i.IsSelected && !string.IsNullOrEmpty(i.ImportPackEntryId));
+                GUILayout.BeginVertical(GUI.skin.box);
+                string kind = _pendingFolderOp == PendingFolderOperation.ImportTreePack ? "tree branch" : "pose pack";
+                GUILayout.Label($"Import preview ({kind}): {check} of {total} checked — thumbnail click toggles; use checkbox for range.", GUILayout.Height(36f));
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Cancel import", GUILayout.Width(110f), GUILayout.Height(24f)))
+                    CancelPendingFolderOperation();
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+                GUILayout.Label(
+                    "Pick the destination folder in the Folders panel (↑), then Apply or Cancel there.",
+                    GUILayout.Height(32f));
+                GUILayout.EndVertical();
+                return;
+            }
+
+            if (librarySelected.Count == 0)
             {
                 if (_tagWindowPurpose == TagWindowPurpose.EditSelection)
                     CloseTagWindow();
                 if (_pendingUpdateMode != UpdateMode.None) _pendingUpdateMode = UpdateMode.None;
                 _showDeletePosesConfirm = false;
-                if (_moveCopyPending)
-                {
-                    _moveCopyPending = false;
-                    _moveCopyDestPath = null;
-                }
+                if (_pendingFolderOp == PendingFolderOperation.MovePoses || _pendingFolderOp == PendingFolderOperation.CopyPoses)
+                    ClearPendingFolderOperation();
                 return;
             }
 
@@ -1771,16 +1892,16 @@ namespace HS2SandboxPlugin
 
             GUILayout.BeginHorizontal();
 
-            GUILayout.Label($"Selection: {selected.Count}", GUILayout.Width(92f));
+            GUILayout.Label($"Selection: {librarySelected.Count}", GUILayout.Width(92f));
 
-            if (selected.Count == 1)
+            if (librarySelected.Count == 1)
             {
                 if (GUILayout.Button("Update Pose", GUILayout.Width(100f), GUILayout.Height(24f)))
-                    ShowUpdatePoseOptions(selected[0]);
+                    ShowUpdatePoseOptions(librarySelected[0]);
 
                 if (GUILayout.Button("Rename…", GUILayout.Width(72f), GUILayout.Height(24f)))
                 {
-                    _renamePoseText = selected[0].DisplayName;
+                    _renamePoseText = librarySelected[0].DisplayName;
                     _renamePoseAlsoFile = true;
                     _showRenamePosePopup = true;
                 }
@@ -1791,27 +1912,28 @@ namespace HS2SandboxPlugin
 
             if (GUILayout.Button("Fav Selected", GUILayout.Width(100f), GUILayout.Height(24f)))
             {
-                foreach (var it in selected)
+                foreach (var it in librarySelected)
                     _tagDb.ToggleFavorite(it);
                 ResortPoseItemsInPlace();
                 ApplyFilters();
             }
 
             if (GUILayout.Button("Thumbs…", GUILayout.Width(72f), GUILayout.Height(24f)))
-                StartThumbnailCapture(selected);
+                StartThumbnailCapture(librarySelected);
+
+            if (GUILayout.Button("Export…", GUILayout.Width(68f), GUILayout.Height(24f)))
+                ExportSelectedPosesToDisk();
 
             if (GUILayout.Button("Move…", GUILayout.Width(60f), GUILayout.Height(24f)))
             {
-                _moveCopyIsCopy = false;
-                _moveCopyPending = true;
-                _moveCopyDestPath = SaveTargetFolderPath;
+                _pendingFolderOp = PendingFolderOperation.MovePoses;
+                _pendingFolderDestPath = SaveTargetFolderPath;
             }
 
             if (GUILayout.Button("Copy…", GUILayout.Width(60f), GUILayout.Height(24f)))
             {
-                _moveCopyIsCopy = true;
-                _moveCopyPending = true;
-                _moveCopyDestPath = SaveTargetFolderPath;
+                _pendingFolderOp = PendingFolderOperation.CopyPoses;
+                _pendingFolderDestPath = SaveTargetFolderPath;
             }
 
             if (GUILayout.Button("Delete…", GUILayout.Width(62f), GUILayout.Height(24f)))
@@ -1828,7 +1950,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.EndHorizontal();
 
-            if (_moveCopyPending)
+            if (_pendingFolderOp == PendingFolderOperation.MovePoses || _pendingFolderOp == PendingFolderOperation.CopyPoses)
             {
                 GUILayout.Space(4f);
                 GUILayout.Label(
@@ -1840,17 +1962,17 @@ namespace HS2SandboxPlugin
             {
                 GUILayout.Space(4f);
                 GUILayout.Label(
-                    $"Permanently delete {selected.Count} pose file(s)? Each file is copied to !_AutoBackup first.",
+                    $"Permanently delete {librarySelected.Count} pose file(s)? Each file is copied to !_AutoBackup first.",
                     GUILayout.Height(36f));
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Confirm delete", GUILayout.Height(26f), GUILayout.MinWidth(120f)))
                 {
-                    foreach (var it in selected)
+                    foreach (var it in librarySelected)
                     {
                         if (it.Thumbnail != null)
                             Destroy(it.Thumbnail);
                     }
-                    _dataService.DeletePoseFiles(selected, _tagDb);
+                    _dataService.DeletePoseFiles(librarySelected, _tagDb);
                     _showDeletePosesConfirm = false;
                     ReloadCurrentView();
                 }
@@ -1881,8 +2003,7 @@ namespace HS2SandboxPlugin
                         string oldFull = Path.GetFullPath(target.FullPath);
                         if (_dataService.RenameFolder(oldFull, _renameFolderText, _tagDb, out var newFull))
                         {
-                            _moveCopyPending = false;
-                            _moveCopyDestPath = null;
+                            ClearPendingFolderOperation();
                             _folderTree.Refresh();
                             if (!string.IsNullOrEmpty(newFull))
                             {
@@ -1942,39 +2063,363 @@ namespace HS2SandboxPlugin
 
         }
 
-        private void CancelMoveCopyOperation()
+        private void BeginImportFromDisk(string path)
         {
-            _moveCopyPending = false;
-            _moveCopyDestPath = null;
-            ReloadCurrentView();
-        }
-
-        private void ApplyMoveCopyOperation()
-        {
-            if (!_moveCopyPending || string.IsNullOrEmpty(_moveCopyDestPath))
+            if (_layoutTier != PoseBrowserLayoutTier.Normal)
                 return;
-            var sel = _filteredItems.Where(i => i.IsSelected).ToList();
-            if (sel.Count == 0)
+            if (!PosePackExchange.TryReadPack(path, out var result, out var err) || result == null)
             {
-                CancelMoveCopyOperation();
+                SandboxServices.Log.LogWarning($"PoseBrowser: Could not read pack: {err}");
                 return;
             }
 
-            string dest = _moveCopyDestPath;
-            if (_moveCopyIsCopy)
+            if (ImportPreviewActive)
             {
-                foreach (var it in sel)
-                    _dataService.CopyPoseFileToFolder(it, dest, _tagDb);
+                DestroyImportPreviewThumbnails();
+                _importEntryById.Clear();
+                _importReadResult = null;
+                ClearPendingFolderPickOnly();
+            }
+            else
+                CaptureImportBrowseSnapshot();
+
+            _importReadResult = result;
+            _importEntryById.Clear();
+            foreach (var e in result.Entries)
+                _importEntryById[e.Id] = e;
+            BuildImportPreviewItems(result);
+            _pendingFolderOp = result.IsTreePack ? PendingFolderOperation.ImportTreePack : PendingFolderOperation.ImportPosePack;
+            _pendingFolderDestPath = SaveTargetFolderPath;
+            _folderTree.Refresh();
+            ApplyFilters();
+            _gridScroll = Vector2.zero;
+            _lastClickedGlobalIndex = -1;
+        }
+
+        private void PromptImportPoseOrTreePack()
+        {
+            if (_layoutTier != PoseBrowserLayoutTier.Normal)
+                return;
+            string filter =
+                "ZIP archives (*.zip)\0*.zip\0All files (*.*)\0*.*\0";
+            string? path = NativeFileDialog.OpenFile("Import pose ZIP", filter, _dataService.PoseRootPath);
+            if (string.IsNullOrEmpty(path)) return;
+            BeginImportFromDisk(path);
+        }
+
+        private void RestoreImportBrowseSnapshot()
+        {
+            DestroyImportPreviewThumbnails();
+            _importEntryById.Clear();
+            _importReadResult = null;
+            if (!_importBrowseSnapshotValid)
+            {
+                ReloadCurrentView();
+                return;
+            }
+
+            _importBrowseSnapshotValid = false;
+            _browseFavoritesOnly = _snapBrowseFavoritesOnly;
+            _viewAllPosesRecursive = _snapViewAllRecursive;
+            if (string.IsNullOrEmpty(_snapSelectedNodeFullPath))
+            {
+                _folderTree.SelectedNode = null;
+                if (_browseFavoritesOnly)
+                    LoadFavoritePosesFromTreeRoot();
+                else if (_viewAllPosesRecursive)
+                    LoadAllPosesFromTreeRoot();
+                else
+                    LoadFolder(_folderTree.RootPath);
             }
             else
             {
-                foreach (var it in sel)
-                    _dataService.MovePoseFileToFolder(it, dest, _tagDb);
+                var node = _folderTree.FindNodeByFullPath(_snapSelectedNodeFullPath);
+                if (node != null)
+                {
+                    _folderTree.EnsureExpandedToShow(node);
+                    _folderTree.SelectNode(node);
+                    if (_browseFavoritesOnly)
+                        LoadFavoritePosesFromTreeRoot();
+                    else if (_viewAllPosesRecursive)
+                        LoadAllPosesFromTreeRoot();
+                    else
+                        LoadFolder(node.FullPath);
+                }
+                else
+                    ReloadCurrentView();
+            }
+        }
+
+        private void CancelPendingFolderOperation()
+        {
+            var op = _pendingFolderOp;
+            ClearPendingFolderOperation();
+            if (op == PendingFolderOperation.ImportPosePack || op == PendingFolderOperation.ImportTreePack)
+                RestoreImportBrowseSnapshot();
+            else if (op == PendingFolderOperation.MovePoses || op == PendingFolderOperation.CopyPoses)
+                ReloadCurrentView();
+        }
+
+        private void ApplyPendingFolderOperation()
+        {
+            if (_pendingFolderOp == PendingFolderOperation.None || string.IsNullOrEmpty(_pendingFolderDestPath))
+                return;
+            if ((_pendingFolderOp == PendingFolderOperation.ImportPosePack || _pendingFolderOp == PendingFolderOperation.ImportTreePack)
+                && !_filteredItems.Any(i => i.IsSelected && !string.IsNullOrEmpty(i.ImportPackEntryId)))
+            {
+                SandboxServices.Log.LogMessage("PoseBrowser: No poses checked for import.");
+                return;
             }
 
-            _moveCopyPending = false;
-            _moveCopyDestPath = null;
+            if ((_pendingFolderOp == PendingFolderOperation.MovePoses || _pendingFolderOp == PendingFolderOperation.CopyPoses))
+            {
+                var sel = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
+                if (sel.Count == 0)
+                {
+                    CancelPendingFolderOperation();
+                    return;
+                }
+            }
+
+            string dest = _pendingFolderDestPath;
+            var op = _pendingFolderOp;
+            string? importedTreeBranchRoot = null;
+            switch (op)
+            {
+                case PendingFolderOperation.MovePoses:
+                {
+                    var sel = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
+                    foreach (var it in sel)
+                        _dataService.MovePoseFileToFolder(it, dest, _tagDb);
+                    break;
+                }
+                case PendingFolderOperation.CopyPoses:
+                {
+                    var sel = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
+                    foreach (var it in sel)
+                        _dataService.CopyPoseFileToFolder(it, dest, _tagDb);
+                    break;
+                }
+                case PendingFolderOperation.ImportPosePack:
+                    CommitImportPosePack(dest);
+                    break;
+                case PendingFolderOperation.ImportTreePack:
+                    importedTreeBranchRoot = CommitImportTreePack(dest);
+                    break;
+            }
+
+            if (op == PendingFolderOperation.ImportPosePack || op == PendingFolderOperation.ImportTreePack)
+            {
+                DestroyImportPreviewThumbnails();
+                _importBrowseSnapshotValid = false;
+                _importEntryById.Clear();
+                _importReadResult = null;
+            }
+
+            ClearPendingFolderOperation();
+
+            if (!string.IsNullOrEmpty(importedTreeBranchRoot))
+            {
+                _folderTree.Refresh();
+                var nn = _folderTree.FindNodeByFullPath(importedTreeBranchRoot);
+                if (nn != null)
+                {
+                    _folderTree.EnsureExpandedToShow(nn);
+                    _folderTree.SelectNode(nn);
+                }
+            }
+
             ReloadCurrentView();
+        }
+
+        private void DestroyImportPreviewThumbnails()
+        {
+            foreach (var it in _allItems)
+            {
+                if (!string.IsNullOrEmpty(it.ImportPackEntryId) && it.Thumbnail != null)
+                    Destroy(it.Thumbnail);
+                it.Thumbnail = null;
+            }
+        }
+
+        private void CaptureImportBrowseSnapshot()
+        {
+            _snapBrowseFavoritesOnly = _browseFavoritesOnly;
+            _snapViewAllRecursive = _viewAllPosesRecursive;
+            _snapSelectedNodeFullPath = _folderTree.SelectedNode != null ? _folderTree.SelectedNode.FullPath : null;
+            _importBrowseSnapshotValid = true;
+        }
+
+        private void BuildImportPreviewItems(PosePackExchange.PosePackReadResult result)
+        {
+            StopThumbnailLoading();
+            foreach (var it in _allItems)
+            {
+                if (it.Thumbnail != null)
+                    Destroy(it.Thumbnail);
+            }
+
+            _allItems.Clear();
+            foreach (var e in result.Entries)
+            {
+                var item = new PoseGridItem
+                {
+                    FilePath = "",
+                    DisplayName = e.DisplayName,
+                    IsPng = e.IsPng,
+                    DataPosition = 0,
+                    LastWriteTime = e.LastWriteUtc == DateTime.MinValue ? DateTime.MinValue : e.LastWriteUtc.ToLocalTime(),
+                    CreationTimeUtc = e.CreationUtc,
+                    IsSelected = true,
+                    IsFavorite = e.Favorite,
+                    Tags = new HashSet<string>(e.Tags, StringComparer.OrdinalIgnoreCase),
+                    ImportPackEntryId = e.Id
+                };
+                if (e.IsPng && e.FileBytes.Length > 0)
+                {
+                    try
+                    {
+                        var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+                        if (tex.LoadImage(e.FileBytes))
+                        {
+                            tex.wrapMode = TextureWrapMode.Clamp;
+                            item.Thumbnail = tex;
+                        }
+                        else
+                        {
+                            Destroy(tex);
+                        }
+                    }
+                    catch { /* use placeholder */ }
+                }
+
+                _allItems.Add(item);
+            }
+
+            ResortPoseItemsInPlace();
+        }
+
+        private void CommitImportPosePack(string destFolder)
+        {
+            if (!Directory.Exists(destFolder)) return;
+            foreach (var item in _filteredItems.Where(i => i.IsSelected && !string.IsNullOrEmpty(i.ImportPackEntryId)))
+            {
+                if (!_importEntryById.TryGetValue(item.ImportPackEntryId!, out var e))
+                    continue;
+                string baseName = Path.GetFileName(e.SuggestedFileName);
+                if (string.IsNullOrEmpty(baseName))
+                    baseName = PoseDataService.SanitizeFileName(e.DisplayName) + (e.IsPng ? ".png" : ".dat");
+                string ext = Path.GetExtension(baseName);
+                string stem = PoseDataService.SanitizeFileName(Path.GetFileNameWithoutExtension(baseName));
+                if (string.IsNullOrEmpty(stem)) stem = "pose";
+                if (string.IsNullOrEmpty(ext))
+                    ext = e.IsPng ? ".png" : ".dat";
+                baseName = stem + ext;
+                string outPath = PoseDataService.GetUniqueFilePath(Path.Combine(destFolder, baseName));
+                File.WriteAllBytes(outPath, e.FileBytes);
+                var loaded = _dataService.TryLoadPoseItem(new FileInfo(outPath));
+                if (loaded != null)
+                {
+                    _tagDb.SetTags(loaded, e.Tags);
+                    _tagDb.SetFavorite(loaded, e.Favorite);
+                }
+            }
+        }
+
+        /// <returns>Full path of the created branch root folder, or null if import did not run.</returns>
+        private string? CommitImportTreePack(string parentFolder)
+        {
+            if (_importReadResult == null || !Directory.Exists(parentFolder)) return null;
+            string rootName = PoseDataService.SanitizeFileName(_importReadResult.TreeRootFolderName);
+            if (string.IsNullOrEmpty(rootName))
+                rootName = "folder";
+            string baseRoot = PoseDataService.GetUniqueDirectoryPath(Path.Combine(parentFolder, rootName));
+            Directory.CreateDirectory(baseRoot);
+
+            foreach (var item in _filteredItems.Where(i => i.IsSelected && !string.IsNullOrEmpty(i.ImportPackEntryId)))
+            {
+                if (!_importEntryById.TryGetValue(item.ImportPackEntryId!, out var e))
+                    continue;
+                if (!PosePackExchange.TryValidateTreeRelativePath(e.RelPath, out var norm, out _))
+                    continue;
+                string relFs = norm.Replace('/', Path.DirectorySeparatorChar);
+                string outPath = Path.Combine(baseRoot, relFs);
+                string? subDir = Path.GetDirectoryName(outPath);
+                if (!string.IsNullOrEmpty(subDir))
+                    Directory.CreateDirectory(subDir);
+                outPath = PoseDataService.GetUniqueFilePath(outPath);
+                File.WriteAllBytes(outPath, e.FileBytes);
+                var loaded = _dataService.TryLoadPoseItem(new FileInfo(outPath));
+                if (loaded != null)
+                {
+                    _tagDb.SetTags(loaded, e.Tags);
+                    _tagDb.SetFavorite(loaded, e.Favorite);
+                }
+            }
+
+            return Path.GetFullPath(baseRoot);
+        }
+
+        private void ExportSelectedPosesToDisk()
+        {
+            var sel = _allItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
+            if (sel.Count == 0)
+                return;
+            foreach (var it in sel)
+                _tagDb.ApplyToItem(it);
+            string extNoDot = PosePackExchange.ZipExtension.TrimStart('.');
+            string filter =
+                $"HS2 Sandbox pose export (*.zip)\0*.zip\0All files (*.*)\0*.*\0";
+            string? path = NativeFileDialog.SaveFile("Export poses (ZIP)", extNoDot, filter, _dataService.PoseRootPath);
+            if (string.IsNullOrEmpty(path)) return;
+            if (!path.EndsWith(PosePackExchange.ZipExtension, StringComparison.OrdinalIgnoreCase))
+                path += PosePackExchange.ZipExtension;
+            PosePackExchange.TryExportPosePack(path, _dataService.PoseRootPath, sel);
+        }
+
+        private void ExportFolderBranchToDisk(PoseFolderNode node)
+        {
+            var items = _dataService.LoadPosesRecursive(node.FullPath);
+            if (items.Count == 0)
+            {
+                SandboxServices.Log.LogMessage("PoseBrowser: Nothing to export in this branch (no pose files).");
+                return;
+            }
+
+            foreach (var it in items)
+                _tagDb.ApplyToItem(it);
+            string extNoDot = PosePackExchange.ZipExtension.TrimStart('.');
+            string filter =
+                $"HS2 Sandbox folder export (*.zip)\0*.zip\0All files (*.*)\0*.*\0";
+            string? path = NativeFileDialog.SaveFile("Export folder branch (ZIP)", extNoDot, filter, _dataService.PoseRootPath);
+            if (string.IsNullOrEmpty(path)) return;
+            if (!path.EndsWith(PosePackExchange.ZipExtension, StringComparison.OrdinalIgnoreCase))
+                path += PosePackExchange.ZipExtension;
+            PosePackExchange.TryExportTreePack(path, _dataService.PoseRootPath, node.FullPath, node.Name, items);
+        }
+
+        private void ExportLibraryRootTreeToDisk()
+        {
+            var items = _dataService.LoadPosesRecursive(_folderTree.RootPath);
+            if (items.Count == 0)
+            {
+                SandboxServices.Log.LogMessage("PoseBrowser: Nothing to export in the library (no pose files).");
+                return;
+            }
+
+            foreach (var it in items)
+                _tagDb.ApplyToItem(it);
+            string rootLabel = Path.GetFileName(_folderTree.RootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrEmpty(rootLabel))
+                rootLabel = "pose";
+            string extNoDot = PosePackExchange.ZipExtension.TrimStart('.');
+            string filter =
+                $"HS2 Sandbox library export (*.zip)\0*.zip\0All files (*.*)\0*.*\0";
+            string? path = NativeFileDialog.SaveFile("Export library tree (ZIP)", extNoDot, filter, _dataService.PoseRootPath);
+            if (string.IsNullOrEmpty(path)) return;
+            if (!path.EndsWith(PosePackExchange.ZipExtension, StringComparison.OrdinalIgnoreCase))
+                path += PosePackExchange.ZipExtension;
+            PosePackExchange.TryExportTreePack(path, _dataService.PoseRootPath, _folderTree.RootPath, rootLabel, items);
         }
 
         private void ShowUpdatePoseOptions(PoseGridItem item)
@@ -2088,6 +2533,15 @@ namespace HS2SandboxPlugin
 
         private void ApplyFilters()
         {
+            if (ImportPreviewActive)
+            {
+                _filteredItems = _allItems.ToList();
+                _currentPage = 1;
+                ClampCurrentPage();
+                ClampCompactPoseIndex();
+                return;
+            }
+
             _searchRegexError = "";
             Regex? searchRx = null;
             if (_searchUseRegex && !string.IsNullOrWhiteSpace(_searchText))
