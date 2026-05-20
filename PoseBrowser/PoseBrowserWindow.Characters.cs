@@ -159,7 +159,16 @@ namespace HS2SandboxPlugin
 
         private void ApplyPosesToCharactersMulti()
         {
-            var poses = GetPosesForMultiCharacterApply();
+            ApplyPosesListToSelectedCharacters(GetPosesForMultiCharacterApply());
+        }
+
+        private void ApplyGroupMembersToSelectedCharacters(string groupId)
+        {
+            ApplyPosesListToSelectedCharacters(GetGroupMemberItemsInDisplayOrder(groupId));
+        }
+
+        private void ApplyPosesListToSelectedCharacters(IReadOnlyList<PoseGridItem> poses)
+        {
             foreach (var pose in poses)
                 _tagDb.ApplyToItem(pose);
 

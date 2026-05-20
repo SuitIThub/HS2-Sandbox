@@ -1034,6 +1034,7 @@ namespace HS2SandboxPlugin
                 return;
             int target = delta < 0 ? spanStart - 1 : spanEnd + 1;
             if (target < 0 || target >= _displayEntries.Count) return;
+            _compactSelectedGroupId = null;
             _compactPoseIndex = target;
             ApplyPoseToSelectedWithUsage(_displayEntries[_compactPoseIndex].Item);
         }

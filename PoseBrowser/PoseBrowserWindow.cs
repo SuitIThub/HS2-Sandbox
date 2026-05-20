@@ -72,21 +72,37 @@ namespace HS2SandboxPlugin
 
         private PoseBrowserLayoutTier _layoutTier = PoseBrowserLayoutTier.Normal;
         private int _compactPoseIndex = -1;
+        private string? _compactSelectedGroupId;
         private Vector2 _compactListScroll;
+        private bool _compactListShowTree = true;
 
         // Per–layout-tier main window rect (persisted so switching modes restores size/position).
         private float _savedFullW = 900f, _savedFullH = 620f, _savedFullX = 200f, _savedFullY = 80f;
         private float _savedListW = 520f, _savedListH = 400f, _savedListX = 200f, _savedListY = 80f;
+        private float _savedListNoTreeW = 260f, _savedListNoTreeH = 400f;
         private float _savedMiniW = 280f, _savedMiniH = 240f, _savedMiniX = 200f, _savedMiniY = 80f;
+
+        private const float CompactListMinWidthWithTree = 300f;
+        private const float CompactListMinWidthNoTree = 160f;
+        private const float CompactListDefaultWidthWithTree = 520f;
+        private const float CompactListDefaultWidthNoTree = 260f;
+        private const float CompactListDefaultHeight = 400f;
 
         private static float LayoutMinWidthFor(PoseBrowserLayoutTier tier) => tier switch
         {
             // Matches toolbar + tree/grid column minimum (see ComputeContentMinimumWindowWidth).
             PoseBrowserLayoutTier.Normal => 980f,
-            PoseBrowserLayoutTier.CompactList => 300f,
+            PoseBrowserLayoutTier.CompactList => CompactListMinWidthWithTree,
             PoseBrowserLayoutTier.CompactMini => 200f,
             _ => 980f
         };
+
+        private float EffectiveLayoutMinWidthFor(PoseBrowserLayoutTier tier)
+        {
+            if (tier == PoseBrowserLayoutTier.CompactList)
+                return _compactListShowTree ? CompactListMinWidthWithTree : CompactListMinWidthNoTree;
+            return LayoutMinWidthFor(tier);
+        }
 
         private static float LayoutMaxWidthFor(PoseBrowserLayoutTier tier) =>
             tier == PoseBrowserLayoutTier.CompactMini ? 440f : 1400f;
@@ -102,7 +118,7 @@ namespace HS2SandboxPlugin
         private static float LayoutMaxHeightFor(PoseBrowserLayoutTier tier) =>
             tier == PoseBrowserLayoutTier.CompactMini ? 320f : 1000f;
 
-        private float LayoutMinWidth => LayoutMinWidthFor(_layoutTier);
+        private float LayoutMinWidth => EffectiveLayoutMinWidthFor(_layoutTier);
         private float LayoutMaxWidth => LayoutMaxWidthFor(_layoutTier);
         private float LayoutMinHeight => LayoutMinHeightFor(_layoutTier);
         private float LayoutMaxHeight => LayoutMaxHeightFor(_layoutTier);
@@ -260,7 +276,7 @@ namespace HS2SandboxPlugin
         {
             base.Start();
             windowID = 2020;
-            windowTitle = "Pose Browser";
+            windowTitle = $"Pose Browser v{PoseBrowserVersionInfo.Version}";
             windowRect = new Rect(200f, 80f, 900f, 620f);
 
             string poseRoot = Path.Combine(UserData.Path, "studio", "pose");
@@ -416,11 +432,35 @@ namespace HS2SandboxPlugin
                 }
 
                 if (_showCharacterConfigPane)
-                    DrawDockedPaneWindow(CharacterConfigWindowId, ref _characterConfigWindowRect, DrawCharacterConfigWindowContent, "Pose Browser · Characters", CharacterPaneDefaultWidth);
+                    DrawCharacterConfigDockedPane();
 
                 if (_showSortPane)
                     DrawDockedPaneWindow(SortWindowId, ref _sortWindowRect, DrawSortWindowContent, "Pose Browser · Sort", SortPaneDefaultWidth);
             }
+            else if (_layoutTier == PoseBrowserLayoutTier.CompactList && _showCharacterConfigPane)
+            {
+                SyncCharacterConfigPaneRect();
+                DrawCharacterConfigDockedPane();
+            }
+        }
+
+        private void SyncCharacterConfigPaneRect()
+        {
+            PlaceDockedPane(ref _characterConfigWindowRect, windowRect.xMax + DockedPaneGap, CharacterPaneDefaultWidth);
+            const float margin = 4f;
+            float overflow = _characterConfigWindowRect.xMax - (Screen.width - margin);
+            if (overflow > 0f)
+                ShiftPaneX(ref _characterConfigWindowRect, -overflow);
+        }
+
+        private void DrawCharacterConfigDockedPane()
+        {
+            DrawDockedPaneWindow(
+                CharacterConfigWindowId,
+                ref _characterConfigWindowRect,
+                DrawCharacterConfigWindowContent,
+                "Pose Browser · Characters",
+                CharacterPaneDefaultWidth);
         }
 
         /// <summary>
@@ -731,10 +771,7 @@ namespace HS2SandboxPlugin
                     _savedFullY = windowRect.y;
                     break;
                 case PoseBrowserLayoutTier.CompactList:
-                    _savedListW = windowRect.width;
-                    _savedListH = windowRect.height;
-                    _savedListX = windowRect.x;
-                    _savedListY = windowRect.y;
+                    CaptureCompactListWindowSize();
                     break;
                 case PoseBrowserLayoutTier.CompactMini:
                     _savedMiniW = windowRect.width;
@@ -757,10 +794,7 @@ namespace HS2SandboxPlugin
                     y = _savedFullY;
                     break;
                 case PoseBrowserLayoutTier.CompactList:
-                    w = _savedListW;
-                    h = _savedListH;
-                    x = _savedListX;
-                    y = _savedListY;
+                    GetCompactListSavedSize(out w, out h, out x, out y);
                     break;
                 default:
                     w = _savedMiniW;
@@ -770,14 +804,77 @@ namespace HS2SandboxPlugin
                     break;
             }
 
-            float defW = tier == PoseBrowserLayoutTier.Normal ? 900f : tier == PoseBrowserLayoutTier.CompactList ? 520f : 280f;
-            float defH = tier == PoseBrowserLayoutTier.Normal ? 620f : tier == PoseBrowserLayoutTier.CompactList ? 400f : 240f;
+            float defW = tier switch
+            {
+                PoseBrowserLayoutTier.Normal => 900f,
+                PoseBrowserLayoutTier.CompactList => _compactListShowTree
+                    ? CompactListDefaultWidthWithTree
+                    : CompactListDefaultWidthNoTree,
+                _ => 280f
+            };
+            float defH = tier == PoseBrowserLayoutTier.Normal ? 620f
+                : tier == PoseBrowserLayoutTier.CompactList ? CompactListDefaultHeight
+                : 240f;
             if (w < 50f) w = defW;
             if (h < 50f) h = defH;
 
-            w = Mathf.Clamp(w, LayoutMinWidthFor(tier), LayoutMaxWidthFor(tier));
+            w = Mathf.Clamp(w, EffectiveLayoutMinWidthFor(tier), LayoutMaxWidthFor(tier));
             h = Mathf.Clamp(h, LayoutMinHeightFor(tier), LayoutMaxHeightFor(tier));
             windowRect = new Rect(x, y, w, h);
+        }
+
+        private void CaptureCompactListWindowSize()
+        {
+            _savedListX = windowRect.x;
+            _savedListY = windowRect.y;
+            if (_compactListShowTree)
+            {
+                _savedListW = windowRect.width;
+                _savedListH = windowRect.height;
+            }
+            else
+            {
+                _savedListNoTreeW = windowRect.width;
+                _savedListNoTreeH = windowRect.height;
+            }
+        }
+
+        private void GetCompactListSavedSize(out float w, out float h, out float x, out float y)
+        {
+            x = _savedListX;
+            y = _savedListY;
+            if (_compactListShowTree)
+            {
+                w = _savedListW;
+                h = _savedListH;
+            }
+            else
+            {
+                w = _savedListNoTreeW;
+                h = _savedListNoTreeH;
+            }
+        }
+
+        private void ApplyCompactListWindowSizeFromSaved()
+        {
+            GetCompactListSavedSize(out float w, out float h, out float x, out float y);
+            float defW = _compactListShowTree ? CompactListDefaultWidthWithTree : CompactListDefaultWidthNoTree;
+            if (w < 50f) w = defW;
+            if (h < 50f) h = CompactListDefaultHeight;
+            w = Mathf.Clamp(w, EffectiveLayoutMinWidthFor(PoseBrowserLayoutTier.CompactList), LayoutMaxWidth);
+            h = Mathf.Clamp(h, LayoutMinHeight, LayoutMaxHeight);
+            windowRect = new Rect(x, y, w, h);
+        }
+
+        private void ToggleCompactListTree()
+        {
+            if (_layoutTier != PoseBrowserLayoutTier.CompactList)
+                return;
+
+            CaptureCompactListWindowSize();
+            _compactListShowTree = !_compactListShowTree;
+            ApplyCompactListWindowSizeFromSaved();
+            SavePersistedOptions();
         }
 
         /// <summary>After changing browse target (folder / all / favorites), apply the first filtered pose and sync compact index + grid selection.</summary>
@@ -785,12 +882,12 @@ namespace HS2SandboxPlugin
         {
             if (_filteredItems.Count == 0)
             {
-                _compactPoseIndex = -1;
+                ClearCompactListSelection();
                 return;
             }
 
             var item = _filteredItems[0];
-            _compactPoseIndex = 0;
+            SelectCompactPose(0);
             for (int i = 0; i < _filteredItems.Count; i++)
                 _filteredItems[i].IsSelected = false;
             item.IsSelected = true;
@@ -812,12 +909,13 @@ namespace HS2SandboxPlugin
 
         private void SyncWindowTitleForLayoutTier()
         {
-            windowTitle = _layoutTier switch
+            string layout = _layoutTier switch
             {
                 PoseBrowserLayoutTier.CompactMini => "Pose Browser · Mini",
                 PoseBrowserLayoutTier.CompactList => "Pose Browser · Compact",
                 _ => "Pose Browser"
             };
+            windowTitle = $"{layout} v{PoseBrowserVersionInfo.Version}";
         }
 
         private string LayoutTierShortLabel() => _layoutTier switch
@@ -930,6 +1028,14 @@ namespace HS2SandboxPlugin
             GUILayout.BeginHorizontal(GUILayout.Height(26f));
             if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
                 CycleLayoutTier();
+            if (_layoutTier == PoseBrowserLayoutTier.CompactList)
+            {
+                if (GUILayout.Button(
+                        new GUIContent(_compactListShowTree ? "Tree ▶" : "Tree", "Show or hide the folder tree panel. Window size is remembered separately for each layout."),
+                        GUILayout.Width(52f),
+                        GUILayout.Height(24f)))
+                    ToggleCompactListTree();
+            }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
         }
@@ -975,7 +1081,7 @@ namespace HS2SandboxPlugin
         private void ApplyMiniBrowseTarget(MiniBrowseTarget t)
         {
             ClearTreeFolderActionUi();
-            _compactPoseIndex = 0;
+            ClearCompactListSelection();
             switch (t.Kind)
             {
                 case MiniBrowseKind.RootOnly:
@@ -1009,9 +1115,45 @@ namespace HS2SandboxPlugin
             ApplyMiniBrowseTarget(targets[n]);
         }
 
+        private void SelectCompactPose(int index)
+        {
+            _compactSelectedGroupId = null;
+            _compactPoseIndex = index;
+        }
+
+        private void SelectCompactGroup(string groupId)
+        {
+            _compactSelectedGroupId = groupId;
+            _compactPoseIndex = -1;
+        }
+
+        private void ClearCompactListSelection()
+        {
+            _compactSelectedGroupId = null;
+            _compactPoseIndex = -1;
+        }
+
+        private bool IsCompactGroupSelected(string groupId) =>
+            !string.IsNullOrEmpty(_compactSelectedGroupId) &&
+            string.Equals(_compactSelectedGroupId, groupId, StringComparison.Ordinal);
+
+        private bool CompactSelectedGroupStillInList()
+        {
+            if (string.IsNullOrEmpty(_compactSelectedGroupId))
+                return false;
+            foreach (var e in _displayEntries)
+            {
+                if (e.Item.GroupId == _compactSelectedGroupId)
+                    return true;
+            }
+
+            return false;
+        }
+
         private void AdvanceCompactPose(int delta, bool applyToStudio)
         {
             if (CountDisplayPoses() == 0) return;
+            _compactSelectedGroupId = null;
             ClampCompactPoseIndex();
             if (_compactPoseIndex < 0) _compactPoseIndex = 0;
             _compactPoseIndex = (_compactPoseIndex + delta + _displayEntries.Count) % _displayEntries.Count;
@@ -1023,9 +1165,23 @@ namespace HS2SandboxPlugin
         {
             if (CountDisplayPoses() == 0)
             {
-                _compactPoseIndex = -1;
+                ClearCompactListSelection();
                 return;
             }
+
+            if (!string.IsNullOrEmpty(_compactSelectedGroupId))
+            {
+                if (!CompactSelectedGroupStillInList())
+                {
+                    _compactSelectedGroupId = null;
+                    _compactPoseIndex = 0;
+                }
+                else
+                    _compactPoseIndex = -1;
+
+                return;
+            }
+
             if (_compactPoseIndex < 0 || _compactPoseIndex >= _displayEntries.Count)
                 _compactPoseIndex = 0;
             _compactPoseIndex = Mathf.Clamp(_compactPoseIndex, 0, _displayEntries.Count - 1);
@@ -1048,8 +1204,10 @@ namespace HS2SandboxPlugin
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             DrawCompactLayoutHeader();
+            DrawStudioCharacterSelectionRow();
             GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
-            DrawTreePanel(showFolderFooter: false);
+            if (_compactListShowTree)
+                DrawTreePanel(showFolderFooter: false);
             DrawCompactPoseListPanel();
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
@@ -1090,8 +1248,22 @@ namespace HS2SandboxPlugin
                 int start = i;
                 while (i < _displayEntries.Count && _displayEntries[i].Item.GroupId == gid)
                     i++;
-                GUILayout.BeginVertical(_groupCardStyle!, GUILayout.ExpandWidth(true));
-                GUILayout.Label("▦ " + group.Name, _groupTitleStyle!);
+                bool groupSelected = IsCompactGroupSelected(gid!);
+                var cardStyle = groupSelected ? _groupCardSelectedStyle! : _groupCardStyle!;
+                GUILayout.BeginVertical(cardStyle, GUILayout.ExpandWidth(true));
+                string groupLabel = "▦ " + group.Name;
+                var groupBtnContent = new GUIContent(
+                    groupLabel,
+                    "Apply all poses in this group to selected Studio characters (male/female priority lists in Chars pane).");
+                bool canGroupApply = _dataService.GetSelectedCharacters().Any() && i > start;
+                var groupHeaderStyle = groupSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
+                GUI.enabled = canGroupApply;
+                if (GUILayout.Button(groupBtnContent, groupHeaderStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
+                {
+                    SelectCompactGroup(gid!);
+                    ApplyGroupMembersToSelectedCharacters(gid!);
+                }
+                GUI.enabled = true;
                 for (int j = start; j < i; j++)
                     DrawCompactPoseRow(j);
                 GUILayout.EndVertical();
@@ -1105,14 +1277,14 @@ namespace HS2SandboxPlugin
         {
             var entry = _displayEntries[index];
             var item = entry.Item;
-            bool rowOn = index == _compactPoseIndex;
+            bool rowOn = string.IsNullOrEmpty(_compactSelectedGroupId) && index == _compactPoseIndex;
             var rowStyle = rowOn ? _treeNodeSelectedStyle! : _treeNodeStyle!;
             string label = (item.IsFavorite ? "★ " : "") + item.DisplayName;
             Color prev = GUI.color;
             if (entry.IsDimmed) GUI.color = new Color(0.6f, 0.6f, 0.6f, 1f);
             if (GUILayout.Button(label, rowStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
             {
-                _compactPoseIndex = index;
+                SelectCompactPose(index);
                 ApplyPoseToSelectedWithUsage(item);
             }
             GUI.color = prev;
@@ -3910,7 +4082,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Compact views</b>", rich);
             GUILayout.Label(
                 "<b>View (…)</b> in the top bar (Window section) cycles <b>Full → List → Mini → Full</b>; choice is saved. Each mode remembers its own window size, position, and resize (stored in <b>pose_browser_options.json</b>).\n" +
-                "• <b>List</b> — folder tree + scrollable list of <b>filtered</b> poses (names only; no thumbnails, tags, search bar, or bottom selection bar). <b>Prev / Next</b> applies in list order and wraps. Click a row to apply.\n" +
+                "• <b>List</b> — optional folder tree (<b>Tree</b> toggle; separate saved window width with tree shown vs hidden, same position). Character row (<b>Chars</b> + Studio selection), scrollable list of <b>filtered</b> poses. <b>Prev / Next</b> applies in list order and wraps. Click a row for one pose; click a <b>▦ group</b> header for multi-character group apply.\n" +
                 "• <b>Mini</b> — <b>Folder</b> arrows walk <b>Root only</b>, every subfolder in depth-first order, <b>All poses</b>, then <b>Favorites</b>, wrapping; the <b>first filtered pose</b> in the new scope is applied immediately. <b>Pose</b> arrows walk the filtered list, apply each step, and wrap. <b>Reapply</b> repeats the current pose.",
                 rich);
 
@@ -4071,7 +4243,7 @@ namespace HS2SandboxPlugin
         private float ComputeContentMinimumWindowWidth()
         {
             if (_layoutTier != PoseBrowserLayoutTier.Normal)
-                return LayoutMinWidthFor(_layoutTier);
+                return EffectiveLayoutMinWidthFor(_layoutTier);
 
             float treeGrid = TreePanelWidth + GridPanelChromePad + MinCardSize + PoseCardHorizontalMarginBudget() + VerticalScrollbarWidth();
             return Mathf.Max(NormalTopBarMinWidth, treeGrid) + WindowChromeHorizontalPadding();
@@ -4199,6 +4371,25 @@ namespace HS2SandboxPlugin
                     }
                 }
 
+                if (data.optionsVersion >= 6)
+                    _compactListShowTree = data.compactListShowTree;
+
+                if (data.optionsVersion >= 7)
+                {
+                    if (data.listNoTreeWindowW > 10f)
+                    {
+                        _savedListNoTreeW = data.listNoTreeWindowW;
+                        _savedListNoTreeH = data.listNoTreeWindowH;
+                    }
+                }
+                else if (_savedListW > 10f)
+                {
+                    _savedListNoTreeW = Mathf.Max(
+                        CompactListMinWidthNoTree,
+                        _savedListW - TreePanelWidth - GridPanelChromePad);
+                    _savedListNoTreeH = _savedListH > 10f ? _savedListH : CompactListDefaultHeight;
+                }
+
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
                 SyncWindowTitleForLayoutTier();
@@ -4236,10 +4427,13 @@ namespace HS2SandboxPlugin
                     listWindowH = _savedListH,
                     listWindowX = _savedListX,
                     listWindowY = _savedListY,
+                    listNoTreeWindowW = _savedListNoTreeW,
+                    listNoTreeWindowH = _savedListNoTreeH,
                     miniWindowW = _savedMiniW,
                     miniWindowH = _savedMiniH,
                     miniWindowX = _savedMiniX,
-                    miniWindowY = _savedMiniY
+                    miniWindowY = _savedMiniY,
+                    compactListShowTree = _compactListShowTree
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -4327,7 +4521,7 @@ namespace HS2SandboxPlugin
             }
 
             idx = (idx + delta + _filteredItems.Count) % _filteredItems.Count;
-            _compactPoseIndex = idx;
+            SelectCompactPose(idx);
             var item = _filteredItems[idx];
             ApplyPoseToSelectedWithUsage(item);
             ClearGroupSelection();
@@ -4371,6 +4565,8 @@ namespace HS2SandboxPlugin
         public int layoutTier;
         public float fullWindowW, fullWindowH, fullWindowX, fullWindowY;
         public float listWindowW, listWindowH, listWindowX, listWindowY;
+        public float listNoTreeWindowW, listNoTreeWindowH;
         public float miniWindowW, miniWindowH, miniWindowX, miniWindowY;
+        public bool compactListShowTree = true;
     }
 }
