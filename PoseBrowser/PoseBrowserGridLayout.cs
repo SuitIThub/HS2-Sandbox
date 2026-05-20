@@ -87,7 +87,8 @@ namespace HS2SandboxPlugin
             HashSet<string> includeTagFilters,
             HashSet<string> excludeTagFilters,
             bool tagFilterAndMode,
-            bool showFavoritesOnly)
+            bool showFavoritesOnly,
+            bool excludeGroupedPosesFromResults = false)
         {
             searchRegexError = "";
             var groupVisible = new Dictionary<string, bool>(StringComparer.Ordinal);
@@ -108,7 +109,11 @@ namespace HS2SandboxPlugin
 
             var poseContentMatch = new Dictionary<PoseGridItem, bool>(ReferenceEqualityComparer.Instance);
             foreach (var item in allItems)
-                poseContentMatch[item] = PosePassesContentFilters(item, searchText, searchRx, includeTagFilters, tagFilterAndMode, showFavoritesOnly);
+            {
+                var effectiveTags = CollectEffectiveFilterTags(item, groupById);
+                poseContentMatch[item] = PosePassesContentFilters(
+                    item, searchText, searchRx, effectiveTags, includeTagFilters, tagFilterAndMode, showFavoritesOnly);
+            }
 
             foreach (var group in groupById.Values)
                 groupVisible[group.Id] = GroupMetadataPassesFilters(group, searchText, searchRx, includeTagFilters, excludeTagFilters, tagFilterAndMode);
@@ -142,6 +147,8 @@ namespace HS2SandboxPlugin
                 string? gid = item.GroupId;
                 if (!string.IsNullOrEmpty(gid) && groupById.ContainsKey(gid))
                 {
+                    if (excludeGroupedPosesFromResults)
+                        continue;
                     if (!groupVisible.TryGetValue(gid, out bool vis) || !vis) continue;
                     if (included.Contains(item)) continue;
                     var group = groupById[gid];
@@ -164,12 +171,14 @@ namespace HS2SandboxPlugin
                     {
                         if (included.Contains(member)) continue;
                         included.Add(member);
+                        var memberTags = CollectEffectiveFilterTags(member, groupById);
                         bool dimmed = !poseContentMatch[member] ||
-                            HasAnyExcludedTag(member.Tags, excludeTagFilters);
+                            HasAnyExcludedTag(memberTags, excludeTagFilters);
                         result.Add(new PoseBrowserDisplayEntry(member, dimmed));
                     }
                 }
-                else if (poseContentMatch[item] && !HasAnyExcludedTag(item.Tags, excludeTagFilters))
+                else if (poseContentMatch[item] &&
+                         !HasAnyExcludedTag(CollectEffectiveFilterTags(item, groupById), excludeTagFilters))
                 {
                     if (included.Contains(item)) continue;
                     included.Add(item);
@@ -459,10 +468,26 @@ namespace HS2SandboxPlugin
             return false;
         }
 
+        private static HashSet<string> CollectEffectiveFilterTags(
+            PoseGridItem item,
+            IReadOnlyDictionary<string, PoseGroup> groupById)
+        {
+            var tags = new HashSet<string>(item.Tags, StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(item.GroupId) &&
+                groupById.TryGetValue(item.GroupId, out var group))
+            {
+                foreach (var t in group.Tags)
+                    tags.Add(t);
+            }
+
+            return tags;
+        }
+
         private static bool PosePassesContentFilters(
             PoseGridItem item,
             string searchText,
             Regex? searchRx,
+            HashSet<string> effectiveTags,
             HashSet<string> includeTagFilters,
             bool tagFilterAndMode,
             bool showFavoritesOnly)
@@ -494,10 +519,10 @@ namespace HS2SandboxPlugin
             {
                 if (tagFilterAndMode)
                 {
-                    if (!includeTagFilters.All(t => item.Tags.Contains(t)))
+                    if (!includeTagFilters.All(t => effectiveTags.Contains(t)))
                         return false;
                 }
-                else if (!includeTagFilters.Any(t => item.Tags.Contains(t)))
+                else if (!includeTagFilters.Any(t => effectiveTags.Contains(t)))
                 {
                     return false;
                 }

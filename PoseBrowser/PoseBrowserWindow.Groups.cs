@@ -337,14 +337,16 @@ namespace HS2SandboxPlugin
             return ids;
         }
 
-        private void SelectAllGroupsInCurrentFolderView()
+        private void SelectAllGroupEntitiesInView()
         {
             ClearPoseSelection();
+            foreach (var it in _allItems)
+                it.IsSelected = false;
             ClearGroupSelection();
 
             if (ImportPreviewActive)
             {
-                foreach (var gid in _importPreviewGroupsById.Keys)
+                foreach (var gid in CollectVisibleGroupIdsInDisplay())
                 {
                     foreach (var m in GetGroupMemberItems(gid))
                         m.IsSelected = true;
@@ -353,7 +355,7 @@ namespace HS2SandboxPlugin
                 return;
             }
 
-            foreach (var gid in CollectGroupIdsInCurrentFolderView())
+            foreach (var gid in CollectVisibleGroupIdsInDisplay())
             {
                 if (_groupDb.TryGetGroup(gid) != null)
                     _selectedGroupIds.Add(gid);
@@ -384,8 +386,98 @@ namespace HS2SandboxPlugin
 
         private void ClearAllSelection()
         {
-            ClearPoseSelection();
+            foreach (var it in _allItems)
+                it.IsSelected = false;
             ClearGroupSelection();
+        }
+
+        private HashSet<string> CollectVisibleGroupIdsInDisplay()
+        {
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var e in _displayEntries)
+            {
+                if (!string.IsNullOrEmpty(e.Item.GroupId))
+                    ids.Add(e.Item.GroupId);
+            }
+
+            return ids;
+        }
+
+        private void SelectAllStandalonePosesInView()
+        {
+            ClearGroupSelection();
+            foreach (var it in _allItems)
+                it.IsSelected = false;
+            foreach (var e in _displayEntries)
+            {
+                if (e.IsDimmed || !string.IsNullOrEmpty(e.Item.GroupId))
+                    continue;
+                e.Item.IsSelected = true;
+            }
+        }
+
+        private void SelectAllGroupedPosesInView()
+        {
+            ClearGroupSelection();
+            foreach (var it in _allItems)
+                it.IsSelected = false;
+            foreach (var e in _displayEntries)
+            {
+                if (e.IsDimmed || string.IsNullOrEmpty(e.Item.GroupId))
+                    continue;
+                e.Item.IsSelected = true;
+            }
+        }
+
+        private bool HasGroupEntitySelection() => _selectedGroupIds.Count > 0;
+
+        private bool HasPoseCheckboxSelection()
+        {
+            foreach (var it in _allItems)
+            {
+                if (it.IsSelected)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private bool CanInvertSelection() =>
+            HasGroupEntitySelection() || HasPoseCheckboxSelection();
+
+        private void InvertSelectionInView()
+        {
+            if (HasGroupEntitySelection())
+            {
+                InvertGroupEntitySelectionInView();
+                return;
+            }
+
+            if (HasPoseCheckboxSelection())
+                InvertPoseCheckboxSelectionInView();
+        }
+
+        private void InvertGroupEntitySelectionInView()
+        {
+            foreach (var gid in CollectVisibleGroupIdsInDisplay())
+            {
+                if (_groupDb.TryGetGroup(gid) == null)
+                    continue;
+                if (_selectedGroupIds.Contains(gid))
+                    _selectedGroupIds.Remove(gid);
+                else
+                    _selectedGroupIds.Add(gid);
+            }
+        }
+
+        private void InvertPoseCheckboxSelectionInView()
+        {
+            foreach (var e in _displayEntries)
+            {
+                if (e.IsDimmed)
+                    continue;
+                e.Item.IsSelected = !e.Item.IsSelected;
+            }
         }
 
         private bool TryGetSingleSelectedGroup(out PoseGroup? group)
@@ -516,7 +608,8 @@ namespace HS2SandboxPlugin
                 _tagFiltersInclude,
                 _tagFiltersExclude,
                 _tagFilterAndMode,
-                _showFavoritesOnly);
+                _showFavoritesOnly,
+                _tagFilterExcludeGroups);
             PoseBrowserGridLayout.SortDisplayEntries(_displayEntries, _groupDb, _poseSortMode, _sortAscending);
             SyncFilteredItemsFromDisplay();
             PruneSelectedGroups();

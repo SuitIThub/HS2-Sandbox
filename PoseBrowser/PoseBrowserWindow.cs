@@ -171,6 +171,7 @@ namespace HS2SandboxPlugin
         private readonly HashSet<string> _tagFiltersInclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _tagFiltersExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _tagFilterAndMode = true;
+        private bool _tagFilterExcludeGroups;
         private bool _showFavoritesOnly;
 
         private enum TagWindowPurpose { None, FilterLibrary, EditSelection }
@@ -748,16 +749,36 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private void SelectAllInCurrentFolderView()
-        {
-            foreach (var it in _allItems)
-                it.IsSelected = true;
-        }
+        private bool HasActivePoseContentFilters() =>
+            _showFavoritesOnly
+            || !string.IsNullOrWhiteSpace(_searchText)
+            || _tagFiltersInclude.Count > 0
+            || _tagFiltersExclude.Count > 0
+            || _tagFilterExcludeGroups;
 
-        private void DeselectAllInCurrentFolderView()
+        private void SelectAllMatchingDisplayResults()
         {
+            ClearGroupSelection();
             foreach (var it in _allItems)
                 it.IsSelected = false;
+            foreach (var e in _displayEntries)
+            {
+                if (!e.IsDimmed)
+                    e.Item.IsSelected = true;
+            }
+        }
+
+        private void SelectAllInCurrentFolderView()
+        {
+            if (HasActivePoseContentFilters())
+            {
+                SelectAllMatchingDisplayResults();
+                return;
+            }
+
+            ClearGroupSelection();
+            foreach (var it in _allItems)
+                it.IsSelected = true;
         }
 
         private void CaptureWindowRectForCurrentTier()
@@ -1399,17 +1420,37 @@ namespace HS2SandboxPlugin
 
         // ── Top Bar ──
 
+        private static bool DrawSearchFieldWithClear(ref string text, float height, params GUILayoutOption[] textFieldOptions)
+        {
+            GUILayout.BeginHorizontal();
+            var fieldOpts = new List<GUILayoutOption> { GUILayout.Height(height) };
+            if (textFieldOptions != null && textFieldOptions.Length > 0)
+                fieldOpts.AddRange(textFieldOptions);
+            string newText = GUILayout.TextField(text, fieldOpts.ToArray());
+            bool changed = !string.Equals(newText, text, StringComparison.Ordinal);
+            text = newText;
+            GUI.enabled = text.Length > 0;
+            if (GUILayout.Button(new GUIContent("✕", "Clear search"), GUILayout.Width(24f), GUILayout.Height(height)))
+            {
+                if (text.Length > 0)
+                {
+                    text = "";
+                    changed = true;
+                }
+            }
+
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+            return changed;
+        }
+
         private void DrawTopBar()
         {
             GUILayout.BeginHorizontal(GUILayout.Height(TopBarHeight));
 
             GUILayout.Label("Search:", GUILayout.Width(46f));
-            string newSearch = GUILayout.TextField(_searchText, GUILayout.MinWidth(160f), GUILayout.ExpandWidth(true));
-            if (newSearch != _searchText)
-            {
-                _searchText = newSearch;
+            if (DrawSearchFieldWithClear(ref _searchText, 22f, GUILayout.MinWidth(160f), GUILayout.ExpandWidth(true)))
                 ApplyFilters();
-            }
 
             GUILayout.Space(6f);
             bool newRegex = GUILayout.Toggle(_searchUseRegex, ".*", GUILayout.Width(36f));
@@ -1548,8 +1589,11 @@ namespace HS2SandboxPlugin
         private void DrawTagWindowContent(int id)
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            GUILayout.Label("Search tags", GUILayout.Height(18f));
-            _tagWindowSearch = GUILayout.TextField(_tagWindowSearch, GUILayout.Height(22f));
+            GUILayout.BeginHorizontal(GUILayout.Height(24f));
+            GUILayout.Label("Search tags", GUILayout.Width(82f), GUILayout.Height(22f));
+            DrawSearchFieldWithClear(ref _tagWindowSearch, 22f, GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
 
             string searchNormFold = _tagWindowSearch.Trim();
 
@@ -1623,13 +1667,17 @@ namespace HS2SandboxPlugin
         {
             int inc = _tagFiltersInclude.Count;
             int exc = _tagFiltersExclude.Count;
-            if (inc == 0 && exc == 0)
+            if (inc == 0 && exc == 0 && !_tagFilterExcludeGroups)
                 return "Tags";
-            if (exc == 0)
+            if (exc == 0 && !_tagFilterExcludeGroups)
                 return $"Tags (+{inc})";
-            if (inc == 0)
+            if (inc == 0 && !_tagFilterExcludeGroups)
                 return $"Tags (−{exc})";
-            return $"Tags (+{inc} −{exc})";
+            var parts = new List<string>();
+            if (inc > 0) parts.Add($"+{inc}");
+            if (exc > 0) parts.Add($"−{exc}");
+            if (_tagFilterExcludeGroups) parts.Add("no ▦");
+            return "Tags (" + string.Join(" ", parts) + ")";
         }
 
         private enum TagFilterRole { Neutral, Include, Exclude }
@@ -1672,6 +1720,20 @@ namespace HS2SandboxPlugin
         {
             DrawTagFilterIncludeModeRow();
 
+            bool prevExcludeGroups = _tagFilterExcludeGroups;
+            _tagFilterExcludeGroups = GUILayout.Toggle(
+                _tagFilterExcludeGroups,
+                new GUIContent(
+                    "Hide grouped poses",
+                    "When enabled, poses that belong to a group are omitted from filtered results (only ungrouped poses are shown)."));
+            if (prevExcludeGroups != _tagFilterExcludeGroups)
+            {
+                ApplyFilters();
+                SavePersistedOptions();
+            }
+
+            GUILayout.Space(4f);
+
             var allTags = GetAllLibraryTagNames();
             if (allTags.Count == 0)
             {
@@ -1690,7 +1752,8 @@ namespace HS2SandboxPlugin
             }
 
             GUILayout.Label("Click a tag to cycle: neutral → include (+) → exclude (−).");
-            GUILayout.Label("Exclude hides ungrouped poses; in a visible group all members stay shown (excluded ones dimmed).");
+            GUILayout.Label(
+                "Grouped poses inherit their group's tags for include/exclude. Exclude hides ungrouped poses; in a visible group, members with an excluded tag (on the pose or group) are dimmed.");
 
             GUILayout.Space(4f);
             _tagWindowScroll = GUILayout.BeginScrollView(_tagWindowScroll, GUILayout.ExpandHeight(true));
@@ -2470,15 +2533,47 @@ namespace HS2SandboxPlugin
             ClampCurrentPage();
 
             GUILayout.BeginHorizontal(GUILayout.Height(22f));
-            if (GUILayout.Button(new GUIContent("All", "Select all poses in the current folder / library view"), GUILayout.Width(36f)))
+            if (GUILayout.Button(new GUIContent(
+                    "Solo",
+                    HasActivePoseContentFilters()
+                        ? "Select ungrouped poses that match search / tag filters"
+                        : "Select all ungrouped poses in the current view"),
+                    GUILayout.Width(52f)))
+                SelectAllStandalonePosesInView();
+            if (GUILayout.Button(new GUIContent(
+                    "▦ Group",
+                    "Select all group headers (▦ entities) shown in the current results — for rename, group tags, export, apply to characters…"),
+                    GUILayout.Width(80f)))
+                SelectAllGroupEntitiesInView();
+            if (GUILayout.Button(new GUIContent(
+                    "▦ Pose",
+                    HasActivePoseContentFilters()
+                        ? "Select pose checkboxes in groups that match search / tag filters (skips dimmed non-matching members)"
+                        : "Select all pose checkboxes in groups in the current view"),
+                    GUILayout.Width(72f)))
+                SelectAllGroupedPosesInView();
+            if (GUILayout.Button(new GUIContent(
+                    "All",
+                    HasActivePoseContentFilters()
+                        ? "Select all poses matching search / tag filters (skips dimmed group members that do not match)"
+                        : "Select all poses in the current folder / library view"),
+                    GUILayout.Width(44f)))
                 SelectAllInCurrentFolderView();
-            if (GUILayout.Button(new GUIContent("None", "Deselect all poses in the current folder / library view"), GUILayout.Width(44f)))
-                DeselectAllInCurrentFolderView();
+            GUI.enabled = CanInvertSelection();
+            if (GUILayout.Button(new GUIContent(
+                    "Invert",
+                    HasGroupEntitySelection()
+                        ? "Invert group header (▦) selection among groups in the current results"
+                        : "Invert pose checkbox selection among poses in the current results (skips dimmed)"),
+                    GUILayout.Width(58f)))
+                InvertSelectionInView();
+            GUI.enabled = true;
+            if (GUILayout.Button(new GUIContent(
+                    "None",
+                    "Clear all pose checkboxes and group header (▦) selection"),
+                    GUILayout.Width(52f)))
+                ClearAllSelection();
             GUILayout.Space(6f);
-            if (GUILayout.Button(new GUIContent("▦ All", "Select all pose groups in the current folder / library view (group headers)"), GUILayout.Width(48f)))
-                SelectAllGroupsInCurrentFolderView();
-            if (GUILayout.Button(new GUIContent("▦ None", "Deselect all pose groups (group header selection)"), GUILayout.Width(56f)))
-                DeselectAllGroupsInCurrentFolderView();
             GUILayout.Label(
                 new GUIContent($"{_allItems.Count} in folder", "Total poses in the current tree scope (before search / tag filters)."),
                 GUILayout.Width(78f));
@@ -4064,7 +4159,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label(
                 "• Select <b>2+ ungrouped</b> poses → bottom bar <b>Group…</b> (name the group). <b>Ungroup</b> removes membership.\n" +
                 "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, <b>Group tags…</b>, <b>Export group…</b>, <b>Apply to characters…</b>). Card checkboxes = individual poses.\n" +
-                "• <b>Exclude</b> tag filters: hide ungrouped poses; inside a visible group all members stay (excluded pose tags dim cards, red tag text).\n" +
+                "• <b>Exclude</b> tag filters: hide ungrouped poses; grouped poses use <b>group + pose</b> tags. In a visible group, excluded tags dim cards (red tag text). <b>Hide grouped poses</b> in the tag filter panel omits all groups and their members.\n" +
                 "• Move/Copy one <b>full group</b> at a time. Data: <b>pose_groups.tsv</b> in Sandbox config.",
                 rich);
 
@@ -4115,7 +4210,7 @@ namespace HS2SandboxPlugin
                 "• <b>Shift+click</b> — range select in the filtered list.\n" +
                 "• <b>Right-click</b> thumbnail — apply pose only (selection unchanged).\n" +
                 "• With pagination (Options), use ◀ ▶; card width slider controls minimum size; extra width fills the row or adds columns.\n" +
-                "• <b>All</b> / <b>None</b> — every pose in the current folder view (not search/tag filtered). <b>▦ All</b> / <b>▦ None</b> — every group header in that scope (import preview: check/uncheck all group members).",
+                "• <b>Solo</b> / <b>▦ Group</b> / <b>▦ Pose</b> / <b>All</b> — ungrouped pose checkboxes; visible group headers (▦ entities); pose checkboxes inside groups; or everything (filtered results skip dimmed group members). <b>Invert</b> flips group headers if any ▦ group is selected, otherwise pose checkboxes (disabled when nothing selected). <b>None</b> clears both.",
                 rich);
 
             GUILayout.Space(8f);
@@ -4208,15 +4303,9 @@ namespace HS2SandboxPlugin
             GUILayout.Space(12f);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Select all filtered", GUILayout.Height(24f)))
-            {
-                foreach (var it in _filteredItems)
-                    it.IsSelected = true;
-            }
+                SelectAllMatchingDisplayResults();
             if (GUILayout.Button("Deselect all", GUILayout.Height(24f)))
-            {
-                foreach (var it in _filteredItems)
-                    it.IsSelected = false;
-            }
+                ClearAllSelection();
             GUILayout.EndHorizontal();
 
             GUILayout.FlexibleSpace();
@@ -4390,6 +4479,9 @@ namespace HS2SandboxPlugin
                     _savedListNoTreeH = _savedListH > 10f ? _savedListH : CompactListDefaultHeight;
                 }
 
+                if (data.optionsVersion >= 8)
+                    _tagFilterExcludeGroups = data.tagFilterExcludeGroups;
+
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
                 SyncWindowTitleForLayoutTier();
@@ -4433,7 +4525,8 @@ namespace HS2SandboxPlugin
                     miniWindowH = _savedMiniH,
                     miniWindowX = _savedMiniX,
                     miniWindowY = _savedMiniY,
-                    compactListShowTree = _compactListShowTree
+                    compactListShowTree = _compactListShowTree,
+                    tagFilterExcludeGroups = _tagFilterExcludeGroups
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -4568,5 +4661,6 @@ namespace HS2SandboxPlugin
         public float listNoTreeWindowW, listNoTreeWindowH;
         public float miniWindowW, miniWindowH, miniWindowX, miniWindowY;
         public bool compactListShowTree = true;
+        public bool tagFilterExcludeGroups;
     }
 }
