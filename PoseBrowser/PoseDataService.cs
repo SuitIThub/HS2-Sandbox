@@ -925,10 +925,17 @@ namespace HS2SandboxPlugin
                 }
                 else
                 {
-                    return SavePoseAsDat(item.FilePath, item.DisplayName, ociChar);
+                    if (!SavePoseAsDat(item.FilePath, item.DisplayName, ociChar))
+                        return false;
+                    SyncPoseFileLayoutFromDisk(item);
+                    return true;
                 }
 
-                return SavePose(item.FilePath, item.DisplayName, pngBytes, ociChar);
+                if (!SavePose(item.FilePath, item.DisplayName, pngBytes, ociChar))
+                    return false;
+
+                SyncPoseFileLayoutFromDisk(item);
+                return true;
             }
             catch (Exception ex)
             {
@@ -1081,6 +1088,23 @@ namespace HS2SandboxPlugin
             UnityEngine.Object.Destroy(source);
 
             return result;
+        }
+
+        /// <summary>Re-reads PNG/dat layout offsets from disk after the file was rewritten.</summary>
+        public void SyncPoseFileLayoutFromDisk(PoseGridItem item)
+        {
+            var fi = new FileInfo(item.FilePath);
+            item.IsPng = string.Equals(fi.Extension, ".png", StringComparison.OrdinalIgnoreCase);
+            item.LastWriteTime = fi.LastWriteTime;
+            item.CreationTimeUtc = fi.CreationTimeUtc;
+            if (!item.IsPng)
+            {
+                item.DataPosition = 0;
+                return;
+            }
+
+            using var fs = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            item.DataPosition = (int)GetPngSize(fs);
         }
 
         public byte[] ReadPoseDataBytes(PoseGridItem item)

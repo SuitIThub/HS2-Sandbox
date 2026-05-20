@@ -1796,7 +1796,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Label(isLibraryRootScope ? "Library root" : "Selected folder", GUILayout.MinHeight(20f));
             if (isLibraryRootScope)
-                GUILayout.Label("New folders go here.", GUILayout.MinHeight(16f));
+                GUILayout.Label("New folders go here.", GUILayout.MinHeight(21f));
 
             if (!string.IsNullOrEmpty(_folderActionError))
             {
@@ -1835,7 +1835,7 @@ namespace HS2SandboxPlugin
                 GUI.enabled = true;
 
                 if (!empty && !_showDeleteFolderConfirm)
-                    GUILayout.Label("(Delete: empty only)", GUILayout.MinHeight(18f));
+                    GUILayout.Label("(Delete: empty only)", GUILayout.MinHeight(21f));
 
                 if (!IsPickingFolderDestination && _layoutTier == PoseBrowserLayoutTier.Normal && node != null)
                 {
@@ -2033,9 +2033,9 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button(new GUIContent("None", "Deselect all poses in the current folder / library view"), GUILayout.Width(44f)))
                 DeselectAllInCurrentFolderView();
             GUILayout.Space(6f);
-            if (GUILayout.Button(new GUIContent("▦ All", "Select all pose groups in the current folder / library view (group headers)"), GUILayout.Width(40f)))
+            if (GUILayout.Button(new GUIContent("▦ All", "Select all pose groups in the current folder / library view (group headers)"), GUILayout.Width(48f)))
                 SelectAllGroupsInCurrentFolderView();
-            if (GUILayout.Button(new GUIContent("▦ None", "Deselect all pose groups (group header selection)"), GUILayout.Width(52f)))
+            if (GUILayout.Button(new GUIContent("▦ None", "Deselect all pose groups (group header selection)"), GUILayout.Width(56f)))
                 DeselectAllGroupsInCurrentFolderView();
             GUILayout.Label(
                 new GUIContent($"{_allItems.Count} in folder", "Total poses in the current tree scope (before search / tag filters)."),
@@ -2392,8 +2392,20 @@ namespace HS2SandboxPlugin
 
                 if (librarySelected.Count == 1)
                 {
-                    if (GUILayout.Button("Update pose", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                    int selectedCharCount = _dataService.GetSelectedCharacterDisplayNames().Count;
+                    bool canUpdatePose = selectedCharCount == 1;
+                    const string updatePoseNeedOneCharTip =
+                        "For updating a pose, exactly one character has to be selected in Studio.";
+                    var prevBtnColor = GUI.color;
+                    if (!canUpdatePose)
+                        GUI.color = new Color(1f, 1f, 1f, 0.45f);
+                    if (GUILayout.Button(
+                            new GUIContent("Update pose", canUpdatePose ? "" : updatePoseNeedOneCharTip),
+                            GUILayout.Height(barBtnH),
+                            GUILayout.MinWidth(barBtnMinW))
+                        && canUpdatePose)
                         ShowUpdatePoseOptions(librarySelected[0]);
+                    GUI.color = prevBtnColor;
 
                     if (GUILayout.Button("Rename…", GUILayout.Height(barBtnH), GUILayout.MinWidth(88f)))
                     {
@@ -3267,7 +3279,10 @@ namespace HS2SandboxPlugin
                 return;
             }
 
-            _dataService.UpdatePose(item, chars[0], newPngBytes);
+            if (!_dataService.UpdatePose(item, chars[0], newPngBytes))
+                return;
+
+            _libraryCache.AddOrUpdate(item);
             _tagDb.RecordLastUsed(item);
             for (int i = 1; i < chars.Count; i++)
                 _dataService.ApplyPose(item, chars[i]);
