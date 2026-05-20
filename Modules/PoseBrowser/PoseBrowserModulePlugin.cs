@@ -9,7 +9,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.posebrowser";
         public const string PluginName = "HS2 Sandbox - Pose Browser";
-        public const string PluginVersion = "3.1.1";
+        public const string PluginVersion = "3.1.2";
 
         private static Texture2D _icon = null!;
         private static ToolbarToggle _toolbarToggle = null!;

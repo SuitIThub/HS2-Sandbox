@@ -2147,8 +2147,8 @@ namespace HS2SandboxPlugin
             }
 
             const float edge = 2f;
-            float layoutW = groupInnerCell ? columnFootprintW : cellInnerW;
-            float innerW = Mathf.Max(40f, (groupInnerCell ? columnFootprintW : cellInnerW) - edge * 2f);
+            float layoutW = cellInnerW;
+            float innerW = Mathf.Max(40f, cellInnerW - edge * 2f);
 
             GUILayout.BeginVertical(cardBox, GUILayout.Width(layoutW), GUILayout.MaxWidth(layoutW), GUILayout.ExpandWidth(false));
 

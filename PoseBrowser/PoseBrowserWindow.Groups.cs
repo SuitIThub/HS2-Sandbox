@@ -985,16 +985,24 @@ namespace HS2SandboxPlugin
             float columnFootprintW,
             ref int displayIndex)
         {
+            const float innerCardGap = 4f;
             int poseCount = segment.Poses.Count;
-            float segmentFootprintW = Mathf.Max(columnFootprintW, poseCount * columnFootprintW);
 
             var cardStyle = IsGroupCardHighlighted(segment.GroupId) ? _groupCardSelectedStyle! : _groupCardStyle!;
-            GUILayout.BeginVertical(cardStyle, GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW), GUILayout.ExpandWidth(false));
+            int groupHPad = cardStyle.padding.left + cardStyle.padding.right;
+
+            // Width reserved for this segment in the grid row (aligns with placeholders). Inner cards use cellInnerW,
+            // so the framed group should hug that width — not the full N × column footprint.
+            float tightInnerW = poseCount * cellInnerW + Mathf.Max(0, poseCount - 1) * innerCardGap;
+            float tightSegmentW = tightInnerW + groupHPad;
+            float innerContentW = Mathf.Max(40f, tightInnerW);
+
+            GUILayout.BeginVertical(cardStyle, GUILayout.Width(tightSegmentW), GUILayout.MaxWidth(tightSegmentW), GUILayout.ExpandWidth(false));
 
             if (segment.ShowHeader)
             {
                 int anchorIdx = displayIndex;
-                var headerRect = GUILayoutUtility.GetRect(segmentFootprintW, 22f, GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW));
+                var headerRect = GUILayoutUtility.GetRect(innerContentW, 22f, GUILayout.Width(innerContentW), GUILayout.MaxWidth(innerContentW));
                 var headerCbRect = new Rect(headerRect.x + 2f, headerRect.y + 2f, 16f, 16f);
                 Event evHdr = Event.current;
                 if (evHdr.type == EventType.Repaint)
@@ -1027,19 +1035,22 @@ namespace HS2SandboxPlugin
                 {
                     string tagStr = string.Join(" · ", segment.GroupTags);
                     var tagStyle = _tagWrapStyle!;
-                    float tagH = MeasureTagBlockHeight(tagStr, tagStyle, segmentFootprintW);
-                    GUILayout.Label(tagStr, tagStyle, GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW), GUILayout.Height(tagH));
+                    float tagH = MeasureTagBlockHeight(tagStr, tagStyle, innerContentW);
+                    GUILayout.Label(tagStr, tagStyle, GUILayout.Width(innerContentW), GUILayout.MaxWidth(innerContentW), GUILayout.Height(tagH));
                 }
 
                 GUILayout.Space(2f);
             }
 
-            GUILayout.BeginHorizontal(GUILayout.Width(segmentFootprintW), GUILayout.MaxWidth(segmentFootprintW), GUILayout.ExpandWidth(false));
+            GUILayout.BeginHorizontal(GUILayout.Width(innerContentW), GUILayout.MaxWidth(innerContentW), GUILayout.ExpandWidth(false));
             for (int p = 0; p < segment.Poses.Count; p++)
             {
+                if (p > 0)
+                    GUILayout.Space(innerCardGap);
                 DrawGridCell(segment.Poses[p], displayIndex, columnFootprintW, cellInnerW, _groupInnerCardStyle);
                 displayIndex++;
             }
+
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
         }
