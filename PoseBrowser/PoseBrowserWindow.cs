@@ -17,7 +17,7 @@ namespace HS2SandboxPlugin
     public partial class PoseBrowserWindow : SubWindow
     {
         private const float ResizeHandleSize = 18f;
-        private const float TreePanelWidth = 200f;
+        private const float TreePanelWidth = 205f;
         /// <summary>Padding between tree panel and grid (window inner chrome).</summary>
         private const float GridPanelChromePad = 24f;
         /// <summary>Sum of fixed top-bar control widths (must stay in sync with <see cref="DrawTopBar"/>).</summary>
@@ -26,6 +26,11 @@ namespace HS2SandboxPlugin
         private const float TopBarHeight = 32f;
         private const float MinCardSize = 96f;
         private const float MaxCardSize = 280f;
+        private const float GridCardSizeBoost = 1.12f;
+        private const float PoseCardNameRowH = 20f;
+        private const float PoseCardTextPadH = 4f;
+        private const float PoseCardNameStarW = 14f;
+        private const float GridCellGap = 3f;
         private const int OptionsWindowId = 2021;
         private const int HelpWindowId = 2022;
         private const int TagWindowId = 2024;
@@ -102,7 +107,7 @@ namespace HS2SandboxPlugin
         private float LayoutMinHeight => LayoutMinHeightFor(_layoutTier);
         private float LayoutMaxHeight => LayoutMaxHeightFor(_layoutTier);
 
-        private float _cardCellSize = 140f;
+        private float _cardCellSize = 152f;
         private int _itemsPerPage;
 
         /// <summary>Grid column metrics computed on the Layout pass and reused on Repaint (avoids resize flicker / IMGUI mismatches).</summary>
@@ -114,9 +119,14 @@ namespace HS2SandboxPlugin
             public int Columns;
             public float ColumnFootprintW;
             public float CellInnerW;
+            public float UniformPoseCardOuterH;
+            public float UniformTagBlockH;
+            public float UniformGroupTagBlockH;
         }
 
         private PoseGridLayoutMetrics _poseGridLayout;
+        private readonly List<float> _gridRowOuterHeights = new List<float>();
+        private int _gridUniformLayoutFrame = -1;
         private int _currentPage = 1;
 
         private bool _viewAllPosesRecursive;
@@ -137,8 +147,6 @@ namespace HS2SandboxPlugin
         private Vector2 _treeScroll;
         private Vector2 _gridScroll;
         private bool _isResizing;
-        /// <summary>IMGUI content min width (toolbar, etc.); updated when layout expands a narrower requested width.</summary>
-        private float _contentMinWindowWidth;
 
         // Search & filter state
         private string _searchText = "";
@@ -154,6 +162,8 @@ namespace HS2SandboxPlugin
         private Rect _tagWindowRect;
         private Vector2 _tagWindowScroll;
         private string _tagWindowSearch = "";
+        /// <summary>Tracks assign-pane target so selection changes refresh the pane without clearing search.</summary>
+        private string _tagWindowTargetKey = "";
 
         // Multi-select (global index into _filteredItems when paginating)
         private int _lastClickedGlobalIndex = -1;
@@ -225,8 +235,11 @@ namespace HS2SandboxPlugin
         private bool _studioLibraryCacheWarmupTriggered;
 
         // GUIStyles (lazy-init)
+        private GUIStyle? _poseCardBaseStyle;
         private GUIStyle? _selectedStyle;
         private GUIStyle? _favoriteCardStyle;
+        private GUIStyle? _dimmedCardStyle;
+        private GUIStyle? _poseCardNameStyle;
         private GUIStyle? _favoriteCardNameStyle;
         private GUIStyle? _favoriteCardTagStyle;
         private GUIStyle? _favoriteStyle;
@@ -350,7 +363,6 @@ namespace HS2SandboxPlugin
             var windowIn = new Rect(windowRect.x, windowRect.y, lockedW, lockedH);
 
             windowRect = GUILayout.Window(windowID, windowIn, DrawWindowContent, windowTitle);
-            RefreshContentMinWindowWidthFromLayout(windowIn.width, windowRect.width);
 
             if (_isResizing)
             {
@@ -359,6 +371,11 @@ namespace HS2SandboxPlugin
             }
             else
             {
+                // GUILayout.Window grows to content min on Layout; keep the user's chosen size.
+                if (windowRect.width > lockedW + 0.5f)
+                    windowRect.width = lockedW;
+                if (windowRect.height > lockedH + 0.5f)
+                    windowRect.height = lockedH;
                 windowRect.width = Mathf.Clamp(windowRect.width, minW, LayoutMaxWidth);
                 windowRect.height = Mathf.Clamp(windowRect.height, minH, LayoutMaxHeight);
             }
@@ -378,9 +395,13 @@ namespace HS2SandboxPlugin
 
                 if (_tagWindowPurpose != TagWindowPurpose.None)
                 {
+                    if (_tagWindowPurpose == TagWindowPurpose.EditSelection)
+                        SyncTagAssignWindowToSelection();
                     string tagTitle = _tagWindowPurpose == TagWindowPurpose.FilterLibrary
                         ? "Pose Browser · Tag filter"
-                        : "Pose Browser · Tags on selection";
+                        : _tagWindowForGroup
+                            ? "Pose Browser · Group tags"
+                            : "Pose Browser · Tags on selection";
                     DrawDockedPaneWindow(TagWindowId, ref _tagWindowRect, DrawTagWindowContent, tagTitle, TagPaneDefaultWidth);
                 }
 
@@ -515,6 +536,7 @@ namespace HS2SandboxPlugin
             _tagWindowForGroup = false;
             _tagWindowGroupId = null;
             _tagWindowGroupIds.Clear();
+            _tagWindowTargetKey = "";
         }
 
         private void OpenTagFilterWindow()
@@ -528,6 +550,52 @@ namespace HS2SandboxPlugin
             _tagWindowPurpose = TagWindowPurpose.EditSelection;
             _tagWindowSearch = "";
             _tagWindowScroll = Vector2.zero;
+            _tagWindowTargetKey = "";
+        }
+
+        /// <summary>Keeps the assign tag pane aligned with group vs pose selection while it stays open.</summary>
+        private void SyncTagAssignWindowToSelection()
+        {
+            if (_tagWindowPurpose != TagWindowPurpose.EditSelection)
+                return;
+
+            if (_selectedGroupIds.Count > 0)
+            {
+                PruneSelectedGroups();
+                var ids = _selectedGroupIds.OrderBy(id => id, StringComparer.Ordinal).ToList();
+                string newKey = "g:" + string.Join("|", ids);
+                if (newKey == _tagWindowTargetKey)
+                    return;
+
+                _tagWindowTargetKey = newKey;
+                _tagWindowForGroup = true;
+                _tagWindowGroupIds.Clear();
+                foreach (var gid in ids)
+                    _tagWindowGroupIds.Add(gid);
+                _tagWindowGroupId = _tagWindowGroupIds.Count == 1 ? _tagWindowGroupIds[0] : null;
+                _tagWindowScroll = Vector2.zero;
+                return;
+            }
+
+            var selected = _filteredItems
+                .Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId))
+                .ToList();
+            if (selected.Count > 0)
+            {
+                string pathsKey = string.Join("|", selected.Select(i => i.FilePath).OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
+                string newKey = "p:" + pathsKey;
+                if (newKey == _tagWindowTargetKey)
+                    return;
+
+                _tagWindowTargetKey = newKey;
+                _tagWindowForGroup = false;
+                _tagWindowGroupId = null;
+                _tagWindowGroupIds.Clear();
+                _tagWindowScroll = Vector2.zero;
+                return;
+            }
+
+            CloseTagWindow();
         }
 
         private bool IsPickingFolderDestination => _pendingFolderOp != PendingFolderOperation.None;
@@ -754,7 +822,6 @@ namespace HS2SandboxPlugin
         {
             CaptureWindowRectForCurrentTier();
             _layoutTier = (PoseBrowserLayoutTier)(((int)_layoutTier + 1) % 3);
-            ResetContentMinWindowWidth();
 
             if (_layoutTier != PoseBrowserLayoutTier.Normal)
             {
@@ -1131,14 +1198,7 @@ namespace HS2SandboxPlugin
                 DrawTreePanel(showFolderFooter: true);
                 float gridAvailW = Mathf.Max(120f, windowRect.width - TreePanelWidth - GridPanelChromePad);
                 GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MaxWidth(gridAvailW));
-                Rect hostProbe = GUILayoutUtility.GetRect(0f, 0f, GUILayout.ExpandWidth(true), GUILayout.MaxWidth(gridAvailW));
-                float effectiveGridW = gridAvailW;
-                if (Event.current.type == EventType.Layout && hostProbe.width > 8f)
-                    effectiveGridW = hostProbe.width;
-                else if (_poseGridLayout.Frame == Time.frameCount)
-                    effectiveGridW = _poseGridLayout.GridAvailW;
-
-                DrawGridPanel(effectiveGridW);
+                DrawGridPanel(gridAvailW);
                 DrawBottomBar();
                 DrawFolderPoseDialogs();
                 GUILayout.EndVertical();
@@ -1297,6 +1357,7 @@ namespace HS2SandboxPlugin
                 DrawTagWindowFilterBody(searchNormFold);
             else if (_tagWindowPurpose == TagWindowPurpose.EditSelection)
             {
+                SyncTagAssignWindowToSelection();
                 if (_tagWindowForGroup)
                 {
                     if (_tagWindowGroupIds.Count > 1)
@@ -1411,10 +1472,10 @@ namespace HS2SandboxPlugin
         {
             DrawTagFilterIncludeModeRow();
 
-            var allTags = _tagDb.GetAllKnownTags().OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+            var allTags = GetAllLibraryTagNames();
             if (allTags.Count == 0)
             {
-                GUILayout.Label("No tags defined yet. Use Tag Selected on the grid.");
+                GUILayout.Label("No tags defined yet. Add tags on poses or groups.");
                 return;
             }
 
@@ -1494,16 +1555,18 @@ namespace HS2SandboxPlugin
             ApplyFilters();
         }
 
-        private List<string> CollectAssignTagUnion(IReadOnlyList<PoseGridItem> selected)
+        /// <summary>Every tag used on any pose (tag DB) or any pose group — shared by all tag windows.</summary>
+        private List<string> GetAllLibraryTagNames()
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var t in _tagDb.GetAllKnownTags())
                 set.Add(t);
-            foreach (var it in selected)
+            foreach (var group in _groupDb.GetAllGroups())
             {
-                foreach (var t in it.Tags)
+                foreach (var t in group.Tags)
                     set.Add(t);
             }
+
             return set.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
@@ -1513,7 +1576,7 @@ namespace HS2SandboxPlugin
 
             if (!string.IsNullOrEmpty(searchNormFold))
             {
-                bool alreadyKnown = CollectAssignTagUnion(selected).Any(t =>
+                bool alreadyKnown = GetAllLibraryTagNames().Any(t =>
                     string.Equals(t, searchNormFold, StringComparison.OrdinalIgnoreCase));
 
                 if (!alreadyKnown &&
@@ -1526,7 +1589,7 @@ namespace HS2SandboxPlugin
                 }
             }
 
-            var union = CollectAssignTagUnion(selected);
+            var union = GetAllLibraryTagNames();
             var visible = string.IsNullOrEmpty(searchNormFold)
                 ? union
                 : union.Where(t => t.IndexOf(searchNormFold, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
@@ -1642,7 +1705,12 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(2f);
 
-            _treeScroll = GUILayout.BeginScrollView(_treeScroll, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            _treeScroll = GUILayout.BeginScrollView(
+                _treeScroll,
+                false,
+                true,
+                GUILayout.ExpandWidth(true),
+                GUILayout.ExpandHeight(true));
 
             bool allViewSelected = !IsPickingFolderDestination && _viewAllPosesRecursive && !_browseFavoritesOnly;
             var allStyle = allViewSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
@@ -1713,7 +1781,8 @@ namespace HS2SandboxPlugin
                 bool moveDestSel = IsPickingFolderDestination && !string.IsNullOrEmpty(_pendingFolderDestPath) &&
                     Path.GetFullPath(node.FullPath).Equals(Path.GetFullPath(_pendingFolderDestPath), StringComparison.OrdinalIgnoreCase);
                 var style = (normalSel || moveDestSel) ? _treeNodeSelectedStyle! : _treeNodeStyle!;
-                if (GUILayout.Button(node.Name, style, GUILayout.Height(20f), GUILayout.ExpandWidth(true)))
+                string shownName = TruncateWithEllipsis(node.Name, style, TreeNodeLabelMaxWidth(node.Depth));
+                if (GUILayout.Button(new GUIContent(shownName, node.Name), style, GUILayout.Height(20f), GUILayout.ExpandWidth(true)))
                 {
                     if (IsPickingFolderDestination)
                     {
@@ -1955,7 +2024,11 @@ namespace HS2SandboxPlugin
             return Mathf.Max(8f, m + b + 6f);
         }
 
-        private static float PoseCardHorizontalMarginBudget() => CardHorizontalMarginBudget(GUI.skin.box);
+        private float PoseCardHorizontalMarginBudget()
+        {
+            InitStyles();
+            return CardHorizontalMarginBudget(_poseCardBaseStyle!);
+        }
 
         private void ComputeGridCellLayout(
             float contentWidth,
@@ -1965,7 +2038,7 @@ namespace HS2SandboxPlugin
             out float cellInnerW)
         {
             contentWidth = Mathf.Max(80f, contentWidth);
-            float target = Mathf.Clamp(_cardCellSize, MinCardSize, MaxCardSize);
+            float target = Mathf.Clamp(_cardCellSize * GridCardSizeBoost, MinCardSize, MaxCardSize);
 
             // Fewest columns that respect the slider as a minimum inner width per column.
             columns = Mathf.Max(1, Mathf.FloorToInt(contentWidth / (target + marginH)));
@@ -1993,13 +2066,21 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private void UpdatePoseGridLayout(float gridAvailW)
+        private static float VerticalScrollbarWidth()
         {
             float vsb = GUI.skin.verticalScrollbar != null ? GUI.skin.verticalScrollbar.fixedWidth : 15f;
-            if (vsb < 10f) vsb = 18f;
+            return vsb < 10f ? 18f : vsb;
+        }
+
+        private void UpdatePoseGridLayout(float gridAvailW)
+        {
+            float vsb = VerticalScrollbarWidth();
             float marginH = PoseCardHorizontalMarginBudget();
             float contentWidth = Mathf.Max(80f, gridAvailW - vsb);
             ComputeGridCellLayout(contentWidth, marginH, out int columns, out float columnFootprintW, out float cellInnerW);
+            float layoutWidth = Mathf.Max(80f, contentWidth - Mathf.Max(0, columns - 1) * GridCellGap);
+            if (layoutWidth + 0.5f < contentWidth)
+                ComputeGridCellLayout(layoutWidth, marginH, out columns, out columnFootprintW, out cellInnerW);
             _poseGridLayout = new PoseGridLayoutMetrics
             {
                 Frame = Time.frameCount,
@@ -2007,8 +2088,169 @@ namespace HS2SandboxPlugin
                 ContentWidth = contentWidth,
                 Columns = columns,
                 ColumnFootprintW = columnFootprintW,
-                CellInnerW = cellInnerW
+                CellInnerW = cellInnerW,
+                UniformPoseCardOuterH = _poseGridLayout.UniformPoseCardOuterH,
+                UniformTagBlockH = _poseGridLayout.UniformTagBlockH,
+                UniformGroupTagBlockH = _poseGridLayout.UniformGroupTagBlockH
             };
+        }
+
+        private static float PoseCardVerticalChrome(GUIStyle cardStyle) =>
+            cardStyle.padding.top + cardStyle.padding.bottom;
+
+        private static float MeasurePoseCardOuterHeight(
+            GUIStyle cardStyle,
+            float thumbInnerW,
+            float tagBlockH)
+        {
+            return PoseCardVerticalChrome(cardStyle) + thumbInnerW + PoseCardNameRowH +
+                   (tagBlockH > 0f ? tagBlockH : 0f);
+        }
+
+        private float MeasureGroupSegmentOuterHeight(
+            PoseBrowserGroupSegment segment,
+            float cellInnerW,
+            float uniformPoseCardOuterH,
+            float uniformGroupTagBlockH,
+            GUIStyle groupCardStyle)
+        {
+            float h = PoseCardVerticalChrome(groupCardStyle);
+            if (segment.ShowHeader)
+            {
+                h += 22f;
+                if (segment.ShowTags && uniformGroupTagBlockH > 0f)
+                    h += uniformGroupTagBlockH + 2f;
+            }
+
+            h += uniformPoseCardOuterH;
+            return h;
+        }
+
+        private void UpdateMaxTagBlockHeight(ref float maxTagH, IEnumerable<string> tags, float width)
+        {
+            if (tags == null || !tags.Any())
+                return;
+            string tagStr = string.Join(" · ", tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+            maxTagH = Mathf.Max(maxTagH, MeasureTagBlockHeight(tagStr, _tagWrapStyle!, width));
+        }
+
+        private void ComputeUniformGridRowMetrics(
+            IReadOnlyList<PoseBrowserGridRow> gridRows,
+            float cellInnerW)
+        {
+            InitStyles();
+            InitGroupStyles();
+
+            float innerW = Mathf.Max(40f, cellInnerW);
+            float tagTextW = Mathf.Max(20f, innerW - PoseCardTextPadH * 2f);
+            float maxPoseTagH = 0f;
+            float maxGroupTagH = 0f;
+
+            foreach (var gridRow in gridRows)
+            {
+                foreach (var gridCell in gridRow.Cells)
+                {
+                    if (gridCell.Kind == PoseBrowserGridCellKind.Pose)
+                    {
+                        UpdateMaxTagBlockHeight(ref maxPoseTagH, gridCell.Pose!.Item.Tags, tagTextW);
+                        continue;
+                    }
+
+                    var segment = gridCell.GroupSegment!;
+                    float segInnerW = Mathf.Max(40f,
+                        segment.Poses.Count * cellInnerW + Mathf.Max(0, segment.Poses.Count - 1) * 4f);
+                    if (segment.ShowTags)
+                        UpdateMaxTagBlockHeight(ref maxGroupTagH, segment.GroupTags, segInnerW);
+                    foreach (var pose in segment.Poses)
+                        UpdateMaxTagBlockHeight(ref maxPoseTagH, pose.Item.Tags, tagTextW);
+                }
+            }
+
+            float uniformTagBlockH = maxPoseTagH;
+            float uniformGroupTagBlockH = maxGroupTagH;
+            float uniformPoseCardOuterH = Mathf.Max(
+                MeasurePoseCardOuterHeight(_poseCardBaseStyle!, innerW, uniformTagBlockH),
+                MeasurePoseCardOuterHeight(_groupInnerCardStyle!, innerW, uniformTagBlockH));
+
+            _gridRowOuterHeights.Clear();
+            foreach (var gridRow in gridRows)
+            {
+                float rowH = uniformPoseCardOuterH;
+                foreach (var gridCell in gridRow.Cells)
+                {
+                    if (gridCell.Kind != PoseBrowserGridCellKind.GroupSegment)
+                        continue;
+                    rowH = Mathf.Max(
+                        rowH,
+                        MeasureGroupSegmentOuterHeight(
+                            gridCell.GroupSegment!,
+                            cellInnerW,
+                            uniformPoseCardOuterH,
+                            uniformGroupTagBlockH,
+                            _groupCardStyle!));
+                }
+
+                _gridRowOuterHeights.Add(rowH);
+            }
+
+            _poseGridLayout.UniformPoseCardOuterH = uniformPoseCardOuterH;
+            _poseGridLayout.UniformTagBlockH = uniformTagBlockH;
+            _poseGridLayout.UniformGroupTagBlockH = uniformGroupTagBlockH;
+        }
+
+        private float MeasureGridRowContentWidth(PoseBrowserGridRow row, float cellInnerW)
+        {
+            InitGroupStyles();
+            const float innerCardGap = 4f;
+            int groupHPad = _groupCardStyle!.padding.left + _groupCardStyle.padding.right;
+            float w = 0f;
+            int cellIdx = 0;
+            foreach (var gridCell in row.Cells)
+            {
+                if (cellIdx++ > 0)
+                    w += GridCellGap;
+
+                if (gridCell.Kind == PoseBrowserGridCellKind.GroupSegment)
+                {
+                    int poseCount = gridCell.GroupSegment!.Poses.Count;
+                    w += poseCount * cellInnerW + Mathf.Max(0, poseCount - 1) * innerCardGap + groupHPad;
+                }
+                else
+                    w += cellInnerW;
+            }
+
+            return w;
+        }
+
+        /// <summary>If rows are wider than the scroll area, add columns (smaller cards) until they fit.</summary>
+        private void RefineGridLayoutForRows(IReadOnlyList<PoseBrowserGridRow> gridRows)
+        {
+            if (gridRows.Count == 0)
+                return;
+
+            float contentWidth = _poseGridLayout.ContentWidth;
+            float marginH = PoseCardHorizontalMarginBudget();
+            int columns = _poseGridLayout.Columns;
+            float columnFootprintW = _poseGridLayout.ColumnFootprintW;
+            float cellInnerW = _poseGridLayout.CellInnerW;
+
+            for (int attempt = 0; attempt < 16; attempt++)
+            {
+                float maxRowW = 0f;
+                foreach (var row in gridRows)
+                    maxRowW = Mathf.Max(maxRowW, MeasureGridRowContentWidth(row, cellInnerW));
+
+                if (maxRowW <= contentWidth + 1f)
+                    break;
+
+                int nextCols = columns + 1;
+                float avail = contentWidth - Mathf.Max(0, nextCols - 1) * GridCellGap;
+                ComputeGridCellLayout(avail, marginH, out columns, out columnFootprintW, out cellInnerW);
+            }
+
+            _poseGridLayout.Columns = columns;
+            _poseGridLayout.ColumnFootprintW = columnFootprintW;
+            _poseGridLayout.CellInnerW = cellInnerW;
         }
 
         private void DrawGridPanel(float gridAvailW)
@@ -2058,12 +2300,15 @@ namespace HS2SandboxPlugin
             }
             GUILayout.EndHorizontal();
 
+            // Outer = gridAvailW; contentWidth already subtracts the v-scrollbar for cell layout.
             _gridScroll = GUILayout.BeginScrollView(
                 _gridScroll,
+                false,
+                true,
                 GUIStyle.none,
                 GUI.skin.verticalScrollbar,
-                GUILayout.Width(contentWidth),
-                GUILayout.MaxWidth(contentWidth),
+                GUILayout.Width(gridAvailW),
+                GUILayout.MaxWidth(gridAvailW),
                 GUILayout.ExpandHeight(true));
 
             var gridRows = PoseBrowserGridLayout.BuildGridRows(
@@ -2071,44 +2316,77 @@ namespace HS2SandboxPlugin
                 _groupDb,
                 columns,
                 ImportPreviewActive ? _importPreviewGroupsById : null);
-            int displayIdx = _itemsPerPage > 0 ? (_currentPage - 1) * _itemsPerPage : 0;
-            foreach (var gridRow in gridRows)
+
+            if (Event.current.type == EventType.Layout ||
+                _poseGridLayout.Frame != Time.frameCount ||
+                _gridUniformLayoutFrame != Time.frameCount ||
+                _gridRowOuterHeights.Count != gridRows.Count)
             {
+                RefineGridLayoutForRows(gridRows);
+                cellInnerW = _poseGridLayout.CellInnerW;
+                columnFootprintW = _poseGridLayout.ColumnFootprintW;
+                columns = _poseGridLayout.Columns;
+                ComputeUniformGridRowMetrics(gridRows, cellInnerW);
+                _gridUniformLayoutFrame = Time.frameCount;
+            }
+
+            float uniformPoseCardOuterH = _poseGridLayout.UniformPoseCardOuterH;
+            float uniformTagBlockH = _poseGridLayout.UniformTagBlockH;
+            float uniformGroupTagBlockH = _poseGridLayout.UniformGroupTagBlockH;
+
+            int displayIdx = _itemsPerPage > 0 ? (_currentPage - 1) * _itemsPerPage : 0;
+            for (int rowIdx = 0; rowIdx < gridRows.Count; rowIdx++)
+            {
+                if (rowIdx > 0)
+                    GUILayout.Space(GridCellGap);
+
+                var gridRow = gridRows[rowIdx];
+                float rowOuterH = rowIdx < _gridRowOuterHeights.Count
+                    ? _gridRowOuterHeights[rowIdx]
+                    : uniformPoseCardOuterH;
+
                 GUILayout.BeginHorizontal(
                     GUILayout.Width(contentWidth),
                     GUILayout.MaxWidth(contentWidth),
+                    GUILayout.MinHeight(rowOuterH),
                     GUILayout.ExpandWidth(false));
+                int cellIdx = 0;
                 foreach (var gridCell in gridRow.Cells)
                 {
+                    if (cellIdx++ > 0)
+                        GUILayout.Space(GridCellGap);
+
                     if (gridCell.Kind == PoseBrowserGridCellKind.GroupSegment)
-                        DrawGroupSegmentCell(gridCell.GroupSegment!, cellInnerW, columnFootprintW, ref displayIdx);
+                    {
+                        DrawGroupSegmentCell(
+                            gridCell.GroupSegment!,
+                            cellInnerW,
+                            columnFootprintW,
+                            uniformPoseCardOuterH,
+                            uniformTagBlockH,
+                            uniformGroupTagBlockH,
+                            rowOuterH,
+                            ref displayIdx);
+                    }
                     else
                     {
-                        DrawGridCell(gridCell.Pose!, displayIdx, columnFootprintW, cellInnerW);
+                        DrawGridCell(
+                            gridCell.Pose!,
+                            displayIdx,
+                            cellInnerW,
+                            uniformPoseCardOuterH,
+                            uniformTagBlockH);
                         displayIdx++;
                     }
                 }
 
-                int usedCols = PoseBrowserGridLayout.RowColumnSpan(gridRow);
-                for (int p = usedCols; p < columns; p++)
-                    DrawGridCellPlaceholder(columnFootprintW);
+                GUILayout.FlexibleSpace();
 
                 GUILayout.EndHorizontal();
             }
 
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
-        }
-
-        /// <summary>Reserves one column footprint on partial rows without drawing a visible card.</summary>
-        private static void DrawGridCellPlaceholder(float columnFootprintW)
-        {
-            GUILayoutUtility.GetRect(
-                GUIContent.none,
-                GUIStyle.none,
-                GUILayout.Width(columnFootprintW),
-                GUILayout.MaxWidth(columnFootprintW),
-                GUILayout.ExpandWidth(false));
         }
 
         /// <summary>Repaint-only checkbox; unlike <see cref="GUI.Toggle"/> does not register extra GUILayout controls.</summary>
@@ -2122,13 +2400,16 @@ namespace HS2SandboxPlugin
         private void DrawGridCell(
             PoseBrowserDisplayEntry entry,
             int displayIndex,
-            float columnFootprintW,
             float cellInnerW,
+            float uniformPoseCardOuterH,
+            float uniformTagBlockH,
             GUIStyle? cardStyleOverride = null)
         {
+            InitStyles();
+            InitGroupStyles();
+
             var item = entry.Item;
-            GUIStyle cardBox = cardStyleOverride ?? GUI.skin.box;
-            bool groupInnerCell = cardStyleOverride != null;
+            GUIStyle cardBox = cardStyleOverride ?? _poseCardBaseStyle!;
             if (cardStyleOverride == null)
             {
                 if (item.IsSelected)
@@ -2141,18 +2422,27 @@ namespace HS2SandboxPlugin
             else
             {
                 if (item.IsSelected)
-                    cardBox = _selectedStyle!;
+                    cardBox = _groupInnerCardSelectedStyle!;
+                else if (item.IsFavorite)
+                    cardBox = _groupInnerCardFavoriteStyle!;
                 else if (entry.IsDimmed)
-                    cardBox = _dimmedCardStyle!;
+                    cardBox = _groupInnerCardDimmedStyle!;
             }
 
-            const float edge = 2f;
             float layoutW = cellInnerW;
-            float innerW = Mathf.Max(40f, cellInnerW - edge * 2f);
+            float innerW = Mathf.Max(40f, cellInnerW);
 
-            GUILayout.BeginVertical(cardBox, GUILayout.Width(layoutW), GUILayout.MaxWidth(layoutW), GUILayout.ExpandWidth(false));
+            // Same as group segments: horizontal footprint is the card width only. A full columnFootprintW
+            // wrapper left empty space beside the card and looked like double GridCellGap.
+            GUILayout.BeginVertical(
+                cardBox,
+                GUILayout.Width(layoutW),
+                GUILayout.MaxWidth(layoutW),
+                GUILayout.MinHeight(uniformPoseCardOuterH),
+                GUILayout.Height(uniformPoseCardOuterH),
+                GUILayout.ExpandWidth(false));
 
-            Rect thumbRect = GUILayoutUtility.GetRect(innerW, innerW);
+            Rect thumbRect = GUILayoutUtility.GetRect(innerW, innerW, GUILayout.Width(innerW), GUILayout.Height(innerW));
             Texture2D tex = item.Thumbnail ?? _placeholderTex!;
 
             const float cbSize = 18f;
@@ -2204,29 +2494,48 @@ namespace HS2SandboxPlugin
 
             bool favoriteCard = item.IsFavorite && !item.IsSelected;
 
-            GUILayout.BeginHorizontal(GUILayout.Height(20f));
-            var starStyle = favoriteCard ? _favoriteCardNameStyle! : _favoriteStyle!;
-            GUILayout.Label(item.IsFavorite ? "★" : " ", starStyle, GUILayout.Width(14f), GUILayout.Height(20f));
+            var titleRowRect = GUILayoutUtility.GetRect(
+                innerW,
+                PoseCardNameRowH,
+                GUILayout.Width(innerW),
+                GUILayout.MaxWidth(innerW),
+                GUILayout.ExpandWidth(false));
+            float pad = PoseCardTextPadH;
+            var starRect = new Rect(titleRowRect.x + pad, titleRowRect.y, PoseCardNameStarW, titleRowRect.height);
+            float nameW = Mathf.Max(20f, titleRowRect.width - pad * 2f - PoseCardNameStarW);
+            var nameRect = new Rect(starRect.xMax, titleRowRect.y, nameW, titleRowRect.height);
 
             string label = item.DisplayName;
-            var nameStyle = favoriteCard ? _favoriteCardNameStyle! : GUI.skin.label;
-            GUILayout.Label(label, nameStyle, GUILayout.MaxWidth(innerW - 18f), GUILayout.Height(20f));
-            GUILayout.EndHorizontal();
+            var starStyle = _favoriteStyle!;
+            var nameStyle = favoriteCard ? _favoriteCardNameStyle! : _poseCardNameStyle!;
+            string shownName = TruncateWithEllipsis(label, nameStyle, nameW);
+            GUI.Label(starRect, item.IsFavorite ? "★" : " ", starStyle);
+            GUI.Label(nameRect, new GUIContent(shownName, label), nameStyle);
 
-            if (item.Tags.Count > 0)
+            if (uniformTagBlockH > 0f)
             {
-                var sortedTags = item.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
-                string plainTagStr = string.Join(" · ", sortedTags);
-                var tagStyle = favoriteCard ? _favoriteCardTagStyle! : _tagWrapStyle!;
-                bool highlightExcludedTags = entry.IsDimmed &&
-                    !string.IsNullOrEmpty(item.GroupId) &&
-                    sortedTags.Any(t => _tagFiltersExclude.Contains(t));
-                string displayTagStr = highlightExcludedTags
-                    ? BuildPoseCardTagRichText(sortedTags)
-                    : plainTagStr;
-                var drawStyle = highlightExcludedTags ? _tagWrapStyleRich! : tagStyle;
-                float tagH = MeasureTagBlockHeight(plainTagStr, tagStyle, innerW);
-                GUILayout.Label(displayTagStr, drawStyle, GUILayout.Width(innerW), GUILayout.Height(tagH), GUILayout.ExpandHeight(false));
+                float tagTextW = Mathf.Max(20f, innerW - pad * 2f);
+                var tagRect = GUILayoutUtility.GetRect(
+                    innerW,
+                    uniformTagBlockH,
+                    GUILayout.Width(innerW),
+                    GUILayout.MaxWidth(innerW),
+                    GUILayout.ExpandWidth(false));
+                var tagTextRect = new Rect(tagRect.x + pad, tagRect.y, tagTextW, tagRect.height);
+                if (item.Tags.Count > 0 && Event.current.type == EventType.Repaint)
+                {
+                    var sortedTags = item.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+                    string plainTagStr = string.Join(" · ", sortedTags);
+                    var tagStyle = favoriteCard ? _favoriteCardTagStyle! : _tagWrapStyle!;
+                    bool highlightExcludedTags = entry.IsDimmed &&
+                        !string.IsNullOrEmpty(item.GroupId) &&
+                        sortedTags.Any(t => _tagFiltersExclude.Contains(t));
+                    string displayTagStr = highlightExcludedTags
+                        ? BuildPoseCardTagRichText(sortedTags)
+                        : plainTagStr;
+                    var drawStyle = highlightExcludedTags ? _tagWrapStyleRich! : tagStyle;
+                    GUI.Label(tagTextRect, displayTagStr, drawStyle);
+                }
             }
 
             GUILayout.EndVertical();
@@ -2237,6 +2546,38 @@ namespace HS2SandboxPlugin
             float h = style.CalcHeight(new GUIContent(tagText), width);
             return Mathf.Max(Mathf.Ceil(h) + 2f, 16f);
         }
+
+        private const string LabelEllipsis = "...";
+
+        private static string TruncateWithEllipsis(string text, GUIStyle style, float maxWidth)
+        {
+            if (string.IsNullOrEmpty(text) || maxWidth <= 1f)
+                return text ?? "";
+
+            if (style.CalcSize(new GUIContent(text)).x <= maxWidth)
+                return text;
+
+            float ellipsisW = style.CalcSize(new GUIContent(LabelEllipsis)).x;
+            float budget = maxWidth - ellipsisW;
+            if (budget <= 1f)
+                return LabelEllipsis;
+
+            int lo = 0;
+            int hi = text.Length;
+            while (lo < hi)
+            {
+                int mid = (lo + hi + 1) / 2;
+                if (style.CalcSize(new GUIContent(text.Substring(0, mid))).x <= budget)
+                    lo = mid;
+                else
+                    hi = mid - 1;
+            }
+
+            return lo <= 0 ? LabelEllipsis : text.Substring(0, lo) + LabelEllipsis;
+        }
+
+        private float TreeNodeLabelMaxWidth(int depth) =>
+            Mathf.Max(40f, TreePanelWidth - 12f - VerticalScrollbarWidth() - depth * 16f - 24f);
 
         private string BuildPoseCardTagRichText(IReadOnlyList<string> sortedTags)
         {
@@ -3318,14 +3659,32 @@ namespace HS2SandboxPlugin
 
         // ── Styles ──
 
+        private static readonly Color PoseCardBaseTint = new Color(0.32f, 0.32f, 0.34f, 0.62f);
+        private static readonly Color GroupCardBaseTint = new Color(0.14f, 0.14f, 0.16f, 0.94f);
+
+        /// <summary>Chrome only (margin/padding); no skin.box 9-slice background.</summary>
+        private static GUIStyle CreatePoseCardChromeTemplate()
+        {
+            var box = GUI.skin.box;
+            return new GUIStyle
+            {
+                margin = new RectOffset(0, 0, 0, 0),
+                padding = new RectOffset(0, 0, 0, 0),
+                border = new RectOffset(0, 0, 0, 0),
+                clipping = box.clipping
+            };
+        }
+
         private void InitStyles()
         {
             if (_selectedStyle == null)
             {
-                var skinBox = GUI.skin.box;
-                // Plain style + zero border: cloning skin.box keeps atlased 9-slice refs on some states and fights our flat tint.
-                _selectedStyle = CardTintStyle(skinBox, new Color(0.22f, 0.48f, 0.98f, 0.88f));
-                _favoriteCardStyle = CardTintStyle(skinBox, new Color(0.95f, 0.82f, 0.22f, 0.72f));
+                var cardChrome = CreatePoseCardChromeTemplate();
+                _poseCardBaseStyle = CardTintStyle(cardChrome, PoseCardBaseTint);
+
+                _selectedStyle = CardTintStyle(_poseCardBaseStyle, new Color(0.22f, 0.48f, 0.98f, 0.88f));
+                _favoriteCardStyle = CardTintStyle(_poseCardBaseStyle, new Color(0.95f, 0.82f, 0.22f, 0.72f));
+                _dimmedCardStyle = CardTintStyle(_poseCardBaseStyle, new Color(0.45f, 0.45f, 0.45f, 0.35f));
 
                 _favoriteStyle = new GUIStyle(GUI.skin.label)
                 {
@@ -3334,7 +3693,14 @@ namespace HS2SandboxPlugin
                     normal = { textColor = new Color(1f, 0.85f, 0f) }
                 };
 
-                _favoriteCardNameStyle = new GUIStyle(GUI.skin.label)
+                _poseCardNameStyle = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    wordWrap = false,
+                    clipping = TextClipping.Clip
+                };
+
+                _favoriteCardNameStyle = new GUIStyle(_poseCardNameStyle)
                 {
                     fontSize = 14,
                     fontStyle = FontStyle.Bold,
@@ -3344,7 +3710,9 @@ namespace HS2SandboxPlugin
                 _treeNodeStyle = new GUIStyle(GUI.skin.label)
                 {
                     alignment = TextAnchor.MiddleLeft,
-                    padding = new RectOffset(4, 4, 0, 0)
+                    padding = new RectOffset(4, 4, 0, 0),
+                    wordWrap = false,
+                    clipping = TextClipping.Clip
                 };
 
                 var treeSelBg = MakeTex(4, 4, new Color(0.22f, 0.48f, 0.98f, 0.88f));
@@ -3413,15 +3781,9 @@ namespace HS2SandboxPlugin
             GUI.Label(new Rect(x, y, boxW, boxH), text, _poseBrowserTooltipStyle);
         }
 
-        private static GUIStyle CardTintStyle(GUIStyle skinBox, Color tint)
+        private static GUIStyle CardTintStyle(GUIStyle chromeTemplate, Color tint)
         {
-            var s = new GUIStyle
-            {
-                margin = skinBox.margin,
-                padding = skinBox.padding,
-                border = new RectOffset(0, 0, 0, 0),
-                clipping = skinBox.clipping
-            };
+            var s = new GUIStyle(chromeTemplate) { border = new RectOffset(0, 0, 0, 0) };
             Texture2D bg = MakeTex(4, 4, tint);
             ApplyFlatBackgroundAllStates(s, bg);
             return s;
@@ -3682,29 +4044,12 @@ namespace HS2SandboxPlugin
             if (_layoutTier != PoseBrowserLayoutTier.Normal)
                 return LayoutMinWidthFor(_layoutTier);
 
-            float vsb = GUI.skin.verticalScrollbar != null ? GUI.skin.verticalScrollbar.fixedWidth : 15f;
-            if (vsb < 10f) vsb = 18f;
-            float treeGrid = TreePanelWidth + GridPanelChromePad + MinCardSize + PoseCardHorizontalMarginBudget() + vsb;
+            float treeGrid = TreePanelWidth + GridPanelChromePad + MinCardSize + PoseCardHorizontalMarginBudget() + VerticalScrollbarWidth();
             return Mathf.Max(NormalTopBarMinWidth, treeGrid) + WindowChromeHorizontalPadding();
         }
 
-        private float EffectiveResizeMinWidth()
-        {
-            float baseline = ComputeContentMinimumWindowWidth();
-            if (_contentMinWindowWidth < 1f)
-                _contentMinWindowWidth = baseline;
-            return Mathf.Max(LayoutMinWidth, baseline, _contentMinWindowWidth);
-        }
-
-        private void RefreshContentMinWindowWidthFromLayout(float widthPassedToWindow, float widthAfterWindow)
-        {
-            if (Event.current.type != EventType.Layout)
-                return;
-            if (widthAfterWindow > widthPassedToWindow + 0.5f)
-                _contentMinWindowWidth = Mathf.Max(_contentMinWindowWidth, widthAfterWindow);
-        }
-
-        private void ResetContentMinWindowWidth() => _contentMinWindowWidth = 0f;
+        private float EffectiveResizeMinWidth() =>
+            Mathf.Max(LayoutMinWidth, ComputeContentMinimumWindowWidth());
 
         private void HandleResize()
         {

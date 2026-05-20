@@ -10,11 +10,14 @@ namespace HS2SandboxPlugin
     {
         private PoseGroupDatabase _groupDb = null!;
         private List<PoseBrowserDisplayEntry> _displayEntries = new List<PoseBrowserDisplayEntry>();
-        private GUIStyle? _dimmedCardStyle;
         private GUIStyle? _groupCardStyle;
         private GUIStyle? _groupCardSelectedStyle;
         private GUIStyle? _groupTitleStyle;
+        private GUIStyle? _groupInnerCardChromeBase;
         private GUIStyle? _groupInnerCardStyle;
+        private GUIStyle? _groupInnerCardSelectedStyle;
+        private GUIStyle? _groupInnerCardFavoriteStyle;
+        private GUIStyle? _groupInnerCardDimmedStyle;
         private GUIStyle? _actionBarSeparatorStyle;
 
         private bool _showGroupNamePopup;
@@ -38,18 +41,30 @@ namespace HS2SandboxPlugin
         private void InitGroupStyles()
         {
             if (_groupCardStyle != null) return;
-            var skinBox = GUI.skin.box;
-            _groupCardStyle = new GUIStyle(skinBox) { padding = new RectOffset(4, 4, 4, 4), margin = new RectOffset(0, 0, 0, 0) };
-            _groupCardSelectedStyle = CardTintStyle(skinBox, new Color(0.22f, 0.48f, 0.98f, 0.88f));
-            _groupCardSelectedStyle.padding = new RectOffset(4, 4, 4, 4);
-            _groupCardSelectedStyle.margin = new RectOffset(0, 0, 0, 0);
-            _groupInnerCardStyle = CardTintStyle(skinBox, new Color(0.32f, 0.32f, 0.32f, 0.55f));
-            _groupInnerCardStyle.margin = new RectOffset(0, 0, 0, 0);
-            _groupInnerCardStyle.padding = new RectOffset(0, 0, 2, 2);
-            _groupTitleStyle = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold };
-            _dimmedCardStyle = new GUIStyle(GUI.skin.box);
-            var dimTex = MakeTintTexture(new Color(0.45f, 0.45f, 0.45f, 0.35f));
-            _dimmedCardStyle.normal.background = dimTex;
+            InitStyles();
+
+            var groupChrome = CreatePoseCardChromeTemplate();
+            groupChrome.padding = new RectOffset(4, 4, 4, 4);
+            groupChrome.margin = new RectOffset(0, 0, 0, 0);
+            _groupCardStyle = CardTintStyle(groupChrome, GroupCardBaseTint);
+            _groupCardSelectedStyle = CardTintStyle(_groupCardStyle, new Color(0.22f, 0.48f, 0.98f, 0.88f));
+
+            _groupInnerCardChromeBase = new GUIStyle(_poseCardBaseStyle!)
+            {
+                margin = new RectOffset(0, 0, 0, 0),
+                padding = new RectOffset(0, 0, 2, 2)
+            };
+            _groupInnerCardStyle = CardTintStyle(_groupInnerCardChromeBase, PoseCardBaseTint);
+            _groupInnerCardSelectedStyle = CardTintStyle(_groupInnerCardChromeBase, new Color(0.22f, 0.48f, 0.98f, 0.88f));
+            _groupInnerCardFavoriteStyle = CardTintStyle(_groupInnerCardChromeBase, new Color(0.95f, 0.82f, 0.22f, 0.72f));
+            _groupInnerCardDimmedStyle = CardTintStyle(_groupInnerCardChromeBase, new Color(0.45f, 0.45f, 0.45f, 0.35f));
+
+            _groupTitleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontStyle = FontStyle.Bold,
+                wordWrap = false,
+                clipping = TextClipping.Clip
+            };
 
             _actionBarSeparatorStyle = new GUIStyle
             {
@@ -844,6 +859,21 @@ namespace HS2SandboxPlugin
             }
         }
 
+        private void ApplyTagToGroups(IReadOnlyList<PoseGroup> groups, string tag, bool add)
+        {
+            if (groups.Count == 0) return;
+            foreach (var g in groups)
+            {
+                if (add)
+                    g.Tags.Add(tag);
+                else
+                    g.Tags.Remove(tag);
+                _groupDb.SetGroupTags(g.Id, g.Tags);
+            }
+
+            ApplyFilters();
+        }
+
         private void DrawTagWindowAssignMultiGroupBody(string searchNormFold)
         {
             var groups = new List<PoseGroup>();
@@ -867,17 +897,28 @@ namespace HS2SandboxPlugin
                 hintStyle,
                 GUILayout.Height(36f));
 
-            var union = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var g in groups)
+            if (!string.IsNullOrEmpty(searchNormFold))
             {
-                foreach (var t in g.Tags)
-                    union.Add(t);
+                bool alreadyKnown = GetAllLibraryTagNames().Any(t =>
+                    string.Equals(t, searchNormFold, StringComparison.OrdinalIgnoreCase));
+                if (!alreadyKnown &&
+                    GUILayout.Button($"Add new tag \"{searchNormFold}\" to all selected groups", GUILayout.Height(26f)))
+                {
+                    ApplyTagToGroups(groups, searchNormFold, add: true);
+                }
             }
 
-            var allTags = _tagDb.GetAllKnownTags().Union(union).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+            var allTags = GetAllLibraryTagNames();
             var visible = string.IsNullOrEmpty(searchNormFold)
                 ? allTags
                 : allTags.Where(t => t.IndexOf(searchNormFold, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            GUILayout.Space(4f);
+            if (visible.Count == 0)
+            {
+                GUILayout.Label("No tags match the search.");
+                return;
+            }
 
             _tagWindowScroll = GUILayout.BeginScrollView(_tagWindowScroll, GUILayout.ExpandHeight(true));
             foreach (var tag in visible)
@@ -889,28 +930,39 @@ namespace HS2SandboxPlugin
                 if (nv == allOn && !mixed)
                     continue;
 
-                foreach (var g in groups)
-                {
-                    if (nv)
-                        g.Tags.Add(tag);
-                    else
-                        g.Tags.Remove(tag);
-                    _groupDb.SetGroupTags(g.Id, g.Tags);
-                }
+                ApplyTagToGroups(groups, tag, add: nv);
             }
 
             GUILayout.EndScrollView();
-            ApplyFilters();
         }
 
         private void DrawTagWindowAssignGroupBody(PoseGroup group, string searchNormFold)
         {
             GUILayout.Label($"Group: {group.Name}", GUILayout.Height(20f));
-            var union = group.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
-            var allTags = _tagDb.GetAllKnownTags().Union(union).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+
+            var groups = new List<PoseGroup> { group };
+            if (!string.IsNullOrEmpty(searchNormFold))
+            {
+                bool alreadyKnown = GetAllLibraryTagNames().Any(t =>
+                    string.Equals(t, searchNormFold, StringComparison.OrdinalIgnoreCase));
+                if (!alreadyKnown &&
+                    GUILayout.Button($"Add new tag \"{searchNormFold}\" to group", GUILayout.Height(26f)))
+                {
+                    ApplyTagToGroups(groups, searchNormFold, add: true);
+                }
+            }
+
+            var allTags = GetAllLibraryTagNames();
             var visible = string.IsNullOrEmpty(searchNormFold)
                 ? allTags
                 : allTags.Where(t => t.IndexOf(searchNormFold, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+            GUILayout.Space(4f);
+            if (visible.Count == 0)
+            {
+                GUILayout.Label("No tags match the search.");
+                return;
+            }
 
             _tagWindowScroll = GUILayout.BeginScrollView(_tagWindowScroll, GUILayout.ExpandHeight(true));
             foreach (var tag in visible)
@@ -918,12 +970,9 @@ namespace HS2SandboxPlugin
                 bool has = group.Tags.Contains(tag);
                 bool nv = GUILayout.Toggle(has, tag, GUILayout.Height(22f));
                 if (nv != has)
-                {
-                    if (nv) group.Tags.Add(tag);
-                    else group.Tags.Remove(tag);
-                    _groupDb.SetGroupTags(group.Id, group.Tags);
-                }
+                    ApplyTagToGroups(groups, tag, add: nv);
             }
+
             GUILayout.EndScrollView();
         }
 
@@ -983,6 +1032,10 @@ namespace HS2SandboxPlugin
             PoseBrowserGroupSegment segment,
             float cellInnerW,
             float columnFootprintW,
+            float uniformPoseCardOuterH,
+            float uniformTagBlockH,
+            float uniformGroupTagBlockH,
+            float rowOuterH,
             ref int displayIndex)
         {
             const float innerCardGap = 4f;
@@ -997,7 +1050,13 @@ namespace HS2SandboxPlugin
             float tightSegmentW = tightInnerW + groupHPad;
             float innerContentW = Mathf.Max(40f, tightInnerW);
 
-            GUILayout.BeginVertical(cardStyle, GUILayout.Width(tightSegmentW), GUILayout.MaxWidth(tightSegmentW), GUILayout.ExpandWidth(false));
+            GUILayout.BeginVertical(
+                cardStyle,
+                GUILayout.Width(tightSegmentW),
+                GUILayout.MaxWidth(tightSegmentW),
+                GUILayout.MinHeight(rowOuterH),
+                GUILayout.Height(rowOuterH),
+                GUILayout.ExpandWidth(false));
 
             if (segment.ShowHeader)
             {
@@ -1005,6 +1064,13 @@ namespace HS2SandboxPlugin
                 var headerRect = GUILayoutUtility.GetRect(innerContentW, 22f, GUILayout.Width(innerContentW), GUILayout.MaxWidth(innerContentW));
                 var headerCbRect = new Rect(headerRect.x + 2f, headerRect.y + 2f, 16f, 16f);
                 Event evHdr = Event.current;
+                string prefix = segment.IsContinuation ? "→ " : "";
+                string fullTitle = prefix + segment.GroupName;
+                float titleW = Mathf.Max(20f, headerRect.width - headerCbRect.width - 8f);
+                var titleRect = new Rect(headerCbRect.xMax + 4f, headerRect.y, titleW, headerRect.height);
+                string shownTitle = TruncateWithEllipsis(fullTitle, _groupTitleStyle!, titleW);
+                GUI.Label(titleRect, new GUIContent(shownTitle, fullTitle), _groupTitleStyle!);
+
                 if (evHdr.type == EventType.Repaint)
                 {
                     bool mixed = IsGroupMemberPoseSelectionPartial(segment.GroupId);
@@ -1017,13 +1083,6 @@ namespace HS2SandboxPlugin
                         GUI.Label(new Rect(headerCbRect.x + 3f, headerCbRect.y + 1f, 12f, 12f), "◪");
                         GUI.color = prev;
                     }
-
-                    string prefix = segment.IsContinuation ? "→ " : "";
-                    string title = prefix + segment.GroupName;
-                    GUI.Label(
-                        new Rect(headerCbRect.xMax + 4f, headerRect.y, headerRect.width - headerCbRect.width - 8f, headerRect.height),
-                        title,
-                        _groupTitleStyle!);
                 }
                 else if (evHdr.type == EventType.MouseDown && evHdr.button == 0 && headerRect.Contains(evHdr.mousePosition))
                 {
@@ -1031,12 +1090,19 @@ namespace HS2SandboxPlugin
                     evHdr.Use();
                 }
 
-                if (segment.ShowTags && segment.GroupTags.Count > 0)
+                if (segment.ShowTags && uniformGroupTagBlockH > 0f)
                 {
-                    string tagStr = string.Join(" · ", segment.GroupTags);
-                    var tagStyle = _tagWrapStyle!;
-                    float tagH = MeasureTagBlockHeight(tagStr, tagStyle, innerContentW);
-                    GUILayout.Label(tagStr, tagStyle, GUILayout.Width(innerContentW), GUILayout.MaxWidth(innerContentW), GUILayout.Height(tagH));
+                    var tagRect = GUILayoutUtility.GetRect(
+                        innerContentW,
+                        uniformGroupTagBlockH,
+                        GUILayout.Width(innerContentW),
+                        GUILayout.MaxWidth(innerContentW),
+                        GUILayout.ExpandWidth(false));
+                    if (segment.GroupTags.Count > 0 && Event.current.type == EventType.Repaint)
+                    {
+                        string tagStr = string.Join(" · ", segment.GroupTags);
+                        GUI.Label(tagRect, tagStr, _tagWrapStyle!);
+                    }
                 }
 
                 GUILayout.Space(2f);
@@ -1047,7 +1113,13 @@ namespace HS2SandboxPlugin
             {
                 if (p > 0)
                     GUILayout.Space(innerCardGap);
-                DrawGridCell(segment.Poses[p], displayIndex, columnFootprintW, cellInnerW, _groupInnerCardStyle);
+                DrawGridCell(
+                    segment.Poses[p],
+                    displayIndex,
+                    cellInnerW,
+                    uniformPoseCardOuterH,
+                    uniformTagBlockH,
+                    _groupInnerCardStyle);
                 displayIndex++;
             }
 
