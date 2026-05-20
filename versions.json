@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "allInOne": "2.0.0",
-  "allInOneDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-a7c2aeee38086c7b2741a5fe2090db01e28de161/HS2SandboxPlugin.dll",
+  "allInOneDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-190aec82d26ad16c35bcbdf1b0d3b84a86e592db/HS2SandboxPlugin.dll",
   "copyScript": "1.0.0",
   "copyScriptDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-7b8d4a7644041b03247048c2b11a40ecad637664/HS2Sandbox.CopyScript.dll",
   "timeline": "1.0.0",
@@ -14,6 +14,6 @@
   "workspaceTreeLockDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-745349e6470d993a35181964caccc8839106d6ea/HS2Sandbox.WorkspaceTreeLock.dll",
   "notebook": "1.0.0",
   "notebookDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-f316b62761d9722b82c601ae6944dfc71d4650e1/HS2Sandbox.Notebook.dll",
-  "poseBrowser": "3.3.0",
-  "poseBrowserDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-a7c2aeee38086c7b2741a5fe2090db01e28de161/HS2Sandbox.PoseBrowser.dll"
+  "poseBrowser": "3.4.0",
+  "poseBrowserDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-190aec82d26ad16c35bcbdf1b0d3b84a86e592db/HS2Sandbox.PoseBrowser.dll"
 }
