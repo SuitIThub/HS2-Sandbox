@@ -231,7 +231,8 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button("Group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
             {
                 _groupNamePopupMembers = librarySelected.ToList();
-                _groupNamePopupText = librarySelected[0].DisplayName;
+                _groupNamePopupText = PoseGroupNameSuggest.Suggest(
+                    librarySelected.Select(p => p.DisplayName).ToList());
                 _groupNamePopupMode = GroupNamePopupMode.Create;
                 _showGroupNamePopup = true;
             }
@@ -736,7 +737,16 @@ namespace HS2SandboxPlugin
             GUILayout.BeginVertical(GUI.skin.box);
             string title = _groupNamePopupMode == GroupNamePopupMode.Create ? "New group name" : "Rename group";
             GUILayout.Label(title);
+            GUI.SetNextControlName("PoseBrowserGroupNameField");
             _groupNamePopupText = GUILayout.TextField(_groupNamePopupText ?? "");
+            if (GUI.GetNameOfFocusedControl() == "PoseBrowserGroupNameField" &&
+                Event.current.type == EventType.KeyDown &&
+                (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter))
+            {
+                ConfirmGroupNamePopup();
+                Event.current.Use();
+            }
+
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("OK", GUILayout.Width(80f)))
                 ConfirmGroupNamePopup();

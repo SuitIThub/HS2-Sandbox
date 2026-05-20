@@ -250,6 +250,9 @@ namespace HS2SandboxPlugin
         private GUIStyle? _characterHintStyle;
         private GUIStyle? _compactWordWrapStyle;
 
+        private readonly PoseBrowserUpdateCheck _poseBrowserUpdateCheck = new PoseBrowserUpdateCheck();
+        private Coroutine? _poseBrowserUpdateCheckCoroutine;
+
         // BepInEx config ↔ Options panel (grid settings); hotkeys use KeyboardShortcut in Configuration Manager
         private EventHandler? _cfgGridHandler;
 
@@ -285,6 +288,7 @@ namespace HS2SandboxPlugin
             LoadPersistedOptions();
             ApplyPoseBrowserConfigToUi();
             SyncWindowTitleForLayoutTier();
+            _poseBrowserUpdateCheckCoroutine = StartCoroutine(_poseBrowserUpdateCheck.RunCheck());
         }
 
         private void Update()
@@ -298,6 +302,12 @@ namespace HS2SandboxPlugin
 
         private void OnDestroy()
         {
+            if (_poseBrowserUpdateCheckCoroutine != null)
+            {
+                StopCoroutine(_poseBrowserUpdateCheckCoroutine);
+                _poseBrowserUpdateCheckCoroutine = null;
+            }
+
             if (PoseBrowserConfig.CardColumnWidth != null && _cfgGridHandler != null)
             {
                 PoseBrowserConfig.CardColumnWidth.SettingChanged -= _cfgGridHandler;
@@ -1342,7 +1352,25 @@ namespace HS2SandboxPlugin
             }
 
             GUILayout.FlexibleSpace();
+            DrawPoseBrowserUpdateNotice();
             GUILayout.EndHorizontal();
+        }
+
+        private void DrawPoseBrowserUpdateNotice()
+        {
+            if (_poseBrowserUpdateCheck.State != PoseBrowserUpdateCheck.Status.UpdateAvailable)
+                return;
+
+            string remote = _poseBrowserUpdateCheck.RemoteVersion ?? "?";
+            string url = _poseBrowserUpdateCheck.DownloadUrl ?? PoseBrowserVersionInfo.LatestReleasePageUrl;
+            bool directDll = url.IndexOf(".dll", StringComparison.OrdinalIgnoreCase) >= 0;
+            string tip = directDll
+                ? $"Pose Browser v{remote} is available.\nClick to download the DLL.\n{url}"
+                : $"Pose Browser v{remote} is available.\nClick to open the latest GitHub release page.\n{url}";
+
+            var label = new GUIContent($"Update v{remote}", tip);
+            if (GUILayout.Button(label, GUI.skin.button, GUILayout.Height(20f), GUILayout.MinWidth(108f)))
+                Application.OpenURL(url);
         }
 
         private void DrawTagWindowContent(int id)
@@ -3742,6 +3770,7 @@ namespace HS2SandboxPlugin
                     clipping = TextClipping.Overflow,
                     normal = { textColor = new Color(0.62f, 0.66f, 0.7f) }
                 };
+
             }
 
             if (_compactWordWrapStyle == null)

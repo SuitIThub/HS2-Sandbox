@@ -10,7 +10,7 @@ FORCE="${3:-false}"
 extract_version() {
   local ref="$1"
   local path="$2"
-  git show "${ref}:${path}" 2>/dev/null | grep -oP 'PluginVersion\s*=\s*"\K[^"]+' | head -n1 || true
+  git show "${ref}:${path}" 2>/dev/null | grep -oP '(?:PluginVersion|const string Version)\s*=\s*"\K[^"]+' | head -n1 || true
 }
 
 declare -A FILES=(
@@ -21,7 +21,7 @@ declare -A FILES=(
   [sonscale]="Modules/SonScale/SonScaleModulePlugin.cs"
   [workspacetreelock]="Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs"
   [notebook]="Modules/Notebook/NotebookModulePlugin.cs"
-  [posebrowser]="Modules/PoseBrowser/PoseBrowserModulePlugin.cs"
+  [posebrowser]="PoseBrowser/PoseBrowserVersionInfo.cs"
 )
 
 declare -A DLLS=(

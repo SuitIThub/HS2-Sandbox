@@ -1,7 +1,6 @@
 # Single entry point for main-branch automation:
-#   - sync versions.json when PluginVersion constants change
-#   - build and publish GitHub releases when versions bump (or on first release / manual force)
-#   - refresh README download links after a release is published
+#   - build and publish GitHub releases when PluginVersion constants bump (or on first release / manual force)
+#   - after a successful release, refresh README download links and versions.json (badges + in-app update URLs)
 #
 # Bot-only commits (versions.json / README.md) do not re-trigger this workflow.
 
@@ -17,11 +16,6 @@ on:
     inputs:
       force_release:
         description: "Create a release even if no PluginVersion was bumped"
-        required: false
-        default: false
-        type: boolean
-      sync_versions:
-        description: "Regenerate versions.json from PluginVersion constants"
         required: false
         default: false
         type: boolean
@@ -42,7 +36,6 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      versions_changed: ${{ steps.detect.outputs.versions_changed }}
       should_release: ${{ steps.detect.outputs.should_release }}
       notes: ${{ steps.detect.outputs.notes }}
       asset_paths: ${{ steps.detect.outputs.asset_paths }}
@@ -86,31 +79,6 @@ jobs:
             "${{ steps.refs.outputs.before }}" \
             "${{ steps.refs.outputs.after }}" \
             "$FORCE"
-
-  sync-versions:
-    needs: detect
-    if: >-
-      needs.detect.outputs.versions_changed == 'true' ||
-      (github.event_name == 'workflow_dispatch' && inputs.sync_versions == true)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Regenerate versions.json
-        run: bash .github/scripts/sync_versions_json.sh
-
-      - name: Commit if changed
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add versions.json
-          if git diff --cached --quiet; then
-            echo "versions.json already matches source."
-          else
-            git commit -m "chore: sync versions.json from PluginVersion constants"
-            git push
-          fi
 
   release:
     needs: detect
@@ -217,22 +185,24 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Refresh README download links
+      - name: Refresh README and versions.json (after release assets exist)
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
           README_PATH: README.md
-        run: python3 .github/scripts/update_readme_downloads.py
+        run: |
+          python3 .github/scripts/update_readme_downloads.py
+          python3 .github/scripts/sync_versions_json.py
 
       - name: Commit if changed
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
+          git add README.md versions.json
           if git diff --cached --quiet; then
-            echo "README.md download links already current."
+            echo "README.md and versions.json already current."
           else
-            git commit -m "chore: refresh README module download links"
+            git commit -m "chore: sync versions.json and README after release"
             git push
           fi

@@ -5,12 +5,11 @@ then ensure README.md has one \"Download …\" markdown link per module/all-in-o
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
-import urllib.error
-import urllib.request
+
+from github_release_assets import fetch_latest_urls_per_dll
 
 
 SECTIONS: list[tuple[str, str, str]] = [
@@ -51,57 +50,6 @@ SECTIONS: list[tuple[str, str, str]] = [
     ),
     ("## All-in-one build", "HS2SandboxPlugin.dll", "All-in-one"),
 ]
-
-
-def _http_json(url: str, token: str) -> object:
-    req = urllib.request.Request(url)
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
-    req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("X-GitHub-Api-Version", "2022-11-28")
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        return json.loads(resp.read().decode())
-
-
-def _release_timestamp(rel: dict) -> str:
-    """Sort key: GitHub's list order is not reliably newest-first."""
-    return str(rel.get("published_at") or rel.get("created_at") or "")
-
-
-def fetch_latest_urls_per_dll(repo: str, token: str) -> dict[str, str]:
-    """Pick the asset URL from the newest release that contains each DLL basename."""
-    want = {dll for _, dll, _ in SECTIONS}
-    releases: list[dict] = []
-    page = 1
-    while page <= 20:
-        url = f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
-        try:
-            data = _http_json(url, token)
-        except urllib.error.HTTPError as e:
-            print(f"::error::GitHub API failed ({e.code}) while listing releases", file=sys.stderr)
-            raise
-        if not isinstance(data, list) or len(data) == 0:
-            break
-        releases.extend(data)
-        if len(data) < 100:
-            break
-        page += 1
-
-    releases.sort(key=_release_timestamp, reverse=True)
-
-    found: dict[str, str] = {}
-    for rel in releases:
-        assets = rel.get("assets") or []
-        for a in assets:
-            name = a.get("name")
-            dl = a.get("browser_download_url")
-            if not name or not dl or name not in want:
-                continue
-            if name not in found:
-                found[name] = dl
-        if len(found) >= len(want):
-            break
-    return found
 
 
 def patch_readme(text: str, dll_urls: dict[str, str]) -> tuple[str, bool]:

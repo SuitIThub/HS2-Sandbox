@@ -140,7 +140,7 @@ Choose this if you want the full set without managing several DLLs. See [Install
 
 ## For developers
 
-Version badges read [`versions.json`](versions.json); CI updates that file when `PluginVersion` constants change. Release **download** links in [What you get](#what-you-get) are refreshed automatically after each publish.
+Version badges read [`versions.json`](versions.json). CI updates that file **once**, after each successful GitHub release, so version strings and `*Download` URLs always refer to the same published assets. Badges may lag briefly until the release finishes. Release **download** links in [What you get](#what-you-get) are refreshed in the same post-release step.
 
 ### What ships in this repo
 
