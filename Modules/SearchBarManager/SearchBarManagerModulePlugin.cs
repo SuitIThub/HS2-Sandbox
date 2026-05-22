@@ -3,6 +3,7 @@ using BepInEx;
 namespace HS2SandboxPlugin
 {
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
+    [BepInProcess(PluginProcessTargets.StudioNeoV2)]
     public class SearchBarManagerModulePlugin : BaseUnityPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.searchbarmanager";

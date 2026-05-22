@@ -10,6 +10,11 @@
     <!-- File/Product version in Explorer; values come from PluginVersions.generated.props -->
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
+    <!-- KKManager "Website" / "Open website" reads AssemblyCompany (BepisPlugins pattern). -->
+    <PluginRepositoryUrl>https://github.com/SuitIThub/HS2-Sandbox</PluginRepositoryUrl>
+    <Company>$(PluginRepositoryUrl)</Company>
+    <RepositoryUrl>$(PluginRepositoryUrl)</RepositoryUrl>
+    <PackageProjectUrl>$(PluginRepositoryUrl)</PackageProjectUrl>
   </PropertyGroup>
 
   <Import

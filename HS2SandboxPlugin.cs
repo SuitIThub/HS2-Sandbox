@@ -11,6 +11,7 @@ using UnityEngine;
 namespace HS2SandboxPlugin
 {
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
+    [BepInProcess(PluginProcessTargets.StudioNeoV2)]
     [BepInDependency("com.animal42069.studiobetterpenetration", BepInDependency.DependencyFlags.SoftDependency)]
     public class HS2SandboxPlugin : BaseUnityPlugin
     {

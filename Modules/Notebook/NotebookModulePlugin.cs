@@ -5,6 +5,7 @@ using UnityEngine;
 namespace HS2SandboxPlugin
 {
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
+    [BepInProcess(PluginProcessTargets.StudioNeoV2)]
     public class NotebookModulePlugin : BaseUnityPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.notebook";
