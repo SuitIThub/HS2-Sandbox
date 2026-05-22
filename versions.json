@@ -1,19 +1,19 @@
 {
   "schemaVersion": 2,
   "allInOne": "2.0.0",
-  "allInOneDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c82de7daea70416817b8266649ef61aca8a6bffd/HS2SandboxPlugin.dll",
+  "allInOneDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2SandboxPlugin.dll",
   "copyScript": "1.0.0",
-  "copyScriptDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-7b8d4a7644041b03247048c2b11a40ecad637664/HS2Sandbox.CopyScript.dll",
+  "copyScriptDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.CopyScript.dll",
   "timeline": "1.0.0",
-  "timelineDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-7b8d4a7644041b03247048c2b11a40ecad637664/HS2Sandbox.Timeline.dll",
+  "timelineDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Timeline.dll",
   "searchBarManager": "1.0.0",
-  "searchBarManagerDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-7b8d4a7644041b03247048c2b11a40ecad637664/HS2Sandbox.SearchBarManager.dll",
+  "searchBarManagerDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SearchBarManager.dll",
   "sonScale": "1.1.1",
-  "sonScaleDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-540780726abd2c94d745ff12f54cc72521d6684b/HS2Sandbox.SonScale.dll",
+  "sonScaleDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SonScale.dll",
   "workspaceTreeLock": "1.0.7",
-  "workspaceTreeLockDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-745349e6470d993a35181964caccc8839106d6ea/HS2Sandbox.WorkspaceTreeLock.dll",
+  "workspaceTreeLockDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.WorkspaceTreeLock.dll",
   "notebook": "1.0.1",
-  "notebookDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-fd1ecbe2e62bb1dea8ecbbf0d631bc42d002d279/HS2Sandbox.Notebook.dll",
+  "notebookDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Notebook.dll",
   "poseBrowser": "3.6.0",
-  "poseBrowserDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c82de7daea70416817b8266649ef61aca8a6bffd/HS2Sandbox.PoseBrowser.dll"
+  "poseBrowserDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-22-allinone%2Bcopyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-2.0.0%2B1.0.0%2B1.0.1%2B3.6.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.PoseBrowser.dll"
 }
