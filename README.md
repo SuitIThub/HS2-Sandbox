@@ -84,7 +84,7 @@ In the Studio **object list**, **middle-click** a nested row to **pin** it. Pinn
 **Typical use:** pin deep items you need to reach often so collapsing the tree does not hide them.
 
 ### HS2 Sandbox — Notebook (`HS2Sandbox.Notebook.dll`)
-[Download Notebook](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-f316b62761d9722b82c601ae6944dfc71d4650e1/HS2Sandbox.Notebook.dll)
+[Download Notebook](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-fd1ecbe2e62bb1dea8ecbbf0d631bc42d002d279/HS2Sandbox.Notebook.dll)
 
 A simple **in-game notepad** for ideas, shot lists, and reminders—opened from the sidebar. Notes are saved automatically to `BepInEx/config/com.hs2.sandbox/notebook.json` and restored the next time you start Studio.
 
@@ -100,7 +100,7 @@ Browse, tag, favorite, save, and apply poses from your **`UserData/studio/pose`*
 ---
 
 ## All-in-one build
-[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-45b6cecc1f9ea684581eaefc321eb6f30a2ca1f8/HS2SandboxPlugin.dll)
+[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-fd1ecbe2e62bb1dea8ecbbf0d631bc42d002d279/HS2SandboxPlugin.dll)
 
 **`HS2SandboxPlugin.dll`** bundles every feature above in a single plugin: sidebar toggles for CopyScript, Timeline, Son scale, Notebook, and Pose Browser, plus search bars and workspace tree lock built in.
 
