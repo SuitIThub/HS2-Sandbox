@@ -7,7 +7,14 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin\$(Configuration)\</OutputPath>
+    <!-- File/Product version in Explorer; values come from PluginVersions.generated.props -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+
+  <Import
+    Project="PluginVersions.generated.props"
+    Condition="Exists('$(MSBuildThisFileDirectory)PluginVersions.generated.props')" />
 
   <!--
     Game and Unity UI references come from IllusionLibs (IllusionMods NuGet feed), same pattern as other HS2 plugins.

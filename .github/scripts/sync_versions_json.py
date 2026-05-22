@@ -8,36 +8,13 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
 from github_release_assets import RELEASE_DLLS, fetch_latest_urls_per_dll
+from plugin_version_sources import VERSION_FILES, read_plugin_version
 
 ROOT = Path(__file__).resolve().parents[2]
-
-VERSION_FILES: dict[str, Path] = {
-    "allInOne": ROOT / "HS2SandboxPlugin.cs",
-    "copyScript": ROOT / "Modules/CopyScript/CopyScriptModulePlugin.cs",
-    "timeline": ROOT / "Modules/Timeline/TimelineModulePlugin.cs",
-    "searchBarManager": ROOT / "Modules/SearchBarManager/SearchBarManagerModulePlugin.cs",
-    "sonScale": ROOT / "Modules/SonScale/SonScaleModulePlugin.cs",
-    "workspaceTreeLock": ROOT / "Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs",
-    "notebook": ROOT / "Modules/Notebook/NotebookModulePlugin.cs",
-    "poseBrowser": ROOT / "PoseBrowser/PoseBrowserVersionInfo.cs",
-}
-
-VERSION_RE = re.compile(
-    r'(?:PluginVersion|public\s+const\s+string\s+Version)\s*=\s*"([^"]+)"'
-)
-
-
-def read_plugin_version(path: Path) -> str:
-    text = path.read_text(encoding="utf-8")
-    match = VERSION_RE.search(text)
-    if not match:
-        raise ValueError(f"PluginVersion not found in {path}")
-    return match.group(1)
 
 
 def main() -> None:

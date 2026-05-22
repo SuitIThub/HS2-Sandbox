@@ -37,7 +37,10 @@ Run shell commands from the **repo root** unless a step uses absolute paths.
 
 ## 1. Build
 
+Generate assembly file metadata from `PluginVersion` constants (Windows Explorer “File version”), then build:
+
 ```powershell
+python .github/scripts/generate_plugin_versions_props.py
 dotnet build HS2-Sandbox.sln -c Release
 ```
 

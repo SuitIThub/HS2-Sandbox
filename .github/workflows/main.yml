@@ -1,5 +1,6 @@
 # Single entry point for main-branch automation:
 #   - build and publish GitHub releases when PluginVersion constants bump (or on first release / manual force)
+#   - workflow_dispatch "Manual rerelease": check plugins to publish, run workflow (15s wait, then release)
 #   - after a successful release, refresh README download links and versions.json (badges + in-app update URLs)
 #
 # Bot-only commits (versions.json / README.md) do not re-trigger this workflow.
@@ -14,6 +15,51 @@ on:
       - "README.md"
   workflow_dispatch:
     inputs:
+      manual_rerelease:
+        description: "Manual rerelease — check plugins below, wait, then publish selected DLLs"
+        required: false
+        default: false
+        type: boolean
+      rerelease_allinone:
+        description: "Rerelease — All-in-one (HS2SandboxPlugin)"
+        required: false
+        default: false
+        type: boolean
+      rerelease_copyscript:
+        description: "Rerelease — Copy Script"
+        required: false
+        default: false
+        type: boolean
+      rerelease_timeline:
+        description: "Rerelease — Timeline"
+        required: false
+        default: false
+        type: boolean
+      rerelease_searchbarmanager:
+        description: "Rerelease — Search Bar Manager"
+        required: false
+        default: false
+        type: boolean
+      rerelease_sonscale:
+        description: "Rerelease — Son Scale"
+        required: false
+        default: false
+        type: boolean
+      rerelease_workspacetreelock:
+        description: "Rerelease — Workspace Tree Lock"
+        required: false
+        default: false
+        type: boolean
+      rerelease_notebook:
+        description: "Rerelease — Notebook"
+        required: false
+        default: false
+        type: boolean
+      rerelease_posebrowser:
+        description: "Rerelease — Pose Browser"
+        required: false
+        default: false
+        type: boolean
       force_release:
         description: "Create a release even if no PluginVersion was bumped"
         required: false
@@ -34,6 +80,9 @@ concurrency:
 
 jobs:
   detect:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.manual_rerelease != true)
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.detect.outputs.should_release }}
@@ -82,9 +131,62 @@ jobs:
             "${{ steps.refs.outputs.after }}" \
             "$FORCE"
 
+  manual-rerelease:
+    if: github.event_name == 'workflow_dispatch' && inputs.manual_rerelease == true
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.detect.outputs.should_release }}
+      notes: ${{ steps.detect.outputs.notes }}
+      asset_paths: ${{ steps.detect.outputs.asset_paths }}
+      release_tag: ${{ steps.detect.outputs.release_tag }}
+      release_name: ${{ steps.detect.outputs.release_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for plugin selections to register
+        run: |
+          set -euo pipefail
+          echo "Manual rerelease: enable the plugins you want, then run this workflow."
+          echo "Waiting 15 seconds before starting the rerelease..."
+          sleep 15
+
+      - name: Collect selected plugins
+        id: plugins
+        env:
+          RERELEASE_ALLINONE: ${{ inputs.rerelease_allinone }}
+          RERELEASE_COPYSCRIPT: ${{ inputs.rerelease_copyscript }}
+          RERELEASE_TIMELINE: ${{ inputs.rerelease_timeline }}
+          RERELEASE_SEARCHBARMANAGER: ${{ inputs.rerelease_searchbarmanager }}
+          RERELEASE_SONSCALE: ${{ inputs.rerelease_sonscale }}
+          RERELEASE_WORKSPACETREELOCK: ${{ inputs.rerelease_workspacetreelock }}
+          RERELEASE_NOTEBOOK: ${{ inputs.rerelease_notebook }}
+          RERELEASE_POSEBROWSER: ${{ inputs.rerelease_posebrowser }}
+        run: bash .github/scripts/collect_manual_rerelease_plugins.sh
+
+      - name: Prepare manual rerelease plan
+        id: detect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          AFTER="$(git rev-parse HEAD)"
+          BEFORE="$(git rev-parse HEAD~1)"
+          bash .github/scripts/detect_plugin_versions.sh \
+            "$BEFORE" "$AFTER" "false" "${{ steps.plugins.outputs.plugins }}"
+
   release:
-    needs: detect
-    if: needs.detect.outputs.should_release == 'true'
+    needs: [detect, manual-rerelease]
+    if: >-
+      always() &&
+      !cancelled() &&
+      (
+        (needs.manual-rerelease.result == 'success' && needs.manual-rerelease.outputs.should_release == 'true') ||
+        (needs.detect.result == 'success' && needs.detect.outputs.should_release == 'true')
+      )
     runs-on: ubuntu-latest
     outputs:
       released: ${{ steps.set_released.outputs.released }}
@@ -98,7 +200,7 @@ jobs:
         id: existing
         run: |
           set -euo pipefail
-          TAG="${{ needs.detect.outputs.release_tag }}"
+          TAG="${{ needs.manual-rerelease.outputs.should_release == 'true' && needs.manual-rerelease.outputs.release_tag || needs.detect.outputs.release_tag }}"
           TAG_ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$TAG")"
           CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ github.token }}" \
@@ -113,13 +215,17 @@ jobs:
 
       - name: Skip (release tag already exists)
         if: steps.existing.outputs.exists == 'true'
-        run: echo "Tag ${{ needs.detect.outputs.release_tag }} already has a GitHub release; skipping build."
+        run: echo "Tag ${{ needs.manual-rerelease.outputs.should_release == 'true' && needs.manual-rerelease.outputs.release_tag || needs.detect.outputs.release_tag }} already has a GitHub release; skipping build."
 
       - name: Setup .NET
         if: steps.existing.outputs.exists != 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      - name: Generate assembly version props
+        if: steps.existing.outputs.exists != 'true'
+        run: python3 .github/scripts/generate_plugin_versions_props.py
 
       - name: Restore and build solution (Release)
         if: steps.existing.outputs.exists != 'true'
@@ -134,7 +240,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-staging
-          IFS=',' read -ra PATHS <<< "${{ needs.detect.outputs.asset_paths }}"
+          IFS=',' read -ra PATHS <<< "${{ needs.manual-rerelease.outputs.should_release == 'true' && needs.manual-rerelease.outputs.asset_paths || needs.detect.outputs.asset_paths }}"
           for rel in "${PATHS[@]}"; do
             [[ -z "${rel// }" ]] && continue
             if [[ ! -f "$rel" ]]; then
@@ -149,10 +255,10 @@ jobs:
         if: steps.existing.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.detect.outputs.release_tag }}
-          name: ${{ needs.detect.outputs.release_name }}
+          tag_name: ${{ needs.manual-rerelease.outputs.should_release == 'true' && needs.manual-rerelease.outputs.release_tag || needs.detect.outputs.release_tag }}
+          name: ${{ needs.manual-rerelease.outputs.should_release == 'true' && needs.manual-rerelease.outputs.release_name || needs.detect.outputs.release_name }}
           body: |
-            ${{ needs.detect.outputs.notes }}
+            ${{ needs.manual-rerelease.outputs.should_release == 'true' && needs.manual-rerelease.outputs.notes || needs.detect.outputs.notes }}
 
             **Commit:** ${{ github.sha }}
             **Workflow:** ${{ github.run_id }}
@@ -173,7 +279,7 @@ jobs:
           fi
 
   update-readme:
-    needs: [detect, release]
+    needs: [detect, manual-rerelease, release]
     if: >-
       always() &&
       !cancelled() &&

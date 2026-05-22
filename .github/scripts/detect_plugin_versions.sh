@@ -6,6 +6,8 @@ set -euo pipefail
 BEFORE="${1:?before ref required}"
 AFTER="${2:?after ref required}"
 FORCE="${3:-false}"
+# Optional comma-separated plugin keys (e.g. copyscript,timeline) for manual rerelease.
+SELECTED="${4:-}"
 
 extract_version() {
   local ref="$1"
@@ -85,7 +87,30 @@ if [[ "$FORCE" == "true" || ${#CHANGED[@]} -gt 0 || "$INITIAL_RELEASE" == "true"
   SHOULD_RELEASE="true"
 fi
 
-if [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
+if [[ -n "$SELECTED" ]]; then
+  CHANGED=()
+  NOTES=()
+  IFS=',' read -ra SELECTED_KEYS <<< "$SELECTED"
+  unset IFS
+  for key in "${SELECTED_KEYS[@]}"; do
+    key="${key// /}"
+    [[ -z "$key" ]] && continue
+    if [[ ! -v "FILES[$key]" ]]; then
+      echo "::error::Unknown plugin key in manual rerelease: $key"
+      exit 1
+    fi
+    CHANGED+=("$key")
+    v="$(extract_version "$AFTER" "${FILES[$key]}")"
+    [[ -z "$v" ]] && v="unknown"
+    NOTES+=("- **${key}**: \`${v}\` (manual rerelease)")
+  done
+  if [[ ${#CHANGED[@]} -eq 0 ]]; then
+    echo "::error::Manual rerelease requested but no valid plugin keys were provided."
+    exit 1
+  fi
+  SHOULD_RELEASE="true"
+  NOTES+=("- **trigger**: manual rerelease via workflow_dispatch")
+elif [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
   CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
   NOTES+=("- **manual force**: including all module DLLs plus all-in-one")
 elif [[ "$INITIAL_RELEASE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then

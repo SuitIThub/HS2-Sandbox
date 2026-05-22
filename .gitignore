@@ -1,3 +1,6 @@
+# MSBuild: generated from PluginVersion constants before build
+PluginVersions.generated.props
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
