@@ -1,0 +1,50 @@
+---
+description: Never use Unity JsonUtility for persistence or new JSON code
+alwaysApply: true
+---
+
+# Do not use JsonUtility
+
+**Never use `UnityEngine.JsonUtility` (`JsonUtility.ToJson`, `JsonUtility.FromJson`, or wrappers whose only purpose is to satisfy JsonUtility).**
+
+This is not negotiable for new or changed code. Do not introduce JsonUtility “temporarily” and do not suggest it for file/config persistence. We already know it fails in this project — do not use it and then explain why it does not work.
+
+## Why
+
+JsonUtility in Unity is unreliable for real persistence:
+
+- Arrays of nested `[Serializable]` types often do not round-trip
+- Root-level arrays and many dictionary shapes are unsupported
+- Property order and naming quirks break real-world JSON
+- Agents repeatedly add JsonUtility, hit bugs, then rediscover the same limitations
+
+## What to do instead
+
+When adding or changing persistence or JSON serialization:
+
+1. **Prefer existing project patterns** — reuse or extend them instead of inventing a new stack:
+   - `NotebookPersistence` — explicit UTF-8 JSON read/write for nested arrays
+   - `TimelineJsonHelper` — shared escape/build/parse for timeline JSON
+   - `PosePackExchange` / `PoseTagDatabase` — custom parsers or TSV where JsonUtility was abandoned
+2. **Hand-written JSON** — `StringBuilder` + `EscapeJsonString`-style helpers for save; a small dedicated parser (or incremental reader) for load when shape is fixed.
+3. **Newtonsoft.Json** — only if already used in that area and the dependency is acceptable; do not default to it without checking project conventions.
+
+## Allowed exceptions
+
+- **Do not refactor** existing JsonUtility call sites unless the user explicitly asks.
+- **Legacy import only**: reading old files written by JsonUtility (e.g. one-time migration) is OK if clearly labeled legacy; new saves must use a reliable serializer.
+- **Do not “fix” persistence bugs** by adding more JsonUtility wrappers, `[Serializable]` workarounds, or duplicate DTO types whose only job is to appease JsonUtility.
+
+## Examples
+
+```csharp
+// BAD — do not add for new persistence
+File.WriteAllText(path, JsonUtility.ToJson(data, true));
+var data = JsonUtility.FromJson<MySaveData>(json);
+
+// GOOD — follow NotebookPersistence / TimelineJsonHelper style
+File.WriteAllText(path, BuildNotebookJson(state), Encoding.UTF8);
+if (TryParseV1(json, out state)) { ... }
+```
+
+If the task is “save/load X to disk”, start by searching the repo for how similar data is already persisted and match that approach.
