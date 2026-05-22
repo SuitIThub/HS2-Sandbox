@@ -91,7 +91,7 @@ A simple **in-game notepad** for ideas, shot lists, and reminders—opened from 
 **Typical use:** keep the window open while you work; edits are debounced to disk (~0.5s) and flushed when you close the window or exit the game.
 
 ### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)
-[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-45b6cecc1f9ea684581eaefc321eb6f30a2ca1f8/HS2Sandbox.PoseBrowser.dll)
+[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c82de7daea70416817b8266649ef61aca8a6bffd/HS2Sandbox.PoseBrowser.dll)
 
 Browse, tag, favorite, save, and apply poses from your **`UserData/studio/pose`** folder. Folder tree, thumbnails, search, and file operations (move, copy, delete with backup) from one window.
 
@@ -100,7 +100,7 @@ Browse, tag, favorite, save, and apply poses from your **`UserData/studio/pose`*
 ---
 
 ## All-in-one build
-[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-fd1ecbe2e62bb1dea8ecbbf0d631bc42d002d279/HS2SandboxPlugin.dll)
+[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-c82de7daea70416817b8266649ef61aca8a6bffd/HS2SandboxPlugin.dll)
 
 **`HS2SandboxPlugin.dll`** bundles every feature above in a single plugin: sidebar toggles for CopyScript, Timeline, Son scale, Notebook, and Pose Browser, plus search bars and workspace tree lock built in.
 
