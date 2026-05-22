@@ -39,6 +39,8 @@ jobs:
       should_release: ${{ steps.detect.outputs.should_release }}
       notes: ${{ steps.detect.outputs.notes }}
       asset_paths: ${{ steps.detect.outputs.asset_paths }}
+      release_tag: ${{ steps.detect.outputs.release_tag }}
+      release_name: ${{ steps.detect.outputs.release_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,12 +98,13 @@ jobs:
         id: existing
         run: |
           set -euo pipefail
-          TAG="release-${{ github.sha }}"
+          TAG="${{ needs.detect.outputs.release_tag }}"
+          TAG_ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$TAG")"
           CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ github.token }}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}")
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_ENC}")
           if [[ "$CODE" == "200" ]]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -110,7 +113,7 @@ jobs:
 
       - name: Skip (release tag already exists)
         if: steps.existing.outputs.exists == 'true'
-        run: echo "Tag release-${{ github.sha }} already has a GitHub release; skipping build."
+        run: echo "Tag ${{ needs.detect.outputs.release_tag }} already has a GitHub release; skipping build."
 
       - name: Setup .NET
         if: steps.existing.outputs.exists != 'true'
@@ -146,8 +149,8 @@ jobs:
         if: steps.existing.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: release-${{ github.sha }}
-          name: HS2 Sandbox — grouped release (${{ github.sha }})
+          tag_name: ${{ needs.detect.outputs.release_tag }}
+          name: ${{ needs.detect.outputs.release_name }}
           body: |
             ${{ needs.detect.outputs.notes }}
 

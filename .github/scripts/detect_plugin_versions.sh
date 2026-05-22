@@ -144,3 +144,117 @@ echo "asset_paths=$asset_paths_csv" >> "$GITHUB_OUTPUT"
   printf '%s\n' "${CHANGELOG[@]}"
   echo 'NOTEEOF'
 } >> "$GITHUB_OUTPUT"
+
+# --- Sortable release tag/title: release-r<date>-<plugin(s)> <version(s)> ---
+# "release-r" sorts above legacy release-<git-sha> tags when the releases list is
+# ordered by name (descending): 'r' > hex digits.
+
+RELEASE_KEYS=()
+if [[ ${#CHANGED[@]} -gt 0 ]]; then
+  for key in "${CHANGED[@]}"; do
+    RELEASE_KEYS+=("$key")
+  done
+else
+  RELEASE_KEYS=(allinone)
+fi
+IFS=$'\n' RELEASE_KEYS=($(printf '%s\n' "${RELEASE_KEYS[@]}" | sort -u))
+unset IFS
+
+RELEASE_DATE="$(git log -1 --format=%cs "$AFTER" 2>/dev/null || date -u +%Y-%m-%d)"
+PLUGIN_SLUG="$(IFS=+; echo "${RELEASE_KEYS[*]}")"
+
+RELEASE_VERSIONS=()
+for key in "${RELEASE_KEYS[@]}"; do
+  v="$(extract_version "$AFTER" "${FILES[$key]}")"
+  [[ -z "$v" ]] && v="unknown"
+  RELEASE_VERSIONS+=("$v")
+done
+VERSION_SLUG="$(IFS=+; echo "${RELEASE_VERSIONS[*]}")"
+
+fetch_releases_page() {
+  curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=100&page=${1}"
+}
+
+# Reuse tag/title if this commit already has a release.
+EXISTING_TAG=""
+EXISTING_NAME=""
+page=1
+while [[ "$page" -le 20 ]]; do
+  REL_PAGE="$(fetch_releases_page "$page")"
+  count=$(echo "$REL_PAGE" | jq 'length' 2>/dev/null || echo 0)
+  [[ "$count" -eq 0 ]] && break
+  EXISTING_TAG="$(echo "$REL_PAGE" | jq -r --arg sha "$AFTER" \
+    '.[] | select(.target_commitish == $sha) | .tag_name' 2>/dev/null | head -n1)"
+  if [[ -n "$EXISTING_TAG" && "$EXISTING_TAG" != "null" ]]; then
+    EXISTING_NAME="$(echo "$REL_PAGE" | jq -r --arg t "$EXISTING_TAG" \
+      '.[] | select(.tag_name == $t) | .name' 2>/dev/null | head -n1)"
+    break
+  fi
+  [[ "$count" -lt 100 ]] && break
+  page=$((page + 1))
+done
+
+tag_suffix_for_stem() {
+  local tag="$1"
+  local stem="$2"
+  local versions="$3"
+  local expected="${stem}-${versions}"
+  if [[ "$tag" == "$expected" ]]; then
+    echo 1
+    return
+  fi
+  local prefix="${stem}-"
+  [[ "$tag" != "${prefix}"* ]] && return
+  local rest="${tag#"${prefix}"}"
+  if [[ "$rest" =~ ^([0-9]+)- ]]; then
+    local inc="${BASH_REMATCH[1]}"
+    local ver_part="${rest#"${inc}"-}"
+    if [[ "$ver_part" == "$versions" ]]; then
+      echo "$inc"
+    fi
+  fi
+}
+
+if [[ -n "$EXISTING_TAG" && "$EXISTING_TAG" != "null" ]]; then
+  RELEASE_TAG="$EXISTING_TAG"
+  if [[ -n "$EXISTING_NAME" && "$EXISTING_NAME" != "null" ]]; then
+    RELEASE_NAME="$EXISTING_NAME"
+  else
+    RELEASE_NAME="release-r${RELEASE_DATE}-${PLUGIN_SLUG} ${VERSION_SLUG}"
+  fi
+else
+  BASE_STEM="release-r${RELEASE_DATE}-${PLUGIN_SLUG}"
+  MAX_INC=0
+  page=1
+  while [[ "$page" -le 20 ]]; do
+    REL_PAGE="$(fetch_releases_page "$page")"
+    count=$(echo "$REL_PAGE" | jq 'length' 2>/dev/null || echo 0)
+    [[ "$count" -eq 0 ]] && break
+    while IFS= read -r tag; do
+      [[ -z "$tag" ]] && continue
+      inc="$(tag_suffix_for_stem "$tag" "$BASE_STEM" "$VERSION_SLUG")"
+      [[ -n "$inc" && "$inc" -gt "$MAX_INC" ]] && MAX_INC="$inc"
+    done < <(echo "$REL_PAGE" | jq -r '.[].tag_name' 2>/dev/null)
+    [[ "$count" -lt 100 ]] && break
+    page=$((page + 1))
+  done
+
+  if [[ "$MAX_INC" -eq 0 ]]; then
+    INC_STEM="$BASE_STEM"
+  else
+    INC_STEM="${BASE_STEM}-$((MAX_INC + 1))"
+  fi
+
+  RELEASE_NAME="${INC_STEM} ${VERSION_SLUG}"
+  RELEASE_TAG="${INC_STEM}-${VERSION_SLUG}"
+fi
+
+{
+  echo "release_tag=$RELEASE_TAG"
+  echo "release_name=$RELEASE_NAME"
+} >> "$GITHUB_OUTPUT"
+echo "Release tag: $RELEASE_TAG"
+echo "Release name: $RELEASE_NAME"
