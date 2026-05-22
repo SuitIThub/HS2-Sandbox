@@ -1,6 +1,4 @@
 using System;
-using System.IO;
-using BepInEx;
 using KKAPI.Utilities;
 using UnityEngine;
 
@@ -8,20 +6,6 @@ namespace HS2SandboxPlugin
 {
     public class NotebookWindow : SubWindow
     {
-        [Serializable]
-        private class NotebookNote
-        {
-            public string title = "New Note";
-            public string content = "";
-        }
-
-        [Serializable]
-        private class NotebookSaveData
-        {
-            public NotebookNote[] notes = Array.Empty<NotebookNote>();
-            public int selectedIndex = 0;
-        }
-
         private const float MinWidth = 520f;
         private const float MinHeight = 360f;
         private const float MaxWidth = 1100f;
@@ -30,7 +14,7 @@ namespace HS2SandboxPlugin
         private const int MaxTitleLength = 120;
 
         private string _savePath = string.Empty;
-        private NotebookNote[] _notes = Array.Empty<NotebookNote>();
+        private NotebookNoteData[] _notes = Array.Empty<NotebookNoteData>();
         private int _selectedIndex;
         private bool _isResizing;
         private bool _dirty;
@@ -43,17 +27,20 @@ namespace HS2SandboxPlugin
             base.Start();
             windowID = 2012;
             windowTitle = "Notebook";
-            windowRect = new Rect(420f, 120f, 680f, 500f);
-            _savePath = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "notebook.json");
+            _savePath = NotebookPersistence.GetDefaultPath();
             LoadFromDisk();
         }
 
         private void Update()
         {
             if (_dirty && Time.unscaledTime >= _nextSaveAt)
-            {
                 SaveToDisk();
-            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (_dirty)
+                SaveToDisk();
         }
 
         public override void DrawWindow()
@@ -104,7 +91,13 @@ namespace HS2SandboxPlugin
                     title = title.Substring(0, 15) + "...";
 
                 if (GUILayout.Button(title, GUILayout.Height(24f), GUILayout.MinWidth(95f)))
-                    _selectedIndex = i;
+                {
+                    if (_selectedIndex != i)
+                    {
+                        _selectedIndex = i;
+                        MarkDirty();
+                    }
+                }
 
                 GUI.color = oldColor;
             }
@@ -161,6 +154,9 @@ namespace HS2SandboxPlugin
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Close", GUILayout.Width(90f), GUILayout.Height(24f)))
             {
+                if (_dirty)
+                    SaveToDisk();
+
                 var gui = FindObjectOfType<SandboxGUI>();
                 if (gui != null)
                     gui.SetWindowVisible(SandboxWindowKeys.Notebook, false);
@@ -170,7 +166,7 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
         }
 
-        private NotebookNote? GetSelectedNote()
+        private NotebookNoteData? GetSelectedNote()
         {
             if (_notes.Length == 0)
                 return null;
@@ -180,9 +176,9 @@ namespace HS2SandboxPlugin
 
         private void AddNote()
         {
-            var next = new NotebookNote[_notes.Length + 1];
+            var next = new NotebookNoteData[_notes.Length + 1];
             Array.Copy(_notes, next, _notes.Length);
-            next[next.Length - 1] = new NotebookNote { title = $"Note {next.Length}" };
+            next[next.Length - 1] = new NotebookNoteData { title = $"Note {next.Length}" };
             _notes = next;
             _selectedIndex = _notes.Length - 1;
             MarkDirty();
@@ -193,7 +189,7 @@ namespace HS2SandboxPlugin
             if (_notes.Length <= 1)
                 return;
 
-            var next = new NotebookNote[_notes.Length - 1];
+            var next = new NotebookNoteData[_notes.Length - 1];
             int writeIndex = 0;
             for (int i = 0; i < _notes.Length; i++)
             {
@@ -215,51 +211,45 @@ namespace HS2SandboxPlugin
 
         private void SaveToDisk()
         {
-            try
+            var state = new NotebookPersistedState
             {
-                string dir = Path.GetDirectoryName(_savePath) ?? string.Empty;
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
+                notes = _notes,
+                selectedIndex = _selectedIndex,
+                windowX = windowRect.x,
+                windowY = windowRect.y,
+                windowW = windowRect.width,
+                windowH = windowRect.height
+            };
 
-                var data = new NotebookSaveData
-                {
-                    notes = _notes,
-                    selectedIndex = _selectedIndex
-                };
-
-                string json = JsonUtility.ToJson(data, true);
-                File.WriteAllText(_savePath, json);
-                _dirty = false;
-            }
-            catch (Exception ex)
-            {
-                SandboxServices.Log.LogError($"Notebook save failed: {ex.Message}");
-            }
+            NotebookPersistence.Save(_savePath, state);
+            _dirty = false;
         }
 
         private void LoadFromDisk()
         {
-            try
+            if (NotebookPersistence.TryLoad(_savePath, out NotebookPersistedState state))
             {
-                if (File.Exists(_savePath))
+                _notes = state.notes;
+                _selectedIndex = Mathf.Clamp(state.selectedIndex, 0, _notes.Length - 1);
+                if (state.windowW > 0f && state.windowH > 0f)
                 {
-                    string json = File.ReadAllText(_savePath);
-                    var data = JsonUtility.FromJson<NotebookSaveData>(json);
-                    if (data != null && data.notes != null && data.notes.Length > 0)
-                    {
-                        _notes = data.notes;
-                        _selectedIndex = Mathf.Clamp(data.selectedIndex, 0, _notes.Length - 1);
-                        return;
-                    }
+                    windowRect = new Rect(
+                        state.windowX,
+                        state.windowY,
+                        Mathf.Clamp(state.windowW, MinWidth, MaxWidth),
+                        Mathf.Clamp(state.windowH, MinHeight, MaxHeight));
                 }
-            }
-            catch (Exception ex)
-            {
-                SandboxServices.Log.LogError($"Notebook load failed: {ex.Message}");
+                else
+                {
+                    windowRect = new Rect(420f, 120f, 680f, 500f);
+                }
+
+                return;
             }
 
-            _notes = new[] { new NotebookNote { title = "Note 1", content = "" } };
+            _notes = new[] { new NotebookNoteData { title = "Note 1", content = "" } };
             _selectedIndex = 0;
+            windowRect = new Rect(420f, 120f, 680f, 500f);
             MarkDirty();
         }
 
@@ -291,6 +281,7 @@ namespace HS2SandboxPlugin
             else if (_isResizing && (e.type == EventType.MouseUp || e.rawType == EventType.MouseUp))
             {
                 _isResizing = false;
+                MarkDirty();
                 e.Use();
             }
         }

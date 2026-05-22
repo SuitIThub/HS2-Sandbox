@@ -9,7 +9,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.notebook";
         public const string PluginName = "HS2 Sandbox - Notebook";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.0.1";
 
         private static Texture2D _icon = null!;
         private static ToolbarToggle _toolbarToggle = null!;

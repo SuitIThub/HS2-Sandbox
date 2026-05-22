@@ -86,9 +86,9 @@ In the Studio **object list**, **middle-click** a nested row to **pin** it. Pinn
 ### HS2 Sandbox — Notebook (`HS2Sandbox.Notebook.dll`)
 [Download Notebook](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-f316b62761d9722b82c601ae6944dfc71d4650e1/HS2Sandbox.Notebook.dll)
 
-A simple **in-game notepad** for session notes—ideas, shot lists, reminders—opened from the sidebar.
+A simple **in-game notepad** for ideas, shot lists, and reminders—opened from the sidebar. Notes are saved automatically to `BepInEx/config/com.hs2.sandbox/notebook.json` and restored the next time you start Studio.
 
-**Typical use:** keep the window open while you work; content is local to your current plugin session.
+**Typical use:** keep the window open while you work; edits are debounced to disk (~0.5s) and flushed when you close the window or exit the game.
 
 ### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)
 [Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-45b6cecc1f9ea684581eaefc321eb6f30a2ca1f8/HS2Sandbox.PoseBrowser.dll)
