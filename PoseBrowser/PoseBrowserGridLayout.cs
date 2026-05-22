@@ -88,7 +88,8 @@ namespace HS2SandboxPlugin
             HashSet<string> excludeTagFilters,
             bool tagFilterAndMode,
             bool showFavoritesOnly,
-            bool excludeGroupedPosesFromResults = false)
+            bool excludeGroupedPosesFromResults = false,
+            bool excludePosesWithoutThumbnail = false)
         {
             searchRegexError = "";
             var groupVisible = new Dictionary<string, bool>(StringComparer.Ordinal);
@@ -170,6 +171,8 @@ namespace HS2SandboxPlugin
                     foreach (var member in emitted)
                     {
                         if (included.Contains(member)) continue;
+                        if (excludePosesWithoutThumbnail && !member.IsPng)
+                            continue;
                         included.Add(member);
                         var memberTags = CollectEffectiveFilterTags(member, groupById);
                         bool dimmed = !poseContentMatch[member] ||
@@ -178,7 +181,8 @@ namespace HS2SandboxPlugin
                     }
                 }
                 else if (poseContentMatch[item] &&
-                         !HasAnyExcludedTag(CollectEffectiveFilterTags(item, groupById), excludeTagFilters))
+                         !HasAnyExcludedTag(CollectEffectiveFilterTags(item, groupById), excludeTagFilters) &&
+                         (!excludePosesWithoutThumbnail || item.IsPng))
                 {
                     if (included.Contains(item)) continue;
                     included.Add(item);

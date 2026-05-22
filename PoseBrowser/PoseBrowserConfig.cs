@@ -6,7 +6,7 @@ namespace HS2SandboxPlugin
     /// <summary>BepInEx ConfigurationManager entries for Pose Browser (mirrored in the in-game Options panel).</summary>
     internal static class PoseBrowserConfig
     {
-        public const int OptionsJsonVersion = 8;
+        public const int OptionsJsonVersion = 9;
 
         /// <summary>Config section used for <see cref="KeyboardShortcut"/> entries (ConfigurationManager key picker).</summary>
         public const string KeyboardSection = "Pose Browser · Keyboard shortcuts";

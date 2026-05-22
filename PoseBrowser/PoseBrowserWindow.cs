@@ -172,7 +172,20 @@ namespace HS2SandboxPlugin
         private readonly HashSet<string> _tagFiltersExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _tagFilterAndMode = true;
         private bool _tagFilterExcludeGroups;
+        private bool _tagFilterExcludeNoThumbnail;
         private bool _showFavoritesOnly;
+
+        private readonly List<PoseBrowserFilterPreset> _filterPresets = new List<PoseBrowserFilterPreset>();
+        private string? _activeFilterPresetName;
+        private int _selectedFilterPresetIndex = -1;
+        private string _filterPresetSaveName = "";
+        private Vector2 _filterPresetConfigScroll;
+        private static string FilterPresetsPath => PoseBrowserFilterPresets.GetDefaultPath();
+
+        private const string TagFilterTipsTooltip =
+            "Click a tag to cycle: neutral → include (+) → exclude (−).\n\n" +
+            "Grouped poses inherit their group's tags for include/exclude. Exclude hides ungrouped poses; " +
+            "in a visible group, members with an excluded tag (on the pose or group) are dimmed.";
 
         private enum TagWindowPurpose { None, FilterLibrary, EditSelection }
         private TagWindowPurpose _tagWindowPurpose = TagWindowPurpose.None;
@@ -245,6 +258,7 @@ namespace HS2SandboxPlugin
         // Thumbnail loading coroutine
         private Coroutine? _thumbnailLoadCoroutine;
         private int _thumbnailLoadIndex;
+        private readonly HashSet<PoseGridItem> _thumbnailsPendingLoad = new HashSet<PoseGridItem>();
 
         // Background index for All poses / Favorites (warmed after Studio loads)
         private readonly PoseLibraryIndexCache _libraryCache = new PoseLibraryIndexCache();
@@ -303,6 +317,7 @@ namespace HS2SandboxPlugin
             }
 
             LoadPersistedOptions();
+            LoadFilterPresets();
             ApplyPoseBrowserConfigToUi();
             SyncWindowTitleForLayoutTier();
             _poseBrowserUpdateCheckCoroutine = StartCoroutine(_poseBrowserUpdateCheck.RunCheck());
@@ -562,17 +577,26 @@ namespace HS2SandboxPlugin
             pane = new Rect(pane.x + dx, pane.y, pane.width, pane.height);
         }
 
-        private static void DrawDockedPaneWindow(
+        private void DrawDockedPaneWindow(
             int paneId,
             ref Rect paneRect,
             GUI.WindowFunction drawContent,
             string title,
             float minWidth)
         {
+            float tooltipW = Mathf.Max(paneRect.width, minWidth);
+            float tooltipH = Mathf.Max(paneRect.height, 120f);
+            void Wrapped(int winId)
+            {
+                drawContent(winId);
+                if (Event.current.type == EventType.Repaint && !string.IsNullOrEmpty(GUI.tooltip))
+                    DrawPoseBrowserTooltip(GUI.tooltip, new Rect(0f, 0f, tooltipW, tooltipH));
+            }
+
             paneRect = GUILayout.Window(
                 paneId,
                 paneRect,
-                drawContent,
+                Wrapped,
                 title,
                 GUILayout.MinWidth(minWidth),
                 GUILayout.MinHeight(120f));
@@ -753,8 +777,7 @@ namespace HS2SandboxPlugin
             _showFavoritesOnly
             || !string.IsNullOrWhiteSpace(_searchText)
             || _tagFiltersInclude.Count > 0
-            || _tagFiltersExclude.Count > 0
-            || _tagFilterExcludeGroups;
+            || _tagFiltersExclude.Count > 0;
 
         private void SelectAllMatchingDisplayResults()
         {
@@ -1472,7 +1495,14 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
 
             bool tagFilterPanelOpen = _tagWindowPurpose == TagWindowPurpose.FilterLibrary;
-            if (GUILayout.Button(tagFilterPanelOpen ? "Tags ▶" : TagFilterBarButtonLabel(), GUILayout.Width(112f)))
+            bool filterWindowActive = HasActiveFilterWindowSettings();
+            string filterBtnTip = filterWindowActive
+                ? FilterBarButtonTooltip()
+                : "Tag filters and display options for the pose list.";
+            if (GUILayout.Button(
+                    new GUIContent(FilterBarButtonLabel(tagFilterPanelOpen), filterBtnTip),
+                    GUILayout.Width(68f),
+                    GUILayout.Height(24f)))
             {
                 if (tagFilterPanelOpen)
                     CloseTagWindow();
@@ -1649,7 +1679,10 @@ namespace HS2SandboxPlugin
         private void DrawTagFilterIncludeModeRow()
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Include match", GUILayout.Width(88f), GUILayout.Height(24f));
+            GUILayout.Label(
+                new GUIContent("Include", "How multiple + include tags combine: AND = every tag required, OR = any one tag."),
+                GUILayout.Width(52f),
+                GUILayout.Height(24f));
             string modeHint = _tagFilterAndMode
                 ? "Every + tag must match"
                 : "Any + tag may match";
@@ -1659,25 +1692,296 @@ namespace HS2SandboxPlugin
                 ApplyFilters();
             }
             GUILayout.FlexibleSpace();
+            if (GUILayout.Button(
+                    new GUIContent("ⓘ", TagFilterTipsTooltip),
+                    GUI.skin.label,
+                    GUILayout.Width(18f),
+                    GUILayout.Height(24f)))
+            {
+                // Display-only; tooltip is shown on hover.
+            }
+
             GUILayout.EndHorizontal();
             GUILayout.Space(4f);
         }
 
-        private string TagFilterBarButtonLabel()
+        private bool HasSaveableFilterState() =>
+            !string.IsNullOrWhiteSpace(_searchText)
+            || _tagFiltersInclude.Count > 0
+            || _tagFiltersExclude.Count > 0;
+
+        private PoseBrowserFilterPreset CaptureCurrentFilterPreset(string name) =>
+            new PoseBrowserFilterPreset
+            {
+                name = name,
+                searchText = _searchText ?? "",
+                searchUseRegex = _searchUseRegex,
+                tagFilterAndMode = _tagFilterAndMode,
+                tagFilterExcludeGroups = _tagFilterExcludeGroups,
+                tagFilterExcludeNoThumbnail = _tagFilterExcludeNoThumbnail,
+                includeTags = _tagFiltersInclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray(),
+                excludeTags = _tagFiltersExclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray()
+            };
+
+        private bool TryGetActiveFilterPreset(out PoseBrowserFilterPreset? preset)
         {
-            int inc = _tagFiltersInclude.Count;
-            int exc = _tagFiltersExclude.Count;
-            if (inc == 0 && exc == 0 && !_tagFilterExcludeGroups)
-                return "Tags";
-            if (exc == 0 && !_tagFilterExcludeGroups)
-                return $"Tags (+{inc})";
-            if (inc == 0 && !_tagFilterExcludeGroups)
-                return $"Tags (−{exc})";
-            var parts = new List<string>();
-            if (inc > 0) parts.Add($"+{inc}");
-            if (exc > 0) parts.Add($"−{exc}");
-            if (_tagFilterExcludeGroups) parts.Add("no ▦");
-            return "Tags (" + string.Join(" ", parts) + ")";
+            preset = null;
+            if (string.IsNullOrEmpty(_activeFilterPresetName))
+                return false;
+            for (int i = 0; i < _filterPresets.Count; i++)
+            {
+                if (string.Equals(_filterPresets[i].name, _activeFilterPresetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    preset = _filterPresets[i];
+                    return true;
+                }
+            }
+
+            _activeFilterPresetName = null;
+            return false;
+        }
+
+        private bool IsActiveFilterPresetDirty()
+        {
+            if (!TryGetActiveFilterPreset(out var preset) || preset == null)
+                return false;
+            return !preset.MatchesState(
+                _searchText ?? "",
+                _searchUseRegex,
+                _tagFilterAndMode,
+                _tagFilterExcludeGroups,
+                _tagFilterExcludeNoThumbnail,
+                _tagFiltersInclude,
+                _tagFiltersExclude);
+        }
+
+        private bool SelectedFilterPresetIsActive()
+        {
+            if (_selectedFilterPresetIndex < 0 || _selectedFilterPresetIndex >= _filterPresets.Count)
+                return false;
+            return string.Equals(
+                _filterPresets[_selectedFilterPresetIndex].name,
+                _activeFilterPresetName,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void LoadFilterPresets()
+        {
+            _filterPresets.Clear();
+            if (PoseBrowserFilterPresets.TryLoad(FilterPresetsPath, out var loaded))
+                _filterPresets.AddRange(loaded);
+            _selectedFilterPresetIndex = -1;
+            _activeFilterPresetName = null;
+        }
+
+        private void PersistFilterPresets() =>
+            PoseBrowserFilterPresets.Save(FilterPresetsPath, _filterPresets);
+
+        private void ApplyFilterPreset(PoseBrowserFilterPreset preset)
+        {
+            _searchText = preset.searchText ?? "";
+            _searchUseRegex = preset.searchUseRegex;
+            _tagFilterAndMode = preset.tagFilterAndMode;
+            _tagFilterExcludeGroups = preset.tagFilterExcludeGroups;
+            _tagFilterExcludeNoThumbnail = preset.tagFilterExcludeNoThumbnail;
+            _tagFiltersInclude.Clear();
+            _tagFiltersExclude.Clear();
+            if (preset.includeTags != null)
+            {
+                foreach (var t in preset.includeTags)
+                {
+                    if (!string.IsNullOrWhiteSpace(t))
+                        _tagFiltersInclude.Add(t);
+                }
+            }
+
+            if (preset.excludeTags != null)
+            {
+                foreach (var t in preset.excludeTags)
+                {
+                    if (!string.IsNullOrWhiteSpace(t))
+                        _tagFiltersExclude.Add(t);
+                }
+            }
+
+            _activeFilterPresetName = preset.name;
+            ApplyFilters();
+        }
+
+        private void TrySaveFilterPreset()
+        {
+            string name = (_filterPresetSaveName ?? "").Trim();
+            if (string.IsNullOrEmpty(name))
+                return;
+
+            var snapshot = CaptureCurrentFilterPreset(name);
+            int existing = -1;
+            for (int i = 0; i < _filterPresets.Count; i++)
+            {
+                if (string.Equals(_filterPresets[i].name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    existing = i;
+                    break;
+                }
+            }
+
+            if (existing >= 0)
+                _filterPresets[existing] = snapshot;
+            else
+                _filterPresets.Add(snapshot);
+
+            _activeFilterPresetName = name;
+            _selectedFilterPresetIndex = existing >= 0 ? existing : _filterPresets.Count - 1;
+            _filterPresetSaveName = "";
+            PersistFilterPresets();
+        }
+
+        private void UpdateActiveFilterPreset()
+        {
+            if (!TryGetActiveFilterPreset(out var preset) || preset == null)
+                return;
+
+            string name = preset.name;
+            var snapshot = CaptureCurrentFilterPreset(name);
+            int idx = _filterPresets.FindIndex(p =>
+                string.Equals(p.name, name, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0)
+                return;
+
+            _filterPresets[idx] = snapshot;
+            PersistFilterPresets();
+        }
+
+        private void DeleteSelectedFilterPreset()
+        {
+            if (_selectedFilterPresetIndex < 0 || _selectedFilterPresetIndex >= _filterPresets.Count)
+                return;
+
+            string removedName = _filterPresets[_selectedFilterPresetIndex].name;
+            _filterPresets.RemoveAt(_selectedFilterPresetIndex);
+            if (string.Equals(_activeFilterPresetName, removedName, StringComparison.OrdinalIgnoreCase))
+                _activeFilterPresetName = null;
+            _selectedFilterPresetIndex = -1;
+            PersistFilterPresets();
+        }
+
+        private static void DrawTagFilterSeparator()
+        {
+            GUILayout.Space(6f);
+            Rect lineRect = GUILayoutUtility.GetRect(
+                GUIContent.none,
+                GUIStyle.none,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(1f));
+            if (Event.current.type == EventType.Repaint)
+            {
+                Color prev = GUI.color;
+                GUI.color = new Color(1f, 1f, 1f, 0.22f);
+                GUI.DrawTexture(lineRect, Texture2D.whiteTexture, ScaleMode.StretchToFill);
+                GUI.color = prev;
+            }
+
+            GUILayout.Space(6f);
+        }
+
+        private void DrawFilterPresetsSection()
+        {
+            if (HasSaveableFilterState())
+            {
+                GUILayout.BeginHorizontal();
+                _filterPresetSaveName = GUILayout.TextField(
+                    _filterPresetSaveName,
+                    GUILayout.MinWidth(80f),
+                    GUILayout.ExpandWidth(true));
+                if (GUILayout.Button(new GUIContent("Save", "Save current search and tag filters under the name above."), GUILayout.Width(52f)))
+                    TrySaveFilterPreset();
+                GUILayout.EndHorizontal();
+                GUILayout.Space(4f);
+            }
+
+            if (_filterPresets.Count == 0)
+                return;
+
+            GUILayout.Label(new GUIContent("Saved filters", "Click a name to apply that search and tag filter setup."));
+
+            for (int i = 0; i < _filterPresets.Count; i++)
+            {
+                var preset = _filterPresets[i];
+                bool isSelected = _selectedFilterPresetIndex == i;
+                bool isActive = string.Equals(
+                    _activeFilterPresetName,
+                    preset.name,
+                    StringComparison.OrdinalIgnoreCase);
+                Color prev = GUI.color;
+                if (isActive)
+                    GUI.color = new Color(0.65f, 0.85f, 1f, 1f);
+                else if (isSelected)
+                    GUI.color = new Color(0.85f, 0.85f, 0.85f, 1f);
+
+                if (GUILayout.Button(preset.name, GUILayout.Height(22f)))
+                {
+                    _selectedFilterPresetIndex = i;
+                    ApplyFilterPreset(preset);
+                }
+
+                GUI.color = prev;
+            }
+
+            if (_selectedFilterPresetIndex >= 0)
+            {
+                GUILayout.Space(2f);
+                GUILayout.BeginHorizontal();
+                if (IsActiveFilterPresetDirty()
+                    && SelectedFilterPresetIsActive()
+                    && GUILayout.Button(
+                        new GUIContent("Update", "Overwrite the active saved filter with the current search and tag settings."),
+                        GUILayout.Width(64f)))
+                {
+                    UpdateActiveFilterPreset();
+                }
+
+                if (GUILayout.Button(
+                        new GUIContent("Delete", "Remove the selected saved filter."),
+                        GUILayout.Width(56f)))
+                {
+                    DeleteSelectedFilterPreset();
+                }
+
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        private bool HasActiveFilterWindowSettings() =>
+            _tagFiltersInclude.Count > 0
+            || _tagFiltersExclude.Count > 0
+            || _tagFilterExcludeGroups
+            || _tagFilterExcludeNoThumbnail;
+
+        private const string FilterActiveIcon = "●";
+
+        private string FilterBarButtonLabel(bool panelOpen)
+        {
+            bool active = HasActiveFilterWindowSettings();
+            if (panelOpen)
+                return active ? $"Filter {FilterActiveIcon} ▶" : "Filter ▶";
+            return active ? $"Filter {FilterActiveIcon}" : "Filter";
+        }
+
+        private string FilterBarButtonTooltip()
+        {
+            var lines = new List<string> { "Active filter window settings:" };
+            if (_tagFiltersInclude.Count > 0)
+                lines.Add("Include: " + string.Join(", ", _tagFiltersInclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)));
+            if (_tagFiltersExclude.Count > 0)
+                lines.Add("Exclude: " + string.Join(", ", _tagFiltersExclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)));
+            if (_tagFilterExcludeGroups)
+                lines.Add("Hide grouped poses");
+            if (_tagFilterExcludeNoThumbnail)
+                lines.Add("Hide poses without thumbnails");
+            if (_tagFiltersInclude.Count > 0 || _tagFiltersExclude.Count > 0)
+                lines.Add("Include match: " + (_tagFilterAndMode ? "AND" : "OR"));
+            return string.Join("\n", lines);
         }
 
         private enum TagFilterRole { Neutral, Include, Exclude }
@@ -1725,14 +2029,39 @@ namespace HS2SandboxPlugin
                 _tagFilterExcludeGroups,
                 new GUIContent(
                     "Hide grouped poses",
-                    "When enabled, poses that belong to a group are omitted from filtered results (only ungrouped poses are shown)."));
+                    "Omit poses that belong to a group from the grid (ungrouped poses only). Works with or without search/tag filters."));
             if (prevExcludeGroups != _tagFilterExcludeGroups)
             {
                 ApplyFilters();
                 SavePersistedOptions();
             }
 
-            GUILayout.Space(4f);
+            bool prevExcludeNoThumbnail = _tagFilterExcludeNoThumbnail;
+            _tagFilterExcludeNoThumbnail = GUILayout.Toggle(
+                _tagFilterExcludeNoThumbnail,
+                new GUIContent(
+                    "Hide poses without thumbnails",
+                    "Omit .dat-only poses (no .png preview file). Works with or without search/tag filters."));
+            if (prevExcludeNoThumbnail != _tagFilterExcludeNoThumbnail)
+            {
+                ApplyFilters();
+                SavePersistedOptions();
+            }
+
+            bool hasFilterConfigUi = HasSaveableFilterState() || _filterPresets.Count > 0;
+            if (hasFilterConfigUi)
+            {
+                DrawTagFilterSeparator();
+                _filterPresetConfigScroll = GUILayout.BeginScrollView(
+                    _filterPresetConfigScroll,
+                    GUILayout.MaxHeight(160f),
+                    GUILayout.MinHeight(52f));
+                DrawFilterPresetsSection();
+                GUILayout.EndScrollView();
+            }
+
+            DrawTagFilterSeparator();
+            GUILayout.Label(new GUIContent("Tags:", "Click a tag to cycle neutral → include (+) → exclude (−)."));
 
             var allTags = GetAllLibraryTagNames();
             if (allTags.Count == 0)
@@ -1751,11 +2080,7 @@ namespace HS2SandboxPlugin
                 return;
             }
 
-            GUILayout.Label("Click a tag to cycle: neutral → include (+) → exclude (−).");
-            GUILayout.Label(
-                "Grouped poses inherit their group's tags for include/exclude. Exclude hides ungrouped poses; in a visible group, members with an excluded tag (on the pose or group) are dimmed.");
-
-            GUILayout.Space(4f);
+            GUILayout.Space(2f);
             _tagWindowScroll = GUILayout.BeginScrollView(_tagWindowScroll, GUILayout.ExpandHeight(true));
             foreach (var tag in visible)
             {
@@ -1781,6 +2106,7 @@ namespace HS2SandboxPlugin
             {
                 _tagFiltersInclude.Clear();
                 _tagFiltersExclude.Clear();
+                _activeFilterPresetName = null;
                 ApplyFilters();
             }
         }
@@ -2749,6 +3075,8 @@ namespace HS2SandboxPlugin
                 if (entry.IsDimmed)
                     GUI.color = new Color(0.55f, 0.55f, 0.55f, 1f);
                 GUI.DrawTexture(thumbRect, tex, ScaleMode.ScaleToFit, false);
+                if (IsPoseThumbnailLoading(item))
+                    DrawThumbnailLoadingOverlay(thumbRect);
                 GUI.color = prev;
                 DrawCheckboxVisual(cbRect, item.IsSelected);
             }
@@ -3785,9 +4113,37 @@ namespace HS2SandboxPlugin
             ClampCompactPoseIndex();
         }
 
+        private bool IsPoseThumbnailLoading(PoseGridItem item) =>
+            item.Thumbnail == null
+            && item.IsPng
+            && string.IsNullOrEmpty(item.ImportPackEntryId)
+            && _thumbnailsPendingLoad.Contains(item);
+
+        private static void DrawThumbnailLoadingOverlay(Rect thumbRect)
+        {
+            Color prev = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.5f);
+            GUI.DrawTexture(thumbRect, Texture2D.whiteTexture, ScaleMode.StretchToFill);
+            GUI.color = Color.white;
+            var style = GUI.skin.label;
+            TextAnchor prevAlign = style.alignment;
+            style.alignment = TextAnchor.MiddleCenter;
+            GUI.Label(thumbRect, new GUIContent("Loading…", "Thumbnail image is still being loaded from disk."));
+            style.alignment = prevAlign;
+            GUI.color = prev;
+        }
+
         private void StartThumbnailLoading()
         {
             _thumbnailLoadIndex = 0;
+            _thumbnailsPendingLoad.Clear();
+            for (int i = 0; i < _allItems.Count; i++)
+            {
+                var item = _allItems[i];
+                if (item.Thumbnail == null && item.IsPng && string.IsNullOrEmpty(item.ImportPackEntryId))
+                    _thumbnailsPendingLoad.Add(item);
+            }
+
             _thumbnailLoadCoroutine = StartCoroutine(LoadThumbnailsCoroutine());
         }
 
@@ -3798,6 +4154,8 @@ namespace HS2SandboxPlugin
                 StopCoroutine(_thumbnailLoadCoroutine);
                 _thumbnailLoadCoroutine = null;
             }
+
+            _thumbnailsPendingLoad.Clear();
         }
 
         private IEnumerator LoadThumbnailsCoroutine()
@@ -3811,11 +4169,13 @@ namespace HS2SandboxPlugin
                     var item = _allItems[i];
                     if (item.Thumbnail == null && item.IsPng)
                         item.Thumbnail = _dataService.LoadThumbnailTexture(item);
+                    _thumbnailsPendingLoad.Remove(item);
                 }
                 _thumbnailLoadIndex = end;
                 yield return null;
             }
             _thumbnailLoadCoroutine = null;
+            _thumbnailsPendingLoad.Clear();
         }
 
         private void StartThumbnailCapture(List<PoseGridItem> items)
@@ -4482,6 +4842,9 @@ namespace HS2SandboxPlugin
                 if (data.optionsVersion >= 8)
                     _tagFilterExcludeGroups = data.tagFilterExcludeGroups;
 
+                if (data.optionsVersion >= 9)
+                    _tagFilterExcludeNoThumbnail = data.tagFilterExcludeNoThumbnail;
+
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
                 SyncWindowTitleForLayoutTier();
@@ -4526,7 +4889,8 @@ namespace HS2SandboxPlugin
                     miniWindowX = _savedMiniX,
                     miniWindowY = _savedMiniY,
                     compactListShowTree = _compactListShowTree,
-                    tagFilterExcludeGroups = _tagFilterExcludeGroups
+                    tagFilterExcludeGroups = _tagFilterExcludeGroups,
+                    tagFilterExcludeNoThumbnail = _tagFilterExcludeNoThumbnail
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -4662,5 +5026,6 @@ namespace HS2SandboxPlugin
         public float miniWindowW, miniWindowH, miniWindowX, miniWindowY;
         public bool compactListShowTree = true;
         public bool tagFilterExcludeGroups;
+        public bool tagFilterExcludeNoThumbnail;
     }
 }
