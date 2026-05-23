@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using KKAPI.Utilities;
 using UnityEngine;
 
 namespace HS2SandboxPlugin
@@ -216,7 +217,8 @@ namespace HS2SandboxPlugin
                     panelY = Mathf.Max(8f, Screen.height - panelH - 8f);
             }
 
-            GUILayout.BeginArea(new Rect(panelX, panelY, panelW, panelH), GUI.skin.box);
+            var panelRect = new Rect(panelX, panelY, panelW, panelH);
+            GUILayout.BeginArea(panelRect, GUI.skin.box);
             string status = Mode == CaptureMode.Auto
                 ? $"Auto {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}"
                 : $"Capture {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}";
@@ -247,6 +249,7 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
 
             GUILayout.EndArea();
+            IMGUIUtils.EatInputInRect(panelRect);
 
             HandleDragResize();
         }
