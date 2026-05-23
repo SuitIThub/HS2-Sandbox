@@ -17,11 +17,14 @@ namespace HS2SandboxPlugin
     public partial class PoseBrowserWindow : SubWindow
     {
         private const float ResizeHandleSize = 18f;
+        private const float WindowChromeButtonWidth = 22f;
+        private const float MinimizedChipSize = 28f;
+        private const float MinimizedChipClickDragThreshold = 4f;
         private const float TreePanelWidth = 205f;
         /// <summary>Padding between tree panel and grid (window inner chrome).</summary>
         private const float GridPanelChromePad = 24f;
         /// <summary>Sum of fixed top-bar control widths (must stay in sync with <see cref="DrawTopBar"/>).</summary>
-        private const float NormalTopBarMinWidth = 949f;
+        private const float NormalTopBarMinWidth = 975f;
         private const float BottomBarHeight = 36f;
         private const float TopBarHeight = 32f;
         private const float MinCardSize = 96f;
@@ -71,6 +74,12 @@ namespace HS2SandboxPlugin
         }
 
         private PoseBrowserLayoutTier _layoutTier = PoseBrowserLayoutTier.Normal;
+        private bool _isMinimized;
+        private Rect _minimizedChipRect;
+        private Vector2 _minimizeBtnOffsetFromWindow;
+        private bool _chipDragging;
+        private Vector2 _chipDragOffset;
+        private Vector2 _chipMouseDownPos;
         private int _compactPoseIndex = -1;
         private string? _compactSelectedGroupId;
         private Vector2 _compactListScroll;
@@ -328,7 +337,7 @@ namespace HS2SandboxPlugin
             _tagDb?.Update();
             _groupDb?.Update();
             TryStartStudioLibraryCacheWarmup();
-            if (isVisible)
+            if (isVisible && !_isMinimized)
                 MaybeProcessPoseBrowserHotkeys();
         }
 
@@ -375,6 +384,8 @@ namespace HS2SandboxPlugin
 
         protected override void OnVisibilityChanged(bool visible)
         {
+            if (!visible)
+                _isMinimized = false;
             if (visible && _folderTree.RootNodes.Count == 0)
                 _folderTree.Refresh();
             if (visible && !_didAutoLoadBrowse)
@@ -390,6 +401,12 @@ namespace HS2SandboxPlugin
 
             if (_thumbCapture.IsActive)
                 _thumbCapture.DrawOverlay();
+
+            if (_isMinimized)
+            {
+                DrawMinimizedRestoreChip();
+                return;
+            }
 
             HandleResize();
             float minW = EffectiveResizeMinWidth();
@@ -951,6 +968,87 @@ namespace HS2SandboxPlugin
             IMGUIUtils.EatInputInRect(windowRect);
         }
 
+        private void DrawWindowChromeButtons(float buttonHeight)
+        {
+            if (GUILayout.Button(new GUIContent("−", "Minimize Pose Browser"), GUILayout.Width(WindowChromeButtonWidth), GUILayout.Height(buttonHeight)))
+            {
+                var btnRect = GUILayoutUtility.GetLastRect();
+                Vector2 btnScreen = GUIUtility.GUIToScreenPoint(new Vector2(btnRect.x, btnRect.y));
+                MinimizePoseBrowser(btnScreen);
+            }
+
+            if (GUILayout.Button(new GUIContent("×", "Close Pose Browser"), GUILayout.Width(WindowChromeButtonWidth), GUILayout.Height(buttonHeight)))
+                ClosePoseBrowser();
+        }
+
+        private void MinimizePoseBrowser(Vector2 minimizeButtonScreen)
+        {
+            CaptureWindowRectForCurrentTier();
+            _minimizeBtnOffsetFromWindow = minimizeButtonScreen - new Vector2(windowRect.x, windowRect.y);
+            _minimizedChipRect = new Rect(minimizeButtonScreen.x, minimizeButtonScreen.y, MinimizedChipSize, MinimizedChipSize);
+            _chipDragging = false;
+            _isMinimized = true;
+        }
+
+        private void RestoreFromMinimize()
+        {
+            _isMinimized = false;
+            RestoreWindowRectForTier(_layoutTier);
+
+            windowRect.x = _minimizedChipRect.x - _minimizeBtnOffsetFromWindow.x;
+            windowRect.y = _minimizedChipRect.y - _minimizeBtnOffsetFromWindow.y;
+            windowRect.x = Mathf.Clamp(windowRect.x, 4f, Mathf.Max(4f, Screen.width - windowRect.width - 4f));
+            windowRect.y = Mathf.Clamp(windowRect.y, 4f, Mathf.Max(4f, Screen.height - windowRect.height - 4f));
+        }
+
+        private void ClosePoseBrowser()
+        {
+            _isMinimized = false;
+            var gui = FindObjectOfType<SandboxGUI>();
+            if (gui != null)
+                gui.SetPoseBrowserVisible(false);
+            else
+                SetVisible(false);
+        }
+
+        private void DrawMinimizedRestoreChip()
+        {
+            Event e = Event.current;
+            if (_minimizedChipRect.width < 1f)
+                _minimizedChipRect = new Rect(_minimizedChipRect.x, _minimizedChipRect.y, MinimizedChipSize, MinimizedChipSize);
+
+            var chip = _minimizedChipRect;
+            GUI.Box(chip, new GUIContent("PB", "Restore Pose Browser"));
+
+            if (e.type == EventType.MouseDown && e.button == 0 && chip.Contains(e.mousePosition))
+            {
+                _chipDragging = true;
+                _chipDragOffset = e.mousePosition - new Vector2(chip.x, chip.y);
+                _chipMouseDownPos = e.mousePosition;
+                e.Use();
+            }
+            else if (e.type == EventType.MouseDrag && _chipDragging)
+            {
+                float nx = e.mousePosition.x - _chipDragOffset.x;
+                float ny = e.mousePosition.y - _chipDragOffset.y;
+                nx = Mathf.Clamp(nx, 0f, Screen.width - chip.width);
+                ny = Mathf.Clamp(ny, 0f, Screen.height - chip.height);
+                _minimizedChipRect = new Rect(nx, ny, chip.width, chip.height);
+                e.Use();
+            }
+            else if (e.type == EventType.MouseUp && e.button == 0 && _chipDragging)
+            {
+                bool clicked = (e.mousePosition - _chipMouseDownPos).sqrMagnitude <=
+                    MinimizedChipClickDragThreshold * MinimizedChipClickDragThreshold;
+                _chipDragging = false;
+                if (clicked && chip.Contains(e.mousePosition))
+                    RestoreFromMinimize();
+                e.Use();
+            }
+
+            IMGUIUtils.EatInputInRect(chip);
+        }
+
         private void SyncWindowTitleForLayoutTier()
         {
             string layout = _layoutTier switch
@@ -1070,6 +1168,8 @@ namespace HS2SandboxPlugin
         private void DrawCompactLayoutHeader()
         {
             GUILayout.BeginHorizontal(GUILayout.Height(26f));
+            DrawWindowChromeButtons(24f);
+            GUILayout.Space(4f);
             if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
                 CycleLayoutTier();
             if (_layoutTier == PoseBrowserLayoutTier.CompactList)
@@ -1470,6 +1570,9 @@ namespace HS2SandboxPlugin
         private void DrawTopBar()
         {
             GUILayout.BeginHorizontal(GUILayout.Height(TopBarHeight));
+
+            DrawWindowChromeButtons(24f);
+            GUILayout.Space(4f);
 
             GUILayout.Label("Search:", GUILayout.Width(46f));
             if (DrawSearchFieldWithClear(ref _searchText, 22f, GUILayout.MinWidth(160f), GUILayout.ExpandWidth(true)))
