@@ -247,6 +247,10 @@ namespace HS2SandboxPlugin
         private bool _snapViewAllRecursive;
         private string? _snapSelectedNodeFullPath;
         private string _itemsPerPageEdit = "0";
+        private string _lastDatRepairMessage = "";
+        private Coroutine? _poseFileRepairCoroutine;
+        private readonly PoseFileRepair.RepairProgress _poseFileRepairProgress = new PoseFileRepair.RepairProgress();
+        private readonly PoseFileRepair.RepairResult _poseFileRepairResult = new PoseFileRepair.RepairResult();
         private bool _didAutoLoadBrowse;
 
         private bool _showNewChildFolderPopup;
@@ -362,6 +366,13 @@ namespace HS2SandboxPlugin
             {
                 StopCoroutine(_libraryCacheCoroutine);
                 _libraryCacheCoroutine = null;
+            }
+
+            if (_poseFileRepairCoroutine != null)
+            {
+                StopCoroutine(_poseFileRepairCoroutine);
+                _poseFileRepairCoroutine = null;
+                _poseFileRepairProgress.IsRunning = false;
             }
             _libraryCache.Clear();
             if (_placeholderTex != null)
@@ -4105,20 +4116,28 @@ namespace HS2SandboxPlugin
                     DoUpdatePose(_pendingUpdateItem!, null);
                     _pendingUpdateMode = UpdateMode.None;
                 }
+
+                if (GUILayout.Button("New Thumbnail", GUILayout.Height(24f)))
+                {
+                    _pendingUpdateMode = UpdateMode.NewThumb;
+                    StartUpdateCapture(_pendingUpdateItem!);
+                }
             }
-            if (GUILayout.Button("New Thumbnail", GUILayout.Height(24f)))
-            {
-                _pendingUpdateMode = UpdateMode.NewThumb;
-                StartUpdateCapture(_pendingUpdateItem!);
-            }
-            if (_pendingUpdateItem?.IsPng != true)
+            else
             {
                 if (GUILayout.Button("No Thumbnail", GUILayout.Height(24f)))
                 {
                     DoUpdatePose(_pendingUpdateItem!, null);
                     _pendingUpdateMode = UpdateMode.None;
                 }
+
+                if (GUILayout.Button("Create Thumbnail", GUILayout.Height(24f)))
+                {
+                    _pendingUpdateMode = UpdateMode.NewThumb;
+                    StartUpdateCapture(_pendingUpdateItem!);
+                }
             }
+
             if (GUILayout.Button("Cancel", GUILayout.Height(24f)))
                 _pendingUpdateMode = UpdateMode.None;
             GUILayout.EndHorizontal();
@@ -4378,10 +4397,21 @@ namespace HS2SandboxPlugin
                 return;
             }
 
+            string oldPath = item.FilePath;
+            string oldRel = item.RelativePath(_dataService.PoseRootPath);
+
             if (!_dataService.UpdatePose(item, chars[0], newPngBytes))
                 return;
 
-            _libraryCache.AddOrUpdate(item);
+            if (!string.Equals(oldPath, item.FilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                _tagDb.OnItemPathChanged(oldRel, item);
+                _groupDb.OnItemPathChanged(oldRel, item);
+                NotifyLibraryCachePoseMoved(oldPath, item);
+            }
+            else
+                _libraryCache.AddOrUpdate(item);
+
             _tagDb.RecordLastUsed(item);
             for (int i = 1; i < chars.Count; i++)
                 _dataService.ApplyPose(item, chars[i]);
@@ -4716,6 +4746,91 @@ namespace HS2SandboxPlugin
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
         }
 
+        private void RunPoseFileRepair()
+        {
+            if (_poseFileRepairProgress.IsRunning)
+                return;
+
+            _lastDatRepairMessage = "";
+            if (_poseFileRepairCoroutine != null)
+            {
+                StopCoroutine(_poseFileRepairCoroutine);
+                _poseFileRepairCoroutine = null;
+            }
+
+            _poseFileRepairCoroutine = StartCoroutine(PoseFileRepairRoutine());
+        }
+
+        private IEnumerator PoseFileRepairRoutine()
+        {
+            yield return PoseFileRepair.RepairLibraryCoroutine(
+                _dataService.PoseRootPath,
+                _dataService,
+                _tagDb,
+                _groupDb,
+                _poseFileRepairProgress,
+                _poseFileRepairResult);
+
+            _poseFileRepairCoroutine = null;
+            var result = _poseFileRepairResult;
+
+            _lastDatRepairMessage =
+                $"Scanned {result.FilesScanned} file(s): {result.Repaired} repaired, {result.Broken} broken, {result.Failed} failed, {result.AlreadyOk} OK.";
+
+            SandboxServices.Log.LogInfo($"PoseBrowser: Pose file repair — {_lastDatRepairMessage}");
+
+            if (result.Repaired > 0 || result.Broken > 0 || result.Failed > 0)
+            {
+                ScheduleLibraryCacheRebuild();
+                _folderTree.Refresh();
+                ReloadCurrentView();
+            }
+        }
+
+        private static void DrawProgressBar(float fraction, float height = 18f)
+        {
+            fraction = Mathf.Clamp01(fraction);
+            var bar = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+            GUI.Box(bar, GUIContent.none);
+            if (fraction > 0.001f)
+            {
+                Color prev = GUI.color;
+                GUI.color = new Color(0.35f, 0.75f, 0.45f, 0.95f);
+                var fill = new Rect(bar.x + 2f, bar.y + 2f, Mathf.Max(0f, (bar.width - 4f) * fraction), bar.height - 4f);
+                GUI.DrawTexture(fill, Texture2D.whiteTexture);
+                GUI.color = prev;
+            }
+        }
+
+        private void DrawPoseFileRepairSection()
+        {
+            GUILayout.Label("Repair pose files", GUI.skin.label);
+            GUILayout.Label(
+                "Scans all .png and .dat pose files for broken layouts (mislabeled .dat, duplicated embedded PNG previews, etc.). Repairs run only when you click the button; details are written to the BepInEx log.",
+                GUI.skin.label);
+
+            if (_poseFileRepairProgress.IsRunning)
+            {
+                float fraction = _poseFileRepairProgress.TotalFiles > 0
+                    ? _poseFileRepairProgress.FilesScanned / (float)_poseFileRepairProgress.TotalFiles
+                    : 0f;
+                DrawProgressBar(fraction);
+                GUILayout.Label(
+                    $"{_poseFileRepairProgress.Phase}  Checked {_poseFileRepairProgress.FilesScanned} / {_poseFileRepairProgress.TotalFiles} — {_poseFileRepairProgress.FaultyFound} faulty found",
+                    GUI.skin.label);
+                GUI.enabled = false;
+                GUILayout.Button("Repairing…", GUILayout.Height(24f));
+                GUI.enabled = true;
+            }
+            else if (GUILayout.Button("Repair library…", GUILayout.Height(24f)))
+            {
+                RunPoseFileRepair();
+            }
+
+            if (!string.IsNullOrEmpty(_lastDatRepairMessage))
+                GUILayout.Label(_lastDatRepairMessage, GUI.skin.label);
+        }
+
         private void DrawOptionsWindowContent(int id)
         {
             GUILayout.Label("Card / thumbnail width (px). Same value is saved under BepInEx → Pose Browser → Card column width.");
@@ -4762,6 +4877,9 @@ namespace HS2SandboxPlugin
             DrawHotkeyReadonlyRow("Previous browse (folder step)", PoseBrowserConfig.HotkeyPrevBrowse);
             DrawHotkeyReadonlyRow("Next pose", PoseBrowserConfig.HotkeyNextPose);
             DrawHotkeyReadonlyRow("Previous pose", PoseBrowserConfig.HotkeyPrevPose);
+
+            GUILayout.Space(12f);
+            DrawPoseFileRepairSection();
 
             GUILayout.Space(12f);
             GUILayout.BeginHorizontal();

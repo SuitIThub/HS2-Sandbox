@@ -521,7 +521,9 @@ namespace HS2SandboxPlugin
             return ok;
         }
 
-        public PoseGridItem? TryLoadPoseItem(FileInfo file)
+        public PoseGridItem? TryLoadPoseItem(FileInfo file) => TryLoadPoseItemCore(file);
+
+        private PoseGridItem? TryLoadPoseItemCore(FileInfo file)
         {
             string ext = file.Extension.ToLowerInvariant();
             if (ext != ".png" && ext != ".dat") return null;
@@ -914,26 +916,41 @@ namespace HS2SandboxPlugin
             {
                 BackupFile(item.FilePath);
 
-                byte[] pngBytes;
                 if (newPngBytes != null)
                 {
-                    pngBytes = newPngBytes;
+                    string savePath = item.FilePath;
+                    bool convertingDatToPng = !item.IsPng;
+                    if (convertingDatToPng)
+                    {
+                        savePath = Path.ChangeExtension(item.FilePath, ".png");
+                        savePath = GetUniqueFilePath(savePath);
+                    }
+
+                    if (!SavePose(savePath, item.DisplayName, newPngBytes, ociChar))
+                        return false;
+
+                    if (convertingDatToPng)
+                    {
+                        if (File.Exists(item.FilePath) && !string.Equals(item.FilePath, savePath, StringComparison.OrdinalIgnoreCase))
+                            File.Delete(item.FilePath);
+                        item.FilePath = savePath;
+                    }
+
+                    SyncPoseFileLayoutFromDisk(item);
+                    return true;
                 }
-                else if (item.IsPng)
+
+                if (item.IsPng)
                 {
-                    pngBytes = LoadPngBytes(item.FilePath) ?? Array.Empty<byte>();
-                }
-                else
-                {
-                    if (!SavePoseAsDat(item.FilePath, item.DisplayName, ociChar))
+                    byte[] pngBytes = LoadPngBytes(item.FilePath) ?? Array.Empty<byte>();
+                    if (!SavePose(item.FilePath, item.DisplayName, pngBytes, ociChar))
                         return false;
                     SyncPoseFileLayoutFromDisk(item);
                     return true;
                 }
 
-                if (!SavePose(item.FilePath, item.DisplayName, pngBytes, ociChar))
+                if (!SavePoseAsDat(item.FilePath, item.DisplayName, ociChar))
                     return false;
-
                 SyncPoseFileLayoutFromDisk(item);
                 return true;
             }
