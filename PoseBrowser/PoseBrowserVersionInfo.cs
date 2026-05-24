@@ -3,7 +3,7 @@ namespace HS2SandboxPlugin
     /// <summary>Pose Browser module version (<c>versions.json</c> poseBrowser is updated by CI after each release).</summary>
     public static class PoseBrowserVersionInfo
     {
-        public const string Version = "4.0.1";
+        public const string Version = "4.0.2";
         public const string GitHubRepo = "SuitIThub/HS2-Sandbox";
         public const string VersionsJsonUrl =
             "https://raw.githubusercontent.com/SuitIThub/HS2-Sandbox/main/versions.json";

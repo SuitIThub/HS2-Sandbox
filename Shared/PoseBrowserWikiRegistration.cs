@@ -401,7 +401,8 @@ namespace HS2SandboxPlugin
             GUILayout.Label("2. Click <b>Load characters from scene</b> to fill <b>Male</b> and <b>Female</b> lists from the current scene.");
             GUILayout.Label("3. Reorder with <b>↑</b> / <b>↓</b> — <b>top = highest priority</b>.");
             GUILayout.Label("4. <b>⇄</b> moves a slot to the other list; <b>✕</b> removes it. Orange names are not found in the scene.");
-            GUILayout.Label("5. Lists are saved to <b>pose_browser_character_config.json</b> in the Sandbox config folder.");
+            GUILayout.Label("5. <b>Male before female</b> / <b>Female before male</b> — for <b>untagged</b> poses, which gender gets the next slot at the same list rank (default: male first).");
+            GUILayout.Label("6. Lists and this setting are saved to <b>pose_browser_character_config.json</b> in the Sandbox config folder.");
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
@@ -424,7 +425,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("<b>Untagged poses</b>");
-            GUILayout.Label("• Build priority order: interleave Male and Female lists by rank (1st male, 1st female, 2nd male, …), then any selected characters not in either list.");
+            GUILayout.Label("• Build priority order: interleave Male and Female lists by rank (order set in <b>Chars</b>: <b>Male before female</b> or <b>Female before male</b> at each rank), then any selected characters not in either list.");
             GUILayout.Label("• First pass: pose 1 → first free slot, pose 2 → second free slot, etc. Extra poses with no free character are <b>skipped</b>.");
             GUILayout.Label("• Second pass: any selected character still without a pose gets a pose by cycling through the pose list (only if eligible for that pose’s gender tag).");
             GUILayout.EndVertical();

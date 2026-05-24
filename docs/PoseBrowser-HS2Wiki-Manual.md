@@ -250,7 +250,8 @@ When the group has **saved relative positions** and **Apply relative positions**
 2. **Load characters from scene** — fills **Male** and **Female** columns from the scene.
 3. **↑ / ↓** — priority within a column (**top = first**).
 4. **⇄** — move slot to the other column; **✕** — remove from lists.
-5. Persisted in **`pose_browser_character_config.json`**.
+5. **Male before female** / **Female before male** — for **untagged** poses, which gender is picked first at the same list rank (default: male first).
+6. Persisted in **`pose_browser_character_config.json`**.
 
 Only characters that are **both** in Studio selection **and** on a list (or unlisted but selected) participate; matching rules depend on pose tags below.
 
@@ -268,7 +269,7 @@ Poses are processed in **list order** (grid **display order** for a group). **Ea
 
 **Untagged poses:**
 
-1. Build order: interleave lists by rank (1st male, 1st female, 2nd male, …), then selected characters not on either list.
+1. Build order: interleave lists by rank (male/female order from **Chars**; default 1st male, 1st female, 2nd male, …), then selected characters not on either list.
 2. **First pass:** pose 1 → first free slot, pose 2 → second, … Extra poses with no free character are **skipped**.
 3. **Second pass:** selected characters still without a pose may receive one by **cycling** through the pose list (only if eligible for that pose’s gender tag).
 

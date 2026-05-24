@@ -30,6 +30,25 @@ namespace HS2SandboxPlugin
                 _selectedFemaleSlotIndex = -1;
             }
 
+            GUILayout.Space(4f);
+            GUILayout.Label("Untagged poses (no Male/Female tag) at same list rank:", GUILayout.Height(18f));
+            GUILayout.BeginHorizontal();
+            bool maleFirst = !_characterConfig.UntaggedInterleaveFemaleFirst;
+            bool femaleFirst = _characterConfig.UntaggedInterleaveFemaleFirst;
+            if (GUILayout.Toggle(maleFirst, "Male before female", GUI.skin.button, GUILayout.Height(24f)))
+            {
+                if (!maleFirst)
+                    _characterConfig.SetUntaggedInterleaveFemaleFirst(false);
+            }
+
+            if (GUILayout.Toggle(femaleFirst, "Female before male", GUI.skin.button, GUILayout.Height(24f)))
+            {
+                if (!femaleFirst)
+                    _characterConfig.SetUntaggedInterleaveFemaleFirst(true);
+            }
+
+            GUILayout.EndHorizontal();
+
             GUILayout.Space(6f);
             GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
             DrawCharacterConfigListColumn(

@@ -25,9 +25,11 @@ namespace HS2SandboxPlugin
     [Serializable]
     internal sealed class PoseBrowserCharacterConfigFile
     {
-        public int version = 1;
+        public int version = 2;
         public PoseBrowserCharacterSlotPersisted[] male = Array.Empty<PoseBrowserCharacterSlotPersisted>();
         public PoseBrowserCharacterSlotPersisted[] female = Array.Empty<PoseBrowserCharacterSlotPersisted>();
+        /// <summary>When false (default), untagged poses interleave male then female at each list rank.</summary>
+        public bool untaggedInterleaveFemaleFirst;
     }
 
     internal sealed class PoseBrowserCharacterSlot
@@ -91,6 +93,11 @@ namespace HS2SandboxPlugin
         public IReadOnlyList<PoseBrowserCharacterSlot> Male => _male;
         public IReadOnlyList<PoseBrowserCharacterSlot> Female => _female;
 
+        /// <summary>
+        /// For poses without Male/Female tags: at each priority rank, pick female before male when true.
+        /// </summary>
+        public bool UntaggedInterleaveFemaleFirst { get; private set; }
+
         public PoseBrowserCharacterConfig()
         {
             LoadFromDisk();
@@ -116,6 +123,7 @@ namespace HS2SandboxPlugin
                     _male.AddRange(data.male.Select(PoseBrowserCharacterSlot.FromPersisted));
                 if (data.female != null)
                     _female.AddRange(data.female.Select(PoseBrowserCharacterSlot.FromPersisted));
+                UntaggedInterleaveFemaleFirst = data.untaggedInterleaveFemaleFirst;
             }
             catch (Exception ex)
             {
@@ -133,9 +141,10 @@ namespace HS2SandboxPlugin
 
                 var data = new PoseBrowserCharacterConfigFile
                 {
-                    version = 1,
+                    version = 2,
                     male = _male.Select(s => s.ToPersisted()).ToArray(),
-                    female = _female.Select(s => s.ToPersisted()).ToArray()
+                    female = _female.Select(s => s.ToPersisted()).ToArray(),
+                    untaggedInterleaveFemaleFirst = UntaggedInterleaveFemaleFirst
                 };
                 File.WriteAllText(StoragePath, JsonUtility.ToJson(data, true),
                     new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -198,6 +207,14 @@ namespace HS2SandboxPlugin
             var listRef = GetMutableList(list);
             if (index < 0 || index >= listRef.Count) return;
             listRef.RemoveAt(index);
+            SaveToDisk();
+        }
+
+        public void SetUntaggedInterleaveFemaleFirst(bool femaleFirst)
+        {
+            if (UntaggedInterleaveFemaleFirst == femaleFirst)
+                return;
+            UntaggedInterleaveFemaleFirst = femaleFirst;
             SaveToDisk();
         }
 

@@ -4768,7 +4768,7 @@ namespace HS2SandboxPlugin
                 "• Row shows Studio character count/names (tooltip). Props ignored.\n" +
                 "• <b>Chars</b> — male/female <b>priority lists</b> (top = first). <b>Load characters from scene</b>, ↑↓ reorder, ⇄ transfer list, ✕ remove. Saved in <b>pose_browser_character_config.json</b>.\n" +
                 "• <b>Apply to characters…</b> when <b>2+ poses</b> selected, or <b>one group header</b> selected. Select characters in Studio first.\n" +
-                "• <b>Male</b> / <b>Female</b> <i>pose</i> tags → next free character on that list only. <b>Untagged</b> → interleaved list order; each character gets at most <b>one</b> pose per apply (extras skipped; leftover chars may get a second-pass pose).\n" +
+                "• <b>Male</b> / <b>Female</b> <i>pose</i> tags → next free character on that list only. <b>Untagged</b> → interleaved by list rank (<b>Chars</b> pane: <b>Male before female</b> or <b>Female before male</b>); each character gets at most <b>one</b> pose per apply (extras skipped; leftover chars may get a second-pass pose).\n" +
                 "• Left-click thumbnail still applies <b>one</b> pose to <b>all</b> selected characters (separate from multi-apply).",
                 rich);
 

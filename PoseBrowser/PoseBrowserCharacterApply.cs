@@ -257,28 +257,8 @@ namespace HS2SandboxPlugin
                     AddFromSlots(config.Female);
                     break;
                 default:
-                    int maleCount = config.Male.Count;
-                    int femaleCount = config.Female.Count;
-                    int maxRank = Math.Max(maleCount, femaleCount);
-                    for (int r = 0; r < maxRank; r++)
-                    {
-                        if (r < maleCount)
-                        {
-                            var slot = config.Male[r];
-                            if (PoseBrowserCharacterSlot.TryResolveInScene(slot, out var m) &&
-                                selectedSet.Contains(m) && used.Add(m))
-                                result.Add(m);
-                        }
-
-                        if (r < femaleCount)
-                        {
-                            var slot = config.Female[r];
-                            if (PoseBrowserCharacterSlot.TryResolveInScene(slot, out var f) &&
-                                selectedSet.Contains(f) && used.Add(f))
-                                result.Add(f);
-                        }
-                    }
-
+                    AppendInterleavedByRank(
+                        config, selectedSet, used, result, config.UntaggedInterleaveFemaleFirst);
                     break;
             }
 
@@ -292,6 +272,48 @@ namespace HS2SandboxPlugin
             }
 
             return result;
+        }
+
+        private static void AppendInterleavedByRank(
+            PoseBrowserCharacterConfig config,
+            HashSet<OCIChar> selectedSet,
+            HashSet<OCIChar> used,
+            List<OCIChar> result,
+            bool femaleFirst)
+        {
+            int maleCount = config.Male.Count;
+            int femaleCount = config.Female.Count;
+            int maxRank = Math.Max(maleCount, femaleCount);
+            for (int r = 0; r < maxRank; r++)
+            {
+                if (femaleFirst)
+                {
+                    TryAddSlotAtRank(config.Female, femaleCount, r, selectedSet, used, result);
+                    TryAddSlotAtRank(config.Male, maleCount, r, selectedSet, used, result);
+                }
+                else
+                {
+                    TryAddSlotAtRank(config.Male, maleCount, r, selectedSet, used, result);
+                    TryAddSlotAtRank(config.Female, femaleCount, r, selectedSet, used, result);
+                }
+            }
+        }
+
+        private static void TryAddSlotAtRank(
+            IReadOnlyList<PoseBrowserCharacterSlot> slots,
+            int slotCount,
+            int rank,
+            HashSet<OCIChar> selectedSet,
+            HashSet<OCIChar> used,
+            List<OCIChar> result)
+        {
+            if (rank >= slotCount)
+                return;
+
+            var slot = slots[rank];
+            if (PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci) &&
+                selectedSet.Contains(oci) && used.Add(oci))
+                result.Add(oci);
         }
 
         /// <summary>
