@@ -609,8 +609,8 @@ namespace HS2SandboxPlugin
                 _tagFiltersExclude,
                 _tagFilterAndMode,
                 _showFavoritesOnly,
-                _tagFilterExcludeGroups,
-                _tagFilterExcludeNoThumbnail);
+                _tagFilterGroupsMode,
+                _tagFilterThumbnailMode);
             PoseBrowserGridLayout.SortDisplayEntries(_displayEntries, _groupDb, _poseSortMode, _sortAscending);
             SyncFilteredItemsFromDisplay();
             PruneSelectedGroups();

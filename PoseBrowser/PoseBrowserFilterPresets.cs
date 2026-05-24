@@ -12,8 +12,8 @@ namespace HS2SandboxPlugin
         public string searchText = "";
         public bool searchUseRegex;
         public bool tagFilterAndMode = true;
-        public bool tagFilterExcludeGroups;
-        public bool tagFilterExcludeNoThumbnail;
+        public int tagFilterGroupsMode;
+        public int tagFilterThumbnailMode;
         public string[] includeTags = Array.Empty<string>();
         public string[] excludeTags = Array.Empty<string>();
 
@@ -21,16 +21,16 @@ namespace HS2SandboxPlugin
             string searchText,
             bool searchUseRegex,
             bool tagFilterAndMode,
-            bool tagFilterExcludeGroups,
-            bool tagFilterExcludeNoThumbnail,
+            int tagFilterGroupsMode,
+            int tagFilterThumbnailMode,
             IReadOnlyCollection<string> includeTags,
             IReadOnlyCollection<string> excludeTags)
         {
             return string.Equals(this.searchText ?? "", searchText ?? "", StringComparison.Ordinal)
                 && searchUseRegex == this.searchUseRegex
                 && tagFilterAndMode == this.tagFilterAndMode
-                && tagFilterExcludeGroups == this.tagFilterExcludeGroups
-                && tagFilterExcludeNoThumbnail == this.tagFilterExcludeNoThumbnail
+                && tagFilterGroupsMode == this.tagFilterGroupsMode
+                && tagFilterThumbnailMode == this.tagFilterThumbnailMode
                 && TagSetsEqual(this.includeTags, includeTags)
                 && TagSetsEqual(this.excludeTags, excludeTags);
         }
@@ -124,8 +124,8 @@ namespace HS2SandboxPlugin
                 AppendJsonString(sb, p.searchText ?? "");
                 sb.Append(",\n      \"searchUseRegex\": ").Append(p.searchUseRegex ? "true" : "false")
                     .Append(",\n      \"tagFilterAndMode\": ").Append(p.tagFilterAndMode ? "true" : "false")
-                    .Append(",\n      \"tagFilterExcludeGroups\": ").Append(p.tagFilterExcludeGroups ? "true" : "false")
-                    .Append(",\n      \"tagFilterExcludeNoThumbnail\": ").Append(p.tagFilterExcludeNoThumbnail ? "true" : "false")
+                    .Append(",\n      \"tagFilterGroupsMode\": ").Append(p.tagFilterGroupsMode)
+                    .Append(",\n      \"tagFilterThumbnailMode\": ").Append(p.tagFilterThumbnailMode)
                     .Append(",\n      \"includeTags\": ");
                 AppendStringArray(sb, p.includeTags);
                 sb.Append(",\n      \"excludeTags\": ");
@@ -197,8 +197,8 @@ namespace HS2SandboxPlugin
                     };
                     TryParseBool(obj, "searchUseRegex", out preset.searchUseRegex);
                     TryParseBool(obj, "tagFilterAndMode", out preset.tagFilterAndMode);
-                    TryParseBool(obj, "tagFilterExcludeGroups", out preset.tagFilterExcludeGroups);
-                    TryParseBool(obj, "tagFilterExcludeNoThumbnail", out preset.tagFilterExcludeNoThumbnail);
+                    preset.tagFilterGroupsMode = TryParseDisplayFilterMode(obj, "tagFilterGroupsMode", "tagFilterExcludeGroups");
+                    preset.tagFilterThumbnailMode = TryParseDisplayFilterMode(obj, "tagFilterThumbnailMode", "tagFilterExcludeNoThumbnail");
                     if (TryParseStringArray(obj, "includeTags", out string[]? inc))
                         preset.includeTags = inc ?? Array.Empty<string>();
                     if (TryParseStringArray(obj, "excludeTags", out string[]? exc))
@@ -252,6 +252,25 @@ namespace HS2SandboxPlugin
             values = list.ToArray();
             return true;
         }
+
+        private static int TryParseDisplayFilterMode(string obj, string intKey, string legacyBoolKey)
+        {
+            if (TryReadInt(obj, intKey, out int mode))
+                return ClampDisplayFilterMode(mode);
+
+            if (TryParseBool(obj, legacyBoolKey, out bool legacy) && legacy)
+                return (int)PoseDisplayFilterMode.Exclude;
+
+            return (int)PoseDisplayFilterMode.Off;
+        }
+
+        private static int ClampDisplayFilterMode(int mode) =>
+            mode switch
+            {
+                (int)PoseDisplayFilterMode.Exclude => (int)PoseDisplayFilterMode.Exclude,
+                (int)PoseDisplayFilterMode.IncludeOnly => (int)PoseDisplayFilterMode.IncludeOnly,
+                _ => (int)PoseDisplayFilterMode.Off
+            };
 
         private static bool TryParseBool(string json, string key, out bool value)
         {

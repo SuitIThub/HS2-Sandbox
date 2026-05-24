@@ -5,6 +5,14 @@ using System.Text.RegularExpressions;
 
 namespace HS2SandboxPlugin
 {
+    /// <summary>Neutral → exclude (hide) → include-only, same cycle as per-tag filters.</summary>
+    internal enum PoseDisplayFilterMode
+    {
+        Off = 0,
+        Exclude = 1,
+        IncludeOnly = 2
+    }
+
     internal sealed class PoseBrowserDisplayEntry
     {
         public PoseGridItem Item { get; }
@@ -88,8 +96,8 @@ namespace HS2SandboxPlugin
             HashSet<string> excludeTagFilters,
             bool tagFilterAndMode,
             bool showFavoritesOnly,
-            bool excludeGroupedPosesFromResults = false,
-            bool excludePosesWithoutThumbnail = false)
+            PoseDisplayFilterMode groupsFilter = PoseDisplayFilterMode.Off,
+            PoseDisplayFilterMode thumbnailFilter = PoseDisplayFilterMode.Off)
         {
             searchRegexError = "";
             var groupVisible = new Dictionary<string, bool>(StringComparer.Ordinal);
@@ -148,7 +156,7 @@ namespace HS2SandboxPlugin
                 string? gid = item.GroupId;
                 if (!string.IsNullOrEmpty(gid) && groupById.ContainsKey(gid))
                 {
-                    if (excludeGroupedPosesFromResults)
+                    if (groupsFilter == PoseDisplayFilterMode.Exclude)
                         continue;
                     if (!groupVisible.TryGetValue(gid, out bool vis) || !vis) continue;
                     if (included.Contains(item)) continue;
@@ -171,7 +179,7 @@ namespace HS2SandboxPlugin
                     foreach (var member in emitted)
                     {
                         if (included.Contains(member)) continue;
-                        if (excludePosesWithoutThumbnail && !member.IsPng)
+                        if (!PassesThumbnailFilter(member, thumbnailFilter))
                             continue;
                         included.Add(member);
                         var memberTags = CollectEffectiveFilterTags(member, groupById);
@@ -180,9 +188,10 @@ namespace HS2SandboxPlugin
                         result.Add(new PoseBrowserDisplayEntry(member, dimmed));
                     }
                 }
-                else if (poseContentMatch[item] &&
-                         !HasAnyExcludedTag(CollectEffectiveFilterTags(item, groupById), excludeTagFilters) &&
-                         (!excludePosesWithoutThumbnail || item.IsPng))
+                else if (groupsFilter != PoseDisplayFilterMode.IncludeOnly
+                         && poseContentMatch[item]
+                         && !HasAnyExcludedTag(CollectEffectiveFilterTags(item, groupById), excludeTagFilters)
+                         && PassesThumbnailFilter(item, thumbnailFilter))
                 {
                     if (included.Contains(item)) continue;
                     included.Add(item);
@@ -192,6 +201,14 @@ namespace HS2SandboxPlugin
 
             return result;
         }
+
+        private static bool PassesThumbnailFilter(PoseGridItem item, PoseDisplayFilterMode mode) =>
+            mode switch
+            {
+                PoseDisplayFilterMode.Exclude => item.IsPng,
+                PoseDisplayFilterMode.IncludeOnly => !item.IsPng,
+                _ => true
+            };
 
         public static void SortDisplayEntries(
             List<PoseBrowserDisplayEntry> entries,

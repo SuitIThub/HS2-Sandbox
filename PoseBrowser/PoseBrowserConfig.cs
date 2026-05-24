@@ -6,7 +6,7 @@ namespace HS2SandboxPlugin
     /// <summary>BepInEx ConfigurationManager entries for Pose Browser (mirrored in the in-game Options panel).</summary>
     internal static class PoseBrowserConfig
     {
-        public const int OptionsJsonVersion = 9;
+        public const int OptionsJsonVersion = 10;
 
         /// <summary>Config section used for <see cref="KeyboardShortcut"/> entries (ConfigurationManager key picker).</summary>
         public const string KeyboardSection = "Pose Browser · Keyboard shortcuts";
@@ -18,6 +18,8 @@ namespace HS2SandboxPlugin
         public static ConfigEntry<KeyboardShortcut>? HotkeyPrevPose;
         public static ConfigEntry<KeyboardShortcut>? HotkeyNextBrowse;
         public static ConfigEntry<KeyboardShortcut>? HotkeyPrevBrowse;
+        public static ConfigEntry<KeyboardShortcut>? HotkeyToggleVisible;
+        public static ConfigEntry<KeyboardShortcut>? HotkeyToggleMinimize;
 
         public static void Register(ConfigFile cfg)
         {
@@ -75,6 +77,24 @@ namespace HS2SandboxPlugin
                 "Previous browse target (folder step)",
                 new KeyboardShortcut(KeyCode.None),
                 new ConfigDescription(hk));
+
+            const string windowHk =
+                "Uses BepInEx KeyboardShortcut (main key + optional modifiers in Configuration Manager). " +
+                "Leave unassigned (None) to disable.";
+
+            HotkeyToggleVisible = cfg.Bind(
+                KeyboardSection,
+                "Toggle Pose Browser window",
+                new KeyboardShortcut(KeyCode.None),
+                new ConfigDescription(
+                    "Open or close the Pose Browser window (toolbar toggle stays in sync). " + windowHk));
+
+            HotkeyToggleMinimize = cfg.Bind(
+                KeyboardSection,
+                "Toggle minimize (PB chip)",
+                new KeyboardShortcut(KeyCode.None),
+                new ConfigDescription(
+                    "When the window is open: minimize to the draggable PB chip or restore from it. " + windowHk));
         }
     }
 }

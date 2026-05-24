@@ -180,8 +180,8 @@ namespace HS2SandboxPlugin
         private readonly HashSet<string> _tagFiltersInclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _tagFiltersExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _tagFilterAndMode = true;
-        private bool _tagFilterExcludeGroups;
-        private bool _tagFilterExcludeNoThumbnail;
+        private PoseDisplayFilterMode _tagFilterGroupsMode;
+        private PoseDisplayFilterMode _tagFilterThumbnailMode;
         private bool _showFavoritesOnly;
 
         private readonly List<PoseBrowserFilterPreset> _filterPresets = new List<PoseBrowserFilterPreset>();
@@ -341,6 +341,7 @@ namespace HS2SandboxPlugin
             _tagDb?.Update();
             _groupDb?.Update();
             TryStartStudioLibraryCacheWarmup();
+            MaybeProcessPoseBrowserWindowHotkeys();
             if (isVisible && !_isMinimized)
                 MaybeProcessPoseBrowserHotkeys();
         }
@@ -1831,8 +1832,8 @@ namespace HS2SandboxPlugin
                 searchText = _searchText ?? "",
                 searchUseRegex = _searchUseRegex,
                 tagFilterAndMode = _tagFilterAndMode,
-                tagFilterExcludeGroups = _tagFilterExcludeGroups,
-                tagFilterExcludeNoThumbnail = _tagFilterExcludeNoThumbnail,
+                tagFilterGroupsMode = (int)_tagFilterGroupsMode,
+                tagFilterThumbnailMode = (int)_tagFilterThumbnailMode,
                 includeTags = _tagFiltersInclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray(),
                 excludeTags = _tagFiltersExclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray()
             };
@@ -1863,8 +1864,8 @@ namespace HS2SandboxPlugin
                 _searchText ?? "",
                 _searchUseRegex,
                 _tagFilterAndMode,
-                _tagFilterExcludeGroups,
-                _tagFilterExcludeNoThumbnail,
+                (int)_tagFilterGroupsMode,
+                (int)_tagFilterThumbnailMode,
                 _tagFiltersInclude,
                 _tagFiltersExclude);
         }
@@ -1896,8 +1897,8 @@ namespace HS2SandboxPlugin
             _searchText = preset.searchText ?? "";
             _searchUseRegex = preset.searchUseRegex;
             _tagFilterAndMode = preset.tagFilterAndMode;
-            _tagFilterExcludeGroups = preset.tagFilterExcludeGroups;
-            _tagFilterExcludeNoThumbnail = preset.tagFilterExcludeNoThumbnail;
+            _tagFilterGroupsMode = ClampDisplayFilterMode(preset.tagFilterGroupsMode);
+            _tagFilterThumbnailMode = ClampDisplayFilterMode(preset.tagFilterThumbnailMode);
             _tagFiltersInclude.Clear();
             _tagFiltersExclude.Clear();
             if (preset.includeTags != null)
@@ -2069,8 +2070,8 @@ namespace HS2SandboxPlugin
         private bool HasActiveFilterWindowSettings() =>
             _tagFiltersInclude.Count > 0
             || _tagFiltersExclude.Count > 0
-            || _tagFilterExcludeGroups
-            || _tagFilterExcludeNoThumbnail;
+            || _tagFilterGroupsMode != PoseDisplayFilterMode.Off
+            || _tagFilterThumbnailMode != PoseDisplayFilterMode.Off;
 
         private const string FilterActiveIcon = "●";
 
@@ -2089,16 +2090,75 @@ namespace HS2SandboxPlugin
                 lines.Add("Include: " + string.Join(", ", _tagFiltersInclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)));
             if (_tagFiltersExclude.Count > 0)
                 lines.Add("Exclude: " + string.Join(", ", _tagFiltersExclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)));
-            if (_tagFilterExcludeGroups)
-                lines.Add("Hide grouped poses");
-            if (_tagFilterExcludeNoThumbnail)
-                lines.Add("Hide poses without thumbnails");
+            if (_tagFilterGroupsMode != PoseDisplayFilterMode.Off)
+                lines.Add(DisplayFilterModeSummary("Grouped poses", _tagFilterGroupsMode));
+            if (_tagFilterThumbnailMode != PoseDisplayFilterMode.Off)
+                lines.Add(DisplayFilterModeSummary("Thumbnails", _tagFilterThumbnailMode));
             if (_tagFiltersInclude.Count > 0 || _tagFiltersExclude.Count > 0)
                 lines.Add("Include match: " + (_tagFilterAndMode ? "AND" : "OR"));
             return string.Join("\n", lines);
         }
 
         private enum TagFilterRole { Neutral, Include, Exclude }
+
+        private static PoseDisplayFilterMode ClampDisplayFilterMode(int mode) =>
+            mode switch
+            {
+                (int)PoseDisplayFilterMode.Exclude => PoseDisplayFilterMode.Exclude,
+                (int)PoseDisplayFilterMode.IncludeOnly => PoseDisplayFilterMode.IncludeOnly,
+                _ => PoseDisplayFilterMode.Off
+            };
+
+        private static void CycleDisplayFilterMode(ref PoseDisplayFilterMode mode) =>
+            mode = (PoseDisplayFilterMode)(((int)mode + 1) % 3);
+
+        private static string DisplayFilterModeSummary(string label, PoseDisplayFilterMode mode) =>
+            mode switch
+            {
+                PoseDisplayFilterMode.Exclude => $"{label}: hide",
+                PoseDisplayFilterMode.IncludeOnly => $"{label}: only",
+                _ => label
+            };
+
+        private void DrawDisplayFilterModeButton(
+            string neutralLabel,
+            string excludeLabel,
+            string includeLabel,
+            string neutralTip,
+            string excludeTip,
+            string includeTip,
+            ref PoseDisplayFilterMode mode)
+        {
+            string label = mode switch
+            {
+                PoseDisplayFilterMode.Exclude => excludeLabel,
+                PoseDisplayFilterMode.IncludeOnly => includeLabel,
+                _ => neutralLabel
+            };
+            string tip = mode switch
+            {
+                PoseDisplayFilterMode.Exclude => excludeTip,
+                PoseDisplayFilterMode.IncludeOnly => includeTip,
+                _ => neutralTip
+            };
+
+            Color prev = GUI.color;
+            if (mode == PoseDisplayFilterMode.IncludeOnly)
+                GUI.color = new Color(0.55f, 1f, 0.65f, 1f);
+            else if (mode == PoseDisplayFilterMode.Exclude)
+                GUI.color = new Color(1f, 0.55f, 0.5f, 1f);
+
+            var prevMode = mode;
+            if (GUILayout.Button(new GUIContent(label, tip + " Click to cycle."), GUILayout.Height(24f)))
+                CycleDisplayFilterMode(ref mode);
+
+            GUI.color = prev;
+            if (prevMode != mode)
+            {
+                ApplyFilters();
+                SavePersistedOptions();
+            }
+        }
 
         private TagFilterRole GetTagFilterRole(string tag)
         {
@@ -2138,29 +2198,23 @@ namespace HS2SandboxPlugin
         {
             DrawTagFilterIncludeModeRow();
 
-            bool prevExcludeGroups = _tagFilterExcludeGroups;
-            _tagFilterExcludeGroups = GUILayout.Toggle(
-                _tagFilterExcludeGroups,
-                new GUIContent(
-                    "Hide grouped poses",
-                    "Omit poses that belong to a group from the grid (ungrouped poses only). Works with or without search/tag filters."));
-            if (prevExcludeGroups != _tagFilterExcludeGroups)
-            {
-                ApplyFilters();
-                SavePersistedOptions();
-            }
+            DrawDisplayFilterModeButton(
+                "Grouped poses",
+                "− Hide grouped poses",
+                "+ Only grouped poses",
+                "Show all poses regardless of group membership.",
+                "Omit poses that belong to a group (ungrouped only).",
+                "Show only poses that belong to a group.",
+                ref _tagFilterGroupsMode);
 
-            bool prevExcludeNoThumbnail = _tagFilterExcludeNoThumbnail;
-            _tagFilterExcludeNoThumbnail = GUILayout.Toggle(
-                _tagFilterExcludeNoThumbnail,
-                new GUIContent(
-                    "Hide poses without thumbnails",
-                    "Omit .dat-only poses (no .png preview file). Works with or without search/tag filters."));
-            if (prevExcludeNoThumbnail != _tagFilterExcludeNoThumbnail)
-            {
-                ApplyFilters();
-                SavePersistedOptions();
-            }
+            DrawDisplayFilterModeButton(
+                "Thumbnails",
+                "− Hide without thumbnail",
+                "+ Only without thumbnail",
+                "Show all poses (.png and .dat).",
+                "Omit .dat-only poses (no .png preview file).",
+                "Show only .dat-only poses (no .png preview file).",
+                ref _tagFilterThumbnailMode);
 
             bool hasFilterConfigUi = HasSaveableFilterState() || _filterPresets.Count > 0;
             if (hasFilterConfigUi)
@@ -2220,8 +2274,11 @@ namespace HS2SandboxPlugin
             {
                 _tagFiltersInclude.Clear();
                 _tagFiltersExclude.Clear();
+                _tagFilterGroupsMode = PoseDisplayFilterMode.Off;
+                _tagFilterThumbnailMode = PoseDisplayFilterMode.Off;
                 _activeFilterPresetName = null;
                 ApplyFilters();
+                SavePersistedOptions();
             }
         }
 
@@ -4652,7 +4709,8 @@ namespace HS2SandboxPlugin
             GUILayout.Label(
                 "• Select <b>2+ ungrouped</b> poses → bottom bar <b>Group…</b> (name the group). <b>Ungroup</b> removes membership.\n" +
                 "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, <b>Group tags…</b>, <b>Export group…</b>, <b>Apply to characters…</b>). Card checkboxes = individual poses.\n" +
-                "• <b>Exclude</b> tag filters: hide ungrouped poses; grouped poses use <b>group + pose</b> tags. In a visible group, excluded tags dim cards (red tag text). <b>Hide grouped poses</b> in the tag filter panel omits all groups and their members.\n" +
+                "• <b>Exclude</b> tag filters: hide ungrouped poses; grouped poses use <b>group + pose</b> tags. In a visible group, excluded tags dim cards (red tag text).\n" +
+                "• <b>Grouped poses</b> / <b>Thumbnails</b> in the tag filter panel cycle neutral → hide (−) → only (+), like per-tag filters.\n" +
                 "• Move/Copy one <b>full group</b> at a time. Data: <b>pose_groups.tsv</b> in Sandbox config.",
                 rich);
 
@@ -4877,6 +4935,8 @@ namespace HS2SandboxPlugin
             DrawHotkeyReadonlyRow("Previous browse (folder step)", PoseBrowserConfig.HotkeyPrevBrowse);
             DrawHotkeyReadonlyRow("Next pose", PoseBrowserConfig.HotkeyNextPose);
             DrawHotkeyReadonlyRow("Previous pose", PoseBrowserConfig.HotkeyPrevPose);
+            DrawHotkeyReadonlyRow("Toggle Pose Browser window", PoseBrowserConfig.HotkeyToggleVisible);
+            DrawHotkeyReadonlyRow("Toggle minimize (PB chip)", PoseBrowserConfig.HotkeyToggleMinimize);
 
             GUILayout.Space(12f);
             DrawPoseFileRepairSection();
@@ -5060,11 +5120,18 @@ namespace HS2SandboxPlugin
                     _savedListNoTreeH = _savedListH > 10f ? _savedListH : CompactListDefaultHeight;
                 }
 
-                if (data.optionsVersion >= 8)
-                    _tagFilterExcludeGroups = data.tagFilterExcludeGroups;
-
-                if (data.optionsVersion >= 9)
-                    _tagFilterExcludeNoThumbnail = data.tagFilterExcludeNoThumbnail;
+                if (data.optionsVersion >= 10)
+                {
+                    _tagFilterGroupsMode = ClampDisplayFilterMode(data.tagFilterGroupsMode);
+                    _tagFilterThumbnailMode = ClampDisplayFilterMode(data.tagFilterThumbnailMode);
+                }
+                else
+                {
+                    if (data.optionsVersion >= 8 && data.tagFilterExcludeGroups)
+                        _tagFilterGroupsMode = PoseDisplayFilterMode.Exclude;
+                    if (data.optionsVersion >= 9 && data.tagFilterExcludeNoThumbnail)
+                        _tagFilterThumbnailMode = PoseDisplayFilterMode.Exclude;
+                }
 
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
@@ -5110,8 +5177,8 @@ namespace HS2SandboxPlugin
                     miniWindowX = _savedMiniX,
                     miniWindowY = _savedMiniY,
                     compactListShowTree = _compactListShowTree,
-                    tagFilterExcludeGroups = _tagFilterExcludeGroups,
-                    tagFilterExcludeNoThumbnail = _tagFilterExcludeNoThumbnail
+                    tagFilterGroupsMode = (int)_tagFilterGroupsMode,
+                    tagFilterThumbnailMode = (int)_tagFilterThumbnailMode
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -5154,10 +5221,56 @@ namespace HS2SandboxPlugin
             }
         }
 
+        private void MaybeProcessPoseBrowserWindowHotkeys()
+        {
+            if (_thumbCapture.IsActive) return;
+            if (GUIUtility.keyboardControl != 0) return;
+
+            PoseBrowserConfig.Register(SandboxServices.Config);
+
+            if (PoseBrowserConfig.HotkeyToggleVisible!.Value.IsDown())
+            {
+                TogglePoseBrowserVisible();
+                return;
+            }
+
+            if (!isVisible) return;
+
+            if (PoseBrowserConfig.HotkeyToggleMinimize!.Value.IsDown())
+                TogglePoseBrowserMinimize();
+        }
+
+        private void TogglePoseBrowserVisible()
+        {
+            var gui = FindObjectOfType<SandboxGUI>();
+            if (gui == null)
+            {
+                SetVisible(!isVisible);
+                return;
+            }
+
+            if (gui.IsPoseBrowserVisible)
+                ClosePoseBrowser();
+            else
+                gui.SetPoseBrowserVisible(true);
+        }
+
+        private void TogglePoseBrowserMinimize()
+        {
+            if (_isMinimized)
+            {
+                RestoreFromMinimize();
+                return;
+            }
+
+            Vector2 chipScreen = GUIUtility.GUIToScreenPoint(
+                new Vector2(windowRect.xMax - MinimizedChipSize, windowRect.y + 8f));
+            MinimizePoseBrowser(chipScreen);
+        }
+
         private void MaybeProcessPoseBrowserHotkeys()
         {
             if (_thumbCapture.IsActive) return;
-            // Avoid firing while typing in any IMGUI field (search, options, etc.).
             if (GUIUtility.keyboardControl != 0) return;
 
             PoseBrowserConfig.Register(SandboxServices.Config);
@@ -5246,6 +5359,8 @@ namespace HS2SandboxPlugin
         public float listNoTreeWindowW, listNoTreeWindowH;
         public float miniWindowW, miniWindowH, miniWindowX, miniWindowY;
         public bool compactListShowTree = true;
+        public int tagFilterGroupsMode;
+        public int tagFilterThumbnailMode;
         public bool tagFilterExcludeGroups;
         public bool tagFilterExcludeNoThumbnail;
     }
