@@ -86,6 +86,7 @@ namespace HS2SandboxPlugin
         private string? _lastAppliedGroupId;
         private bool _anyPoseAppliedSinceLastGroupApply;
         private bool _applyGroupRelativePositions = true;
+        private bool _applyGroupRelativeHeights;
         private Vector2 _compactListScroll;
         private bool _compactListShowTree = true;
 
@@ -4751,15 +4752,16 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
             GUILayout.Label("<b>Group relative positions</b>", rich);
             GUILayout.Label(
-                "Save spacing between characters for a group, then re-apply it with the group. Stored in <b>pose_groups.tsv</b> and v4 ZIP <b>memberRelativeOffsets</b>.\n\n" +
-                "<b>To save positions</b> (<b>Save positions…</b> on the group bar — enabled only when all steps below are satisfied):\n" +
-                "1. <b>Chars</b> — load male/female priority lists and tag poses <b>Male</b> / <b>Female</b> when needed (see <b>Character row</b> above).\n" +
-                "2. In Studio, select <b>exactly as many characters as poses</b> in the group (e.g. 3 poses → 3 characters).\n" +
-                "3. Gender mix must match: e.g. a group with one male-tagged and two female-tagged poses needs one male and two females among the selected characters, assignable via your priority lists.\n" +
-                "4. Select the <b>group header</b> (▦) and <b>Apply to characters…</b> (or compact ▦ group apply) so every pose is on the right character in <b>display order</b>.\n" +
-                "5. Move characters in the scene to the layout you want (poses stay applied).\n" +
-                "6. Without applying any <b>other</b> pose in between, select the group header again and click <b>Save positions…</b>.\n\n" +
-                "<b>To apply saved positions</b> — use the same apply path; after poses are applied, spacing is restored from the anchor (first pose in display order). Global <b>Apply relative positions</b> (group bar when the group has saved layout, or <b>Options</b>) can disable layout without clearing saved data. <b>Clear positions</b> removes stored offsets for that group.",
+                "Save character spacing for a group and re-apply it with the group. The <b>first pose</b> in grid display order is the <b>anchor</b> (its world position is the reference). Every other pose stores a <b>relative offset</b> (world position − anchor) and <b>maker body height</b> on that pose path. Persisted in <b>pose_groups.tsv</b> and v5 ZIP (<b>memberRelativeOffsets</b>, <b>memberBodyHeights</b>).\n\n" +
+                "<b>To save positions</b> (<b>Save positions…</b> on the group bar):\n" +
+                "1. Set up <b>Chars</b> and pose <b>Male</b> / <b>Female</b> tags if needed.\n" +
+                "2. Select <b>exactly as many characters as poses</b> in Studio.\n" +
+                "3. Apply the group (<b>Apply to characters…</b>) so poses map in <b>display order</b> (first pose → anchor character).\n" +
+                "4. Arrange characters, then <b>Save positions…</b> without applying another pose in between (see button tooltip if disabled).\n\n" +
+                "<b>To apply saved positions</b> — same apply path (same pose order and <b>Chars</b> priority). After poses are applied:\n" +
+                "• <b>Apply relative positions</b> (global; group bar or <b>Options</b>) — each non-anchor character moves to <b>anchor position + saved offset</b> (X, Y, and Z). The anchor character is not moved.\n" +
+                "• <b>Adjust for body height</b> (needs relative positions on) — still applies the full offset, but <b>offset.y</b> is scaled from saved vs current body-height ratios on each pose path (spread ratio when heights differed at save; otherwise anchor or averaged scale). No fixed meter constant.\n" +
+                "• <b>Clear positions</b> — removes stored offsets and heights for that group.",
                 rich);
 
             GUILayout.Space(6f);
@@ -4793,10 +4795,10 @@ namespace HS2SandboxPlugin
                 rich);
 
             GUILayout.Space(8f);
-            GUILayout.Label("<b>Import / export (ZIP v4)</b>", rich);
+            GUILayout.Label("<b>Import / export (ZIP v5)</b>", rich);
             GUILayout.Label(
-                "• After <b>Import…</b>, the grid shows a preview: thumbnail click toggles inclusion (checkbox + Ctrl/Shift work). Use <b>Cancel import</b> in the bottom bar or <b>Cancel</b> in the folder footer to abort. <b>Tree branch</b> packs create a named subfolder under the destination you pick. v2 packs still import.\n" +
-                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v4 <b>.zip</b> (tags/favorites; pose groups when fully selected).\n" +
+                "• After <b>Import…</b>, the grid shows a preview: thumbnail click toggles inclusion (checkbox + Ctrl/Shift work). Use <b>Cancel import</b> in the bottom bar or <b>Cancel</b> in the folder footer to abort. <b>Tree branch</b> packs create a named subfolder under the destination you pick. v2–v4 packs still import.\n" +
+                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v5 <b>.zip</b> (tags/favorites; pose groups with offsets/heights when fully selected).\n" +
                 "• External tools must build <b>stored</b> (uncompressed) ZIP entries — see <b>Modules/PoseBrowser/POSE_ZIP_FORMAT.md</b> in the repo.",
                 rich);
 
@@ -4821,7 +4823,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Options panel</b>", rich);
             GUILayout.Label(
-                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b> (global layout toggle), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target — same cycle as Mini <b>Folder</b> arrows; only while this window is focused and no text field has keyboard focus).\n" +
+                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target — same cycle as Mini <b>Folder</b> arrows; only while this window is focused and no text field has keyboard focus).\n" +
                 "Card width and page cap are mirrored in BepInEx under <b>Pose Browser</b>. Window positions, layout tier (<b>Full</b>/<b>List</b>/<b>Mini</b>), sort mode, and the group layout toggle live in <b>pose_browser_options.json</b> next to the other Sandbox config files.",
                 rich);
 
@@ -4978,7 +4980,19 @@ namespace HS2SandboxPlugin
                 _applyGroupRelativePositions,
                 "Apply stored relative positions when applying a group");
             if (newApplyLayout != _applyGroupRelativePositions)
+            {
                 _applyGroupRelativePositions = newApplyLayout;
+                if (!newApplyLayout)
+                    _applyGroupRelativeHeights = false;
+            }
+
+            GUI.enabled = _applyGroupRelativePositions;
+            bool newApplyHeights = GUILayout.Toggle(
+                _applyGroupRelativeHeights,
+                "Adjust relative layout for body height (saved per pose)");
+            GUI.enabled = true;
+            if (newApplyHeights != _applyGroupRelativeHeights)
+                _applyGroupRelativeHeights = newApplyHeights;
 
             GUILayout.Space(14f);
             GUILayout.Label("Keyboard shortcuts", GUI.skin.label);
@@ -5191,6 +5205,9 @@ namespace HS2SandboxPlugin
                         _tagFilterThumbnailMode = PoseDisplayFilterMode.Exclude;
                 }
 
+                if (data.optionsVersion >= 12)
+                    _applyGroupRelativeHeights = data.applyGroupRelativeHeights;
+
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
                 SyncWindowTitleForLayoutTier();
@@ -5237,7 +5254,8 @@ namespace HS2SandboxPlugin
                     compactListShowTree = _compactListShowTree,
                     tagFilterGroupsMode = (int)_tagFilterGroupsMode,
                     tagFilterThumbnailMode = (int)_tagFilterThumbnailMode,
-                    applyGroupRelativePositions = _applyGroupRelativePositions
+                    applyGroupRelativePositions = _applyGroupRelativePositions,
+                    applyGroupRelativeHeights = _applyGroupRelativeHeights
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -5423,5 +5441,6 @@ namespace HS2SandboxPlugin
         public bool tagFilterExcludeGroups;
         public bool tagFilterExcludeNoThumbnail;
         public bool applyGroupRelativePositions = true;
+        public bool applyGroupRelativeHeights;
     }
 }

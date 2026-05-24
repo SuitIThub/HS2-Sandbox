@@ -128,11 +128,15 @@ namespace HS2SandboxPlugin
             DrawSaveGroupRelativePositionsButton(group, members, barBtnH, barBtnMinW, wrap);
             DrawClearGroupRelativePositionsButton(group, barBtnH, barBtnMinW, wrap);
             DrawApplyGroupRelativePositionsToggle(group, barBtnH, wrap);
+            DrawApplyGroupRelativeHeightsToggle(group, barBtnH, wrap);
             wrap.End();
         }
 
         private static bool GroupHasStoredRelativePositions(PoseGroup group) =>
             group.MemberRelativeOffsets.Count > 0;
+
+        private static bool GroupHasStoredBodyHeights(PoseGroup group) =>
+            group.MemberBodyHeights.Count > 0;
 
         private void DrawApplyGroupRelativePositionsToggle(
             PoseGroup group,
@@ -154,6 +158,35 @@ namespace HS2SandboxPlugin
                 if (nv != _applyGroupRelativePositions)
                 {
                     _applyGroupRelativePositions = nv;
+                    if (!nv)
+                        _applyGroupRelativeHeights = false;
+                    SavePersistedOptions();
+                }
+            });
+        }
+
+        private void DrawApplyGroupRelativeHeightsToggle(
+            PoseGroup group,
+            float barBtnH,
+            ActionBarWrapLayout wrap)
+        {
+            if (!GroupHasStoredBodyHeights(group) || !GroupHasStoredRelativePositions(group))
+                return;
+
+            string label = "Adjust for body height";
+            float toggleW = wrap.MeasureLabel(label, 150f) + 22f;
+            wrap.Add(toggleW, () =>
+            {
+                GUI.enabled = _applyGroupRelativePositions;
+                bool nv = GUILayout.Toggle(
+                    _applyGroupRelativeHeights,
+                    new GUIContent(label, "Applies the full saved relative position (first pose = anchor), then scales saved offset.y by current vs saved body-height ratios (no fixed meter constant)."),
+                    GUILayout.Height(barBtnH),
+                    GUILayout.Width(toggleW));
+                GUI.enabled = true;
+                if (nv != _applyGroupRelativeHeights)
+                {
+                    _applyGroupRelativeHeights = nv;
                     SavePersistedOptions();
                 }
             });
@@ -187,7 +220,7 @@ namespace HS2SandboxPlugin
 
         private void ClearGroupRelativePositions(PoseGroup group)
         {
-            if (!GroupHasStoredRelativePositions(group))
+            if (!GroupHasStoredRelativePositions(group) && !GroupHasStoredBodyHeights(group))
                 return;
             _groupDb.ClearMemberRelativeOffsets(group.Id);
             SandboxServices.Log.LogMessage($"PoseBrowser: Cleared relative positions for group \"{group.Name}\".");
@@ -292,7 +325,12 @@ namespace HS2SandboxPlugin
             }
 
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             string anchorRel = assignments[0].pose.RelativePath(_dataService.PoseRootPath);
+            if (!string.IsNullOrEmpty(anchorRel) &&
+                PoseDataService.TryGetCharacterBodyHeight(assignments[0].character, out float anchorH))
+                heights[anchorRel] = anchorH;
+
             for (int i = 1; i < assignments.Count; i++)
             {
                 if (!PoseDataService.TryGetCharacterWorldPosition(assignments[i].character, out Vector3 pos))
@@ -306,11 +344,13 @@ namespace HS2SandboxPlugin
                 if (string.IsNullOrEmpty(rel))
                     continue;
                 offsets[rel] = pos - anchorPos;
+                if (PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float h))
+                    heights[rel] = h;
             }
 
-            _groupDb.SetMemberRelativeOffsets(group.Id, offsets);
+            _groupDb.SetMemberRelativeLayout(group.Id, offsets, heights);
             SandboxServices.Log.LogMessage(
-                $"PoseBrowser: Saved relative positions for group \"{group.Name}\" ({offsets.Count} offset(s); anchor: {Path.GetFileName(anchorRel)}).");
+                $"PoseBrowser: Saved relative positions for group \"{group.Name}\" ({offsets.Count} offset(s), {heights.Count} height(s); anchor: {Path.GetFileName(anchorRel)}).");
         }
 
         private void RecordGroupMultiApply(string groupId)
@@ -1111,11 +1151,32 @@ namespace HS2SandboxPlugin
                     name = g.Name,
                     tags = g.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray(),
                     members = members.ToArray(),
-                    memberRelativeOffsets = BuildExportGroupMemberOffsets(g)
+                    memberRelativeOffsets = BuildExportGroupMemberOffsets(g),
+                    memberBodyHeights = BuildExportGroupMemberBodyHeights(g)
                 });
             }
 
             return result;
+        }
+
+        private static float[]? BuildExportGroupMemberBodyHeights(PoseGroup group)
+        {
+            if (group.MemberRelativePaths.Count == 0 || group.MemberBodyHeights.Count == 0)
+                return null;
+
+            var rows = new float[group.MemberRelativePaths.Count];
+            bool any = false;
+            for (int i = 0; i < group.MemberRelativePaths.Count; i++)
+            {
+                string rel = group.MemberRelativePaths[i];
+                if (group.MemberBodyHeights.TryGetValue(rel, out float h))
+                {
+                    rows[i] = h;
+                    any = true;
+                }
+            }
+
+            return any ? rows : null;
         }
 
         private static float[][]? BuildExportGroupMemberOffsets(PoseGroup group)
@@ -1181,7 +1242,7 @@ namespace HS2SandboxPlugin
                     Name = pg.Name,
                     Tags = new HashSet<string>(pg.Tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
                 };
-                _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets);
+                _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets, pg.MemberBodyHeights);
             }
         }
 
@@ -1224,23 +1285,28 @@ namespace HS2SandboxPlugin
             IReadOnlyList<PoseGridItem> copyMembers,
             PoseGroup destGroup)
         {
-            if (sourceGroup.MemberRelativeOffsets.Count == 0 ||
+            if ((sourceGroup.MemberRelativeOffsets.Count == 0 && sourceGroup.MemberBodyHeights.Count == 0) ||
                 sourceMembers.Count != copyMembers.Count)
                 return;
 
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 1; i < copyMembers.Count; i++)
+            var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < copyMembers.Count; i++)
             {
                 string oldRel = sourceMembers[i].RelativePath(_dataService.PoseRootPath);
-                if (!sourceGroup.MemberRelativeOffsets.TryGetValue(oldRel, out var offset))
-                    continue;
                 string newRel = copyMembers[i].RelativePath(_dataService.PoseRootPath);
-                if (!string.IsNullOrEmpty(newRel))
+                if (string.IsNullOrEmpty(newRel))
+                    continue;
+
+                if (i > 0 && sourceGroup.MemberRelativeOffsets.TryGetValue(oldRel, out var offset))
                     offsets[newRel] = offset;
+
+                if (sourceGroup.MemberBodyHeights.TryGetValue(oldRel, out float h))
+                    heights[newRel] = h;
             }
 
-            if (offsets.Count > 0)
-                _groupDb.SetMemberRelativeOffsets(destGroup.Id, offsets);
+            if (offsets.Count > 0 || heights.Count > 0)
+                _groupDb.SetMemberRelativeLayout(destGroup.Id, offsets, heights);
         }
 
         private void ApplyTagToGroups(IReadOnlyList<PoseGroup> groups, string tag, bool add)

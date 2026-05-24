@@ -7,6 +7,9 @@ namespace HS2SandboxPlugin
 {
     internal static class PoseBrowserCharacterApply
     {
+        /// <summary>Min |H_member − H_anchor| at save to use spread ratio for Y scaling (else anchor-only / averaged).</summary>
+        private const float BodyHeightSpreadEpsilon = 0.001f;
+
         private enum PoseGenderTag
         {
             Untagged,
@@ -175,7 +178,8 @@ namespace HS2SandboxPlugin
             PoseBrowserCharacterConfig config,
             IReadOnlyList<PoseGridItem> poses,
             IReadOnlyList<OCIChar> studioSelection,
-            string poseRootPath)
+            string poseRootPath,
+            bool adjustForBodyHeight = false)
         {
             if (group.MemberRelativeOffsets.Count == 0 || poses.Count == 0)
                 return 0;
@@ -188,6 +192,16 @@ namespace HS2SandboxPlugin
             if (!PoseDataService.TryGetCharacterWorldPosition(assignments[0].character, out Vector3 anchorPos))
                 return 0;
 
+            string anchorRel = PoseGroupDatabase.NormalizeMemberPath(
+                assignments[0].pose.RelativePath(poseRootPath));
+            float savedAnchorH = 0f;
+            float currentAnchorH = 0f;
+            bool useHeights = adjustForBodyHeight &&
+                              group.MemberBodyHeights.Count > 0 &&
+                              !string.IsNullOrEmpty(anchorRel) &&
+                              group.MemberBodyHeights.TryGetValue(anchorRel, out savedAnchorH) &&
+                              PoseDataService.TryGetCharacterBodyHeight(assignments[0].character, out currentAnchorH);
+
             int moved = 0;
             for (int i = 1; i < assignments.Count; i++)
             {
@@ -197,7 +211,19 @@ namespace HS2SandboxPlugin
                     !group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 offset))
                     continue;
 
-                if (PoseDataService.TrySetCharacterWorldPosition(assignments[i].character, anchorPos + offset))
+                // Full saved relative position (anchor = first pose in assignment order).
+                Vector3 target = anchorPos + offset;
+
+                if (useHeights &&
+                    group.MemberBodyHeights.TryGetValue(rel, out float savedMemberH) &&
+                    PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float currentMemberH))
+                {
+                    float ryScaled = ScaleRelativeOffsetY(
+                        offset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
+                    target.y = anchorPos.y + ryScaled;
+                }
+
+                if (PoseDataService.TrySetCharacterWorldPosition(assignments[i].character, target))
                     moved++;
             }
 
@@ -272,6 +298,36 @@ namespace HS2SandboxPlugin
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Scales the saved relative Y offset from maker body-height ratios (no fixed world multiplier).
+        /// Uses spread ratio when save had distinct anchor/member heights; otherwise anchor scale or average.
+        /// </summary>
+        internal static float ScaleRelativeOffsetY(
+            float rySaved,
+            float savedAnchorH,
+            float savedMemberH,
+            float currentAnchorH,
+            float currentMemberH)
+        {
+            float savedSpread = savedMemberH - savedAnchorH;
+            if (Mathf.Abs(savedSpread) >= BodyHeightSpreadEpsilon)
+            {
+                float currentSpread = currentMemberH - currentAnchorH;
+                return rySaved * (currentSpread / savedSpread);
+            }
+
+            if (Mathf.Abs(savedAnchorH) >= BodyHeightSpreadEpsilon)
+                return rySaved * (currentAnchorH / savedAnchorH);
+
+            float scaleAnchor = Mathf.Abs(savedAnchorH) >= BodyHeightSpreadEpsilon
+                ? currentAnchorH / savedAnchorH
+                : 1f;
+            float scaleMember = Mathf.Abs(savedMemberH) >= BodyHeightSpreadEpsilon
+                ? currentMemberH / savedMemberH
+                : 1f;
+            return rySaved * 0.5f * (scaleAnchor + scaleMember);
         }
 
         private static void AppendInterleavedByRank(

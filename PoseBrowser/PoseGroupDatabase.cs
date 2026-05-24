@@ -11,8 +11,8 @@ namespace HS2SandboxPlugin
 {
     public sealed class PoseGroupDatabase
     {
-        private const int FileVersion = 2;
-        private const string TsvHeader = "HS2SANDBOX_POSE_GROUPS\t2";
+        private const int FileVersion = 3;
+        private const string TsvHeader = "HS2SANDBOX_POSE_GROUPS\t3";
         private const char TagDelimiter = '\x1e';
         private const char MemberDelimiter = '\x1f';
         private const char OffsetDelimiter = '\x1f';
@@ -170,6 +170,12 @@ namespace HS2SandboxPlugin
                     group.MemberRelativeOffsets.Remove(oldK);
                     group.MemberRelativeOffsets[newK] = offset;
                 }
+
+                if (group.MemberBodyHeights.TryGetValue(oldK, out float height))
+                {
+                    group.MemberBodyHeights.Remove(oldK);
+                    group.MemberBodyHeights[newK] = height;
+                }
             }
 
             _pathToGroupId[newK] = groupId;
@@ -193,7 +199,13 @@ namespace HS2SandboxPlugin
             MarkDirty();
         }
 
-        public void SetMemberRelativeOffsets(string groupId, IReadOnlyDictionary<string, Vector3> offsetsByMemberPath)
+        public void SetMemberRelativeOffsets(string groupId, IReadOnlyDictionary<string, Vector3> offsetsByMemberPath) =>
+            SetMemberRelativeLayout(groupId, offsetsByMemberPath, null);
+
+        public void SetMemberRelativeLayout(
+            string groupId,
+            IReadOnlyDictionary<string, Vector3> offsetsByMemberPath,
+            IReadOnlyDictionary<string, float>? bodyHeightsByMemberPath)
         {
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
             group.MemberRelativeOffsets.Clear();
@@ -205,29 +217,51 @@ namespace HS2SandboxPlugin
                 group.MemberRelativeOffsets[key] = kvp.Value;
             }
 
-            PruneOffsetsToMembers(group);
+            if (bodyHeightsByMemberPath != null)
+            {
+                group.MemberBodyHeights.Clear();
+                foreach (var kvp in bodyHeightsByMemberPath)
+                {
+                    string key = NormalizeStorageKey(kvp.Key);
+                    if (string.IsNullOrEmpty(key))
+                        continue;
+                    group.MemberBodyHeights[key] = kvp.Value;
+                }
+            }
+
+            PruneLayoutToMembers(group);
             MarkDirty();
         }
 
         public void ClearMemberRelativeOffsets(string groupId)
         {
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
-            if (group.MemberRelativeOffsets.Count == 0) return;
+            if (group.MemberRelativeOffsets.Count == 0 && group.MemberBodyHeights.Count == 0)
+                return;
             group.MemberRelativeOffsets.Clear();
+            group.MemberBodyHeights.Clear();
             MarkDirty();
         }
 
-        private static void PruneOffsetsToMembers(PoseGroup group)
+        private static void PruneOffsetsToMembers(PoseGroup group) => PruneLayoutToMembers(group);
+
+        private static void PruneLayoutToMembers(PoseGroup group)
         {
-            if (group.MemberRelativeOffsets.Count == 0)
+            if (group.MemberRelativeOffsets.Count == 0 && group.MemberBodyHeights.Count == 0)
                 return;
 
             var memberSet = new HashSet<string>(group.MemberRelativePaths, StringComparer.OrdinalIgnoreCase);
-            var stale = group.MemberRelativeOffsets.Keys
+            var staleOffsets = group.MemberRelativeOffsets.Keys
                 .Where(k => !memberSet.Contains(k))
                 .ToList();
-            foreach (var k in stale)
+            foreach (var k in staleOffsets)
                 group.MemberRelativeOffsets.Remove(k);
+
+            var staleHeights = group.MemberBodyHeights.Keys
+                .Where(k => !memberSet.Contains(k))
+                .ToList();
+            foreach (var k in staleHeights)
+                group.MemberBodyHeights.Remove(k);
         }
 
         public List<PoseGroup> GetGroupsFullyContainedIn(IReadOnlyCollection<string> relativePaths)
@@ -254,7 +288,8 @@ namespace HS2SandboxPlugin
         public void ImportGroup(
             PoseGroup group,
             IReadOnlyDictionary<string, string> oldMemberRelToNewRel,
-            Vector3[]? memberRelativeOffsets = null)
+            Vector3[]? memberRelativeOffsets = null,
+            float[]? memberBodyHeights = null)
         {
             var newMembers = new List<string>();
             var oldMembersOrdered = new List<string>();
@@ -268,6 +303,7 @@ namespace HS2SandboxPlugin
             if (newMembers.Count == 0) return;
 
             var importedOffsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            var importedHeights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             if (memberRelativeOffsets != null && memberRelativeOffsets.Length > 0)
             {
                 for (int i = 0; i < newMembers.Count && i < memberRelativeOffsets.Length; i++)
@@ -292,13 +328,31 @@ namespace HS2SandboxPlugin
                 }
             }
 
+            if (memberBodyHeights != null && memberBodyHeights.Length > 0)
+            {
+                for (int i = 0; i < newMembers.Count && i < memberBodyHeights.Length; i++)
+                    importedHeights[newMembers[i]] = memberBodyHeights[i];
+            }
+            else
+            {
+                foreach (var kvp in group.MemberBodyHeights)
+                {
+                    string oldKey = NormalizeStorageKey(kvp.Key);
+                    int idx = oldMembersOrdered.FindIndex(p =>
+                        string.Equals(p, oldKey, StringComparison.OrdinalIgnoreCase));
+                    if (idx >= 0 && idx < newMembers.Count)
+                        importedHeights[newMembers[idx]] = kvp.Value;
+                }
+            }
+
             var imported = new PoseGroup
             {
                 Id = string.IsNullOrEmpty(group.Id) ? Guid.NewGuid().ToString("N") : group.Id,
                 Name = group.Name,
                 Tags = new HashSet<string>(group.Tags, StringComparer.OrdinalIgnoreCase),
                 MemberRelativePaths = newMembers,
-                MemberRelativeOffsets = importedOffsets
+                MemberRelativeOffsets = importedOffsets,
+                MemberBodyHeights = importedHeights
             };
 
             foreach (var rel in newMembers)
@@ -398,6 +452,9 @@ namespace HS2SandboxPlugin
                     var offsets = parts.Length >= 6
                         ? ParseMemberOffsetsColumn(parts[5], memberPaths)
                         : new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+                    var heights = parts.Length >= 7
+                        ? ParseMemberBodyHeightsColumn(parts[6], memberPaths)
+                        : new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
                     var group = new PoseGroup
                     {
@@ -405,7 +462,8 @@ namespace HS2SandboxPlugin
                         Name = parts[2] ?? "",
                         Tags = new HashSet<string>(ParseDelimited(parts[3], TagDelimiter), StringComparer.OrdinalIgnoreCase),
                         MemberRelativePaths = memberPaths,
-                        MemberRelativeOffsets = offsets
+                        MemberRelativeOffsets = offsets,
+                        MemberBodyHeights = heights
                     };
 
                     if (group.MemberRelativePaths.Count == 0) continue;
@@ -486,6 +544,51 @@ namespace HS2SandboxPlugin
                 return false;
             offset = new Vector3(x, y, z);
             return true;
+        }
+
+        private static Dictionary<string, float> ParseMemberBodyHeightsColumn(
+            string? col,
+            IReadOnlyList<string> memberPaths)
+        {
+            var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
+                return result;
+
+            var tokens = col.Split(OffsetDelimiter);
+            var inv = CultureInfo.InvariantCulture;
+            for (int i = 0; i < memberPaths.Count && i < tokens.Length; i++)
+            {
+                string token = tokens[i].Trim();
+                if (token.Length == 0)
+                    continue;
+                if (!float.TryParse(token, NumberStyles.Float, inv, out float h))
+                    continue;
+                result[memberPaths[i]] = h;
+            }
+
+            return result;
+        }
+
+        private static string FormatMemberBodyHeightsColumn(PoseGroup group)
+        {
+            if (group.MemberRelativePaths.Count == 0 || group.MemberBodyHeights.Count == 0)
+                return "";
+
+            var parts = new List<string>(group.MemberRelativePaths.Count);
+            var inv = CultureInfo.InvariantCulture;
+            for (int i = 0; i < group.MemberRelativePaths.Count; i++)
+            {
+                string rel = group.MemberRelativePaths[i];
+                if (!group.MemberBodyHeights.TryGetValue(rel, out float h))
+                {
+                    parts.Add("");
+                    continue;
+                }
+
+                parts.Add(h.ToString("R", inv));
+            }
+
+            return string.Join(OffsetDelimiter.ToString(), parts);
         }
 
         private static string FormatMemberOffsetsColumn(PoseGroup group)
@@ -584,7 +687,8 @@ namespace HS2SandboxPlugin
                             MemberDelimiter.ToString(),
                             group.MemberRelativePaths);
                         string offsetsCol = FormatMemberOffsetsColumn(group);
-                        sw.WriteLine($"group\t{group.Id}\t{group.Name}\t{tagsCol}\t{membersCol}\t{offsetsCol}");
+                        string heightsCol = FormatMemberBodyHeightsColumn(group);
+                        sw.WriteLine($"group\t{group.Id}\t{group.Name}\t{tagsCol}\t{membersCol}\t{offsetsCol}\t{heightsCol}");
                     }
                 }
 

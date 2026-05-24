@@ -235,6 +235,7 @@ namespace HS2SandboxPlugin
                 });
 
             int layoutMoved = 0;
+            bool heightAdjust = _applyGroupRelativeHeights && _applyGroupRelativePositions;
             if (_applyGroupRelativePositions &&
                 layoutGroup != null &&
                 layoutGroup.MemberRelativeOffsets.Count > 0)
@@ -244,7 +245,8 @@ namespace HS2SandboxPlugin
                     _characterConfig,
                     poses,
                     chars,
-                    _dataService.PoseRootPath);
+                    _dataService.PoseRootPath,
+                    heightAdjust);
             }
 
             if (_poseSortMode == PoseSortMode.LastUsed)
@@ -255,8 +257,9 @@ namespace HS2SandboxPlugin
 
             if (layoutMoved > 0)
             {
+                string heightNote = heightAdjust ? " (body-height Y adjustment on)" : "";
                 SandboxServices.Log.LogMessage(
-                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} character(s) and {layoutMoved} relative position(s) from group \"{layoutGroup!.Name}\".");
+                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} character(s) and {layoutMoved} relative position(s) from group \"{layoutGroup!.Name}\"{heightNote}.");
             }
             else if (layoutGroup != null && layoutGroup.MemberRelativeOffsets.Count > 0)
             {

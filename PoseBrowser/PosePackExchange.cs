@@ -9,9 +9,10 @@ namespace HS2SandboxPlugin
 {
     /// <summary>
     /// Pose ZIP exchange: original <c>.png</c>/<c>.dat</c> files under <c>poses/</c>, plus <c>manifest.json</c> (schema + kind)
-    /// and <c>metadata.json</c> (tags, favorites, paths; v3+ optional <c>groups</c>; v4 adds <c>memberRelativeOffsets</c>). Import parses <c>metadata.json</c> with a
-    /// small JSON reader — not <see cref="JsonUtility"/> — so <c>items</c> arrays round-trip with export. Exports use manifest
-    /// <see cref="ManifestVersion"/> (4); imports accept 2–4. Flat <c>poses</c> export uses only <c>poses/&lt;filename&gt;</c>
+    /// and <c>metadata.json</c> (tags, favorites, paths; v3+ optional <c>groups</c>; v4 adds <c>memberRelativeOffsets</c>; v5 adds
+    /// <c>memberBodyHeights</c>). Import parses <c>metadata.json</c> with a small JSON reader — not <see cref="JsonUtility"/> — so
+    /// <c>items</c> arrays round-trip with export. Exports use manifest <see cref="ManifestVersion"/> (5); imports accept 2–5.
+    /// Flat <c>poses</c> export uses only <c>poses/&lt;filename&gt;</c>
     /// (no subfolders; collisions get <c>-01</c> suffixes). <c>treeBranch</c> keeps structure under <c>poses/&lt;branchRoot&gt;/…</c>.
     /// Legacy blob packs (v1) still import.
     /// </summary>
@@ -27,7 +28,7 @@ namespace HS2SandboxPlugin
 
         public const string SchemaId = "HS2Sandbox.poseZip";
         /// <summary>Manifest <c>version</c> written on export (current format).</summary>
-        public const int ManifestVersion = 4;
+        public const int ManifestVersion = 5;
         /// <summary>Oldest manifest <c>version</c> still accepted on import (v2 packs without <c>groups</c>).</summary>
         public const int MinImportManifestVersion = 2;
 
@@ -78,6 +79,8 @@ namespace HS2SandboxPlugin
             /// later entries are world-space offsets from the first member's character position.
             /// </summary>
             public float[][]? memberRelativeOffsets;
+            /// <summary>Maker body-height slider per member, parallel to <see cref="members"/> (v5).</summary>
+            public float[]? memberBodyHeights;
         }
 
         public sealed class PosePackReadGroup
@@ -87,19 +90,22 @@ namespace HS2SandboxPlugin
             public string[] Tags { get; }
             public string[] MemberZipPaths { get; }
             public Vector3[]? MemberRelativeOffsets { get; }
+            public float[]? MemberBodyHeights { get; }
 
             public PosePackReadGroup(
                 string id,
                 string name,
                 string[] tags,
                 string[] memberZipPaths,
-                Vector3[]? memberRelativeOffsets = null)
+                Vector3[]? memberRelativeOffsets = null,
+                float[]? memberBodyHeights = null)
             {
                 Id = id;
                 Name = name;
                 Tags = tags;
                 MemberZipPaths = memberZipPaths;
                 MemberRelativeOffsets = memberRelativeOffsets;
+                MemberBodyHeights = memberBodyHeights;
             }
         }
 
@@ -540,7 +546,8 @@ namespace HS2SandboxPlugin
                 g.name ?? "",
                 g.tags ?? Array.Empty<string>(),
                 g.members ?? Array.Empty<string>(),
-                ConvertGroupMemberOffsets(g))).ToList();
+                ConvertGroupMemberOffsets(g),
+                ConvertGroupMemberBodyHeights(g))).ToList();
             result = new PosePackReadResult(isTree, branchRoot, manifest.exportedUtc ?? "", list, packGroups);
             return true;
         }
@@ -751,6 +758,19 @@ namespace HS2SandboxPlugin
                 sb.Append(']');
             }
 
+            if (g.memberBodyHeights != null && g.memberBodyHeights.Length > 0)
+            {
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                sb.Append(",\"memberBodyHeights\":[");
+                for (int h = 0; h < g.memberBodyHeights.Length; h++)
+                {
+                    if (h > 0) sb.Append(',');
+                    sb.Append(g.memberBodyHeights[h].ToString("R", inv));
+                }
+
+                sb.Append(']');
+            }
+
             sb.Append('}');
         }
 
@@ -788,6 +808,13 @@ namespace HS2SandboxPlugin
             }
 
             return arr;
+        }
+
+        private static float[]? ConvertGroupMemberBodyHeights(PoseZipGroupJson g)
+        {
+            if (g.memberBodyHeights == null || g.memberBodyHeights.Length == 0)
+                return null;
+            return (float[])g.memberBodyHeights.Clone();
         }
 
         private static void AppendJsonString(StringBuilder sb, string? s)
@@ -1295,6 +1322,7 @@ namespace HS2SandboxPlugin
             var tagsList = new List<string>();
             var membersList = new List<string>();
             List<float[]>? offsetsList = null;
+            List<float>? heightsList = null;
             MetadataJson_SkipWs(json, ref i);
             if (i >= json.Length || json[i] != '{')
             {
@@ -1313,6 +1341,9 @@ namespace HS2SandboxPlugin
                     group.members = membersList.Count > 0 ? membersList.ToArray() : Array.Empty<string>();
                     group.memberRelativeOffsets = offsetsList != null && offsetsList.Count > 0
                         ? offsetsList.ToArray()
+                        : null;
+                    group.memberBodyHeights = heightsList != null && heightsList.Count > 0
+                        ? heightsList.ToArray()
                         : null;
                     return true;
                 }
@@ -1356,6 +1387,12 @@ namespace HS2SandboxPlugin
                     if (!MetadataJson_TryReadVec3ArrayArray(json, ref i, offsetsList, out error))
                         return false;
                 }
+                else if (string.Equals(key, "memberBodyHeights", StringComparison.Ordinal))
+                {
+                    heightsList ??= new List<float>();
+                    if (!MetadataJson_TryReadFloatArray(json, ref i, heightsList, out error))
+                        return false;
+                }
                 else
                 {
                     if (!MetadataJson_TrySkipValue(json, ref i, out error))
@@ -1378,10 +1415,59 @@ namespace HS2SandboxPlugin
                     group.memberRelativeOffsets = offsetsList != null && offsetsList.Count > 0
                         ? offsetsList.ToArray()
                         : null;
+                    group.memberBodyHeights = heightsList != null && heightsList.Count > 0
+                        ? heightsList.ToArray()
+                        : null;
                     return true;
                 }
 
                 error = "Invalid group object.";
+                return false;
+            }
+        }
+
+        private static bool MetadataJson_TryReadFloatArray(
+            string json,
+            ref int i,
+            List<float> sink,
+            out string? error)
+        {
+            error = null;
+            if (i >= json.Length || json[i] != '[')
+            {
+                error = "Expected '[' for memberBodyHeights.";
+                return false;
+            }
+
+            i++;
+            while (true)
+            {
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == ']')
+                {
+                    i++;
+                    return true;
+                }
+
+                if (!MetadataJson_TryReadNumber(json, ref i, out float num, out error))
+                    return false;
+                sink.Add(num);
+
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == ',')
+                {
+                    i++;
+                    continue;
+                }
+
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == ']')
+                {
+                    i++;
+                    return true;
+                }
+
+                error = "Invalid memberBodyHeights array.";
                 return false;
             }
         }

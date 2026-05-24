@@ -819,6 +819,34 @@ namespace HS2SandboxPlugin
 
         public static bool IsMaleCharacter(OCIChar oci) => !IsFemaleCharacter(oci);
 
+        /// <summary>Maker body-height slider (0–1 range, <see cref="ChaFileDefine.BodyShapeIdx.Height"/>).</summary>
+        public static bool TryGetCharacterBodyHeight(OCIChar oci, out float height)
+        {
+            height = 0f;
+            try
+            {
+                int idx = (int)ChaFileDefine.BodyShapeIdx.Height;
+                if (oci?.charInfo != null)
+                {
+                    height = oci.charInfo.GetShapeBodyValue(idx);
+                    return true;
+                }
+
+                var body = oci?.oiCharInfo?.charFile?.custom?.body;
+                if (body?.shapeValueBody != null && body.shapeValueBody.Length > idx)
+                {
+                    height = body.shapeValueBody[idx];
+                    return true;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return false;
+        }
+
         public static bool TryGetCharacterWorldPosition(OCIChar oci, out Vector3 position)
         {
             position = Vector3.zero;

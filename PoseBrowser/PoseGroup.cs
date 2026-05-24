@@ -17,6 +17,12 @@ namespace HS2SandboxPlugin
         /// </summary>
         public Dictionary<string, Vector3> MemberRelativeOffsets { get; set; } =
             new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Maker body-height slider per member (including anchor), keyed by member relative path.
+        /// Used with <see cref="MemberRelativeOffsets"/> to adjust world Y on apply when characters differ in height.
+        /// </summary>
+        public Dictionary<string, float> MemberBodyHeights { get; set; } =
+            new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
     }
 
     [Serializable]

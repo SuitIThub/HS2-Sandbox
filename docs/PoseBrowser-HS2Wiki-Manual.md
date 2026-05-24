@@ -18,11 +18,11 @@ The Pose Browser is a Studio utility that:
 - In **2.0.0** (all-in-one **HS2 Sandbox**): **Full / List / Mini** layouts, **Sort** panel (including **Last used** tracking), **★ Favorites** library view, docked tag filter window, optional **keyboard shortcuts** (BepInEx Configuration Manager), and expanded **`pose_browser_options.json`** (per-layout window geometry and sort).
 - In **2.1.0+**: **v2/v3 pose pack ZIP** **Import…** / **Export…**, branch/tree exports, modder docs **`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`** (stored-only ZIP requirement).
 - In **3.0.0** (split **Pose Browser** module — same sources ship inside the all-in-one build):
-- **Pose groups** — named sets of poses shown as grid segments, **group tags** for filtering, **pose_groups.tsv** persistence (including optional **relative positions**), and **groups[]** / **memberRelativeOffsets** in v4 ZIP metadata (v2/v3 import without layout).
+- **Pose groups** — named sets of poses shown as grid segments, **group tags** for filtering, **pose_groups.tsv** persistence (relative offsets + body heights per pose), and **groups[]** / **memberRelativeOffsets** / **memberBodyHeights** in v5 ZIP metadata (v2–v4 import; layout optional).
 - **Tag filter include/exclude** — tri-state per-tag filters; exclude dims grouped members instead of hiding whole groups.
 - **Multi-character apply** — **Chars** priority lists (male/female), **Apply to characters…** for multiple poses or a whole group, driven by **Male** / **Female** pose tags and list order.
 - In **3.1.0**: **Auto-capture** for batch thumbnails (configurable pause in Options / BepInEx), grid layout and window-resize fixes, multi-group action bar improvements.
-- In **3.2.0+**: **Group relative positions** — save world-space spacing between characters after a group apply; re-apply with the group; stored in **pose_groups.tsv** and v4 ZIP **memberRelativeOffsets**; global **Apply relative positions** toggle (group bar + Options).
+- In **3.2.0+**: **Group relative positions** — save offsets from an anchor pose (first in display order) plus **maker body height** per pose; re-apply with the group; stored in **pose_groups.tsv** and v5 ZIP; global **Apply relative positions** and **Adjust for body height** toggles (group bar + Options).
 
 ### 1.1 Version note
 
@@ -55,7 +55,7 @@ The main window can be **resized** from the bottom-right grip. In **Full** layou
 - **Config** (BepInEx): `BepInEx/config/com.hs2.sandbox/`
   - `pose_browser_options.json` — card width, items per page, **layout tier** (Full/List/Mini) with separate saved window rects, **sort mode** and direction.
   - `pose_tags.tsv` — per-pose tags and favorites (see §10).
-  - `pose_groups.tsv` — pose groups (membership, names, group tags).
+  - `pose_groups.tsv` — pose groups (membership, names, group tags, relative offsets, body heights).
   - `pose_browser_character_config.json` — male/female priority lists for multi-character apply.
 
 ### 3.2 Tree modes
@@ -165,7 +165,7 @@ A **pose group** is a named collection of library poses stored in **`pose_groups
 
 | Mode | How | Used for |
 |------|-----|----------|
-| **Group entity** | Click the **group header** | Rename, tags, export, **Apply to characters…**, **Save positions…** / **Clear positions**, layout toggle |
+| **Group entity** | Click the **group header** | Rename, tags, export, **Apply to characters…**, **Save positions…** / **Clear positions**, **Apply relative positions**, **Adjust for body height** |
 | **Pose members** | Card checkboxes / thumbnail selection | Tag selected, move, copy, delete, partial export |
 
 - **Ctrl+click** / **Shift+click** on group headers work like pose selection (range within the filtered list).
@@ -173,7 +173,11 @@ A **pose group** is a named collection of library poses stored in **`pose_groups
 
 #### Relative positions (save & apply)
 
-Optional spacing between characters when a **whole group** is applied with **Apply to characters…** (or compact **▦** group apply). Offsets are stored **per group** in **pose_groups.tsv** and in v4 ZIP **`memberRelativeOffsets`**. The **Apply relative positions** checkbox is **global** (shown on the group bar when that group has saved layout, and in **Options**).
+Optional layout when a **whole group** is applied with **Apply to characters…** (or compact **▦** group apply). Data is keyed by **pose path** and **assignment order** from **Chars** priority (grid display order) — not by which Studio character you used at save time.
+
+**Anchor (first pose):** The first pose in display order is the anchor. At save, its world position and body height are recorded on that path. At apply, the anchor character is **not moved**; every other pose uses offsets from the **current** anchor position.
+
+Offsets and **maker body height** (slider value per pose) are stored in **pose_groups.tsv** (v3) and in v5 ZIP **`memberRelativeOffsets`** / **`memberBodyHeights`**. Both apply toggles are **global** (group bar when that group has saved data, and **Options**).
 
 **Before Save positions… is enabled**, all of the following must be true:
 
@@ -188,11 +192,16 @@ Optional spacing between characters when a **whole group** is applied with **App
 
 1. Configure **Chars** (load lists, **Male** / **Female** pose tags as needed) — see **§6.2**.
 2. Select the correct characters in Studio.
-3. Select the **group header** → **Apply to characters…** (poses apply in **grid display order**; the first pose’s character is the **anchor**).
+3. Select the **group header** → **Apply to characters…** (first pose → anchor character).
 4. Move characters in the scene to the layout you want.
-5. Select the group header again → **Save positions…** (hover the button for the tooltip if it stays disabled).
+5. Select the group header again → **Save positions…** (stores **offset** = world − anchor per other pose, plus **body height** on every pose path; hover the button if disabled).
 
-**Apply workflow:** Use the same apply path. After poses are applied, non-anchor characters move to **anchor world position + stored offset**. Uncheck **Apply relative positions** to apply poses only (saved layout is kept). **Clear positions** removes stored offsets for that group.
+**Apply workflow:** Use the same apply path and assignment order. After poses are applied:
+
+- **Apply relative positions** — each non-anchor character moves to **anchor position + saved offset** (X, Y, and Z).
+- **Adjust for body height** (requires relative positions on) — same full offset, but **offset.y** is scaled from saved vs current body-height ratios on each pose path (spread ratio when heights differed at save; otherwise anchor or averaged scale; no fixed meter constant).
+- Uncheck **Apply relative positions** to apply poses only (saved layout is kept; turning it off also disables height adjust).
+- **Clear positions** removes stored offsets **and** heights for that group.
 
 #### Filters and layout
 
@@ -202,7 +211,7 @@ Optional spacing between characters when a **whole group** is applied with **App
 #### Move / copy / export
 
 - **Move…** / **Copy…** — ungrouped poses, or exactly **one full group** (every member selected).
-- **Export…** — includes group metadata (and **memberRelativeOffsets** when present) in v4 ZIP when a full group is in the selection; **Export…** from the group bar exports that group alone.
+- **Export…** — includes group metadata (**memberRelativeOffsets**, **memberBodyHeights** when present) in v5 ZIP when a full group is in the selection; **Export…** from the group bar exports that group alone.
 
 ### 5.5 Import preview (after **Import…**)
 
@@ -242,7 +251,7 @@ Use when you want **different poses on different characters** in one step (e.g. 
 
 You must also have **at least one character** selected in Studio.
 
-When the group has **saved relative positions** and **Apply relative positions** is on (global; **Options** or group bar), the same apply also restores character spacing after poses are applied (see **§5.4**).
+When the group has **saved relative positions** and **Apply relative positions** is on (global; **Options** or group bar), the same apply restores character spacing after poses are applied; **Adjust for body height** scales **offset.y** from saved heights (see **§5.4**).
 
 #### Chars window (priority lists)
 
@@ -325,7 +334,7 @@ Pose Browser reads and writes **`.zip`** packs with `manifest.json`, `metadata.j
 
 ### 8.2 Export… (selection bar)
 
-Select library poses, then **Export…** to write a **flat** v4 pack (group metadata and **memberRelativeOffsets** when a complete group with saved layout is selected; v2/v3 packs still import).
+Select library poses, then **Export…** to write a **flat** v5 pack (group metadata with **memberRelativeOffsets** and **memberBodyHeights** when a complete group with saved layout is selected; v2–v4 packs still import).
 
 ### 8.3 Export branch / library tree (folder footer, Full layout)
 
@@ -356,8 +365,8 @@ Select library poses, then **Export…** to write a **flat** v4 pack (group meta
 | File | Contents |
 |------|----------|
 | **`pose_tags.tsv`** | Per-pose tags and favorites |
-| **`pose_groups.tsv`** | Group id, name, group tags, member paths, optional per-member **relative position** offsets (v2 TSV format) |
-| **`pose_browser_options.json`** | Also stores the global **applyGroupRelativePositions** toggle (options v11+) |
+| **`pose_groups.tsv`** | Group id, name, group tags, member paths, relative offsets, body heights per pose (v3 TSV) |
+| **`pose_browser_options.json`** | Global **applyGroupRelativePositions** and **applyGroupRelativeHeights** toggles (options v12+) |
 | **`pose_browser_character_config.json`** | Male/female priority slot lists (`dicKey`, display name) |
 
 All live under `BepInEx/config/com.hs2.sandbox/`. Keys use **stable relative paths** into the pose library so renames/moves can update metadata via the browser.
@@ -392,7 +401,8 @@ If capture is cancelled, files stay unchanged.
 |---------|---------|
 | **Card width slider** | Minimum width per card; grid fills row / adds columns within min/max bounds. |
 | **Items per page** | **0** = no pagination; **> 0** = cap and use page buttons. |
-| **Apply stored relative positions when applying a group** | Global toggle: when on, group apply restores saved character spacing after poses (see **§5.4**). Does not delete saved layout when off. |
+| **Apply stored relative positions when applying a group** | Global toggle: when on, group apply restores saved character spacing (anchor + offset) after poses (see **§5.4**). Does not delete saved layout when off. |
+| **Adjust relative layout for body height (saved per pose)** | Scales saved **offset.y** from body-height ratios; requires relative positions on. |
 | **Keyboard shortcuts** | Read-only list; assign **Next/Previous pose** and **Next/Previous browse target** in Configuration Manager → **Pose Browser · Keyboard shortcuts** (active while Pose Browser is open **unless** an IMGUI text field has keyboard focus). |
 | **Select all filtered** | Select every item in the **current filtered** list. |
 | **Deselect all** | Clear selection in that list. |
@@ -438,7 +448,7 @@ To add a new wiki page:
 | Pose does not apply | **Character** row shows valid selection; click thumbnail (left or right) as intended. |
 | Multi-apply wrong pairing | Set **Male** / **Female** on poses; load/reorder **Chars** lists; select characters in Studio; use **group header** for whole groups. |
 | Tag + Chars panes missing | Open both from **Full** layout; panes dock in a chain to the right of the browser (recent builds fix overlap). |
-| Group not in export | Select **all** members or use **Export…** from the group bar; v4 metadata includes groups (offsets when saved). |
+| Group not in export | Select **all** members or use **Export…** from the group bar; v5 metadata includes groups (offsets and heights when saved). |
 | Tags lost | Prefer **`pose_tags.tsv`** / **`pose_groups.tsv`** backup; avoid editing TSV while the game runs. |
 | ZIP import fails or errors | Pack must use **stored** (uncompressed) ZIP entries; verify **v2/v3** `manifest.json` per **`POSE_ZIP_FORMAT.md`**. |
 | Wiki pages missing | HS2Wiki installed? Log line *“Registered Pose Browser pages with HS2Wiki”* on startup? Restart after installing HS2Wiki. |
