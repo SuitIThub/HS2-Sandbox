@@ -46,7 +46,7 @@ UTF-8 JSON object. Parsed with Unity **`JsonUtility`** in-game, so keep it as a 
 | Field | Type | Meaning |
 |-------|------|---------|
 | `schema` | string | Must be exactly **`HS2Sandbox.poseZip`**. |
-| `version` | number | **`3`** on export (current). Import accepts **`2`** and **`3`**. |
+| `version` | number | **`4`** on export (current). Import accepts **`2`**, **`3`**, and **`4`**. |
 | `kind` | string | **`poses`** (flat pack) or **`treeBranch`** (hierarchical pack). |
 | `exportedUtc` | string | ISO-8601 UTC timestamp of export (informative). |
 | `branchRoot` | string | **Tree packs only:** single folder name segment (sanitized) matching the first directory under `poses/`. **Empty** for `kind: "poses"`. |
@@ -57,7 +57,7 @@ UTF-8 JSON object. Parsed with Unity **`JsonUtility`** in-game, so keep it as a 
 ```json
 {
   "schema": "HS2Sandbox.poseZip",
-  "version": 3,
+  "version": 4,
   "kind": "poses",
   "exportedUtc": "2026-05-17T12:00:00.0000000Z",
   "branchRoot": "",
@@ -70,7 +70,7 @@ UTF-8 JSON object. Parsed with Unity **`JsonUtility`** in-game, so keep it as a 
 ```json
 {
   "schema": "HS2Sandbox.poseZip",
-  "version": 3,
+  "version": 4,
   "kind": "treeBranch",
   "exportedUtc": "2026-05-17T12:00:00.0000000Z",
   "branchRoot": "MyPack",
@@ -112,9 +112,9 @@ Shape:
 
 Every `file` listed in `items` **must** exist as a **stored** ZIP entry with **exactly** that path (after trim/normalization). The importer loads bytes from that entry.
 
-### `groups` (v3, optional)
+### `groups` (v3+, optional)
 
-From manifest **version 3**, `metadata.json` may include a **`groups`** array. Each element describes a Pose Browser pose group:
+From manifest **version 3**, `metadata.json` may include a **`groups`** array. Each element describes a Pose Browser pose group. Manifest **version 4** adds optional per-member layout offsets.
 
 ```json
 {
@@ -124,7 +124,8 @@ From manifest **version 3**, `metadata.json` may include a **`groups`** array. E
       "id": "a1b2c3…",
       "name": "My sequence",
       "tags": ["combo"],
-      "members": ["poses/pose1.png", "poses/pose2.png"]
+      "members": ["poses/pose1.png", "poses/pose2.png"],
+      "memberRelativeOffsets": [[0,0,0], [1.2, 0, -0.5]]
     }
   ]
 }
@@ -136,8 +137,9 @@ From manifest **version 3**, `metadata.json` may include a **`groups`** array. E
 | `name` | string | Display name in Pose Browser. |
 | `tags` | string[] | Group-level tags (not pose tags). |
 | `members` | string[] | ZIP-internal paths (`poses/…`) listed in `items`. |
+| `memberRelativeOffsets` | number[][] | Optional (v4). Parallel to `members`. Index `0` is the anchor `[0,0,0]`; later entries are world-space offsets from the first member's character position when the layout was saved. |
 
-Omit `groups` or use manifest **version 2** for packs without grouping. v2 packs import unchanged.
+Omit `groups` or use manifest **version 2** for packs without grouping. v2/v3 packs import unchanged. v3 groups without `memberRelativeOffsets` behave as before.
 
 ## Pose files under `poses/`
 
@@ -178,7 +180,7 @@ Violating these will fail import with an explicit error string.
 2. Choose **`kind`**:
    - **Flat:** place files as `poses/YourFile.png`, ensuring unique leaf names.
    - **Tree:** pick `<branchRoot>` (e.g. `MyPack`), place files under `poses/MyPack/...`.
-3. Write **`manifest.json`** with `schema`, `version: 3` (or `2` without groups), `kind`, timestamps, `branchRoot`, and `metadata`.
+3. Write **`manifest.json`** with `schema`, `version: 4` (or `2`/`3` without layout offsets), `kind`, timestamps, `branchRoot`, and `metadata`.
 4. Write **`metadata.json`** with one `items[]` entry per file: matching `file` path, `tags`, `favorite`, timestamps (ISO UTC strings are fine).
 5. Build a **ZIP** with **all entries stored (method 0)**, UTF-8 names / EFS bit as appropriate.
 6. Name the archive **`.zip`** and import through Pose Browser.
@@ -187,9 +189,9 @@ You can also export a small pack from the game once and **replace** the contents
 
 ## Legacy v1 packs (still imported)
 
-Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility. **New** exports use manifest **version 3**; **version 2** packs (no `groups`) still import.
+Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility. **New** exports use manifest **version 4**; **version 2** packs (no `groups`) and **version 3** packs (groups without layout) still import.
 
-For new tooling, **target version 3**.
+For new tooling, **target version 4**.
 
 ## Reference implementation in this repository
 

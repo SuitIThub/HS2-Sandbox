@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace HS2SandboxPlugin
 {
@@ -10,6 +11,12 @@ namespace HS2SandboxPlugin
         public HashSet<string> Tags { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>Member pose paths relative to the pose library root.</summary>
         public List<string> MemberRelativePaths { get; set; } = new List<string>();
+        /// <summary>
+        /// World-space offsets from the first member's anchor character position, keyed by member relative path.
+        /// The first member is the anchor and is not stored here.
+        /// </summary>
+        public Dictionary<string, Vector3> MemberRelativeOffsets { get; set; } =
+            new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
     }
 
     [Serializable]

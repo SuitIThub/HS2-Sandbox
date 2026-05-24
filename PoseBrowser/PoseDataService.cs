@@ -819,6 +819,62 @@ namespace HS2SandboxPlugin
 
         public static bool IsMaleCharacter(OCIChar oci) => !IsFemaleCharacter(oci);
 
+        public static bool TryGetCharacterWorldPosition(OCIChar oci, out Vector3 position)
+        {
+            position = Vector3.zero;
+            try
+            {
+                if (oci?.guideObject?.transformTarget != null)
+                {
+                    position = oci.guideObject.transformTarget.position;
+                    return true;
+                }
+
+                if (oci?.charInfo != null)
+                {
+                    position = oci.charInfo.transform.position;
+                    return true;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return false;
+        }
+
+        public static bool TrySetCharacterWorldPosition(OCIChar oci, Vector3 worldPosition)
+        {
+            if (oci?.guideObject == null)
+                return false;
+            if (!TryGetCharacterWorldPosition(oci, out Vector3 current))
+                return false;
+
+            Vector3 delta = worldPosition - current;
+            if (delta.sqrMagnitude < 1e-12f)
+                return true;
+
+            try
+            {
+                oci.guideObject.MoveWorld(delta);
+                try
+                {
+                    oci.guideObject.changeAmount.OnChange();
+                }
+                catch
+                {
+                    // ignore — some Studio builds may not expose OnChange
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static string GetOCICharDisplayName(OCIChar oci)
         {
             try

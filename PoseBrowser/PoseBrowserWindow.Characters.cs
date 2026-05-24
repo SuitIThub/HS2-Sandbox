@@ -159,16 +159,36 @@ namespace HS2SandboxPlugin
 
         private void ApplyPosesToCharactersMulti()
         {
+            if (TryGetSingleSelectedGroup(out var group))
+            {
+                ApplyPosesListToSelectedCharacters(GetGroupMemberItemsInDisplayOrder(group!.Id), group.Id);
+                return;
+            }
+
             ApplyPosesListToSelectedCharacters(GetPosesForMultiCharacterApply());
         }
 
         private void ApplyGroupMembersToSelectedCharacters(string groupId)
         {
-            ApplyPosesListToSelectedCharacters(GetGroupMemberItemsInDisplayOrder(groupId));
+            ApplyPosesListToSelectedCharacters(GetGroupMemberItemsInDisplayOrder(groupId), groupId);
         }
 
-        private void ApplyPosesListToSelectedCharacters(IReadOnlyList<PoseGridItem> poses)
+        private void ApplyPosesListToSelectedCharacters(IReadOnlyList<PoseGridItem> poses, string? knownGroupId = null)
         {
+            PoseGroup? layoutGroup = null;
+            if (!string.IsNullOrEmpty(knownGroupId))
+            {
+                RecordGroupMultiApply(knownGroupId);
+                layoutGroup = _groupDb.TryGetGroup(knownGroupId);
+            }
+            else if (TryGetGroupIdForExactPoseList(poses, out string? appliedGroupId) && !string.IsNullOrEmpty(appliedGroupId))
+            {
+                RecordGroupMultiApply(appliedGroupId);
+                layoutGroup = _groupDb.TryGetGroup(appliedGroupId);
+            }
+            else
+                RecordNonGroupPoseApply();
+
             foreach (var pose in poses)
                 _tagDb.ApplyToItem(pose);
 
@@ -195,23 +215,63 @@ namespace HS2SandboxPlugin
                     _tagDb.RecordLastUsed(pose);
                 });
 
+            int layoutMoved = 0;
+            if (_applyGroupRelativePositions &&
+                layoutGroup != null &&
+                layoutGroup.MemberRelativeOffsets.Count > 0)
+            {
+                layoutMoved = PoseBrowserCharacterApply.ApplyGroupRelativePositions(
+                    layoutGroup,
+                    _characterConfig,
+                    poses,
+                    chars,
+                    _dataService.PoseRootPath);
+            }
+
             if (_poseSortMode == PoseSortMode.LastUsed)
             {
                 ResortPoseItemsInPlace();
                 ApplyFilters();
             }
 
-            SandboxServices.Log.LogMessage(
-                $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} selected character(s) using priority lists.");
+            if (layoutMoved > 0)
+            {
+                SandboxServices.Log.LogMessage(
+                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} character(s) and {layoutMoved} relative position(s) from group \"{layoutGroup!.Name}\".");
+            }
+            else if (layoutGroup != null && layoutGroup.MemberRelativeOffsets.Count > 0)
+            {
+                SandboxServices.Log.LogMessage(
+                    $"PoseBrowser: Applied {applied} pose(s); relative positions were not applied — select {poses.Count} matching character(s) (same gender layout as when saved).");
+            }
+            else
+            {
+                SandboxServices.Log.LogMessage(
+                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} selected character(s) using priority lists.");
+            }
         }
 
-        private void DrawMultiCharacterApplyButton(float barBtnH, float barBtnMinW)
+        private void DrawMultiCharacterApplyButton(float barBtnH, float barBtnMinW, ActionBarWrapLayout? wrap = null)
         {
             if (!CanShowMultiCharacterApply()) return;
-            GUI.enabled = _dataService.GetSelectedCharacters().Any();
-            if (GUILayout.Button("Apply to characters…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW + 24f)))
-                ApplyPosesToCharactersMulti();
-            GUI.enabled = true;
+
+            bool canApply = _dataService.GetSelectedCharacters().Any();
+            if (wrap != null)
+            {
+                wrap.AddButton(
+                    "Apply to characters…",
+                    barBtnH,
+                    barBtnMinW,
+                    ApplyPosesToCharactersMulti,
+                    canApply);
+            }
+            else
+            {
+                GUI.enabled = canApply;
+                if (GUILayout.Button("Apply to characters…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW + 24f)))
+                    ApplyPosesToCharactersMulti();
+                GUI.enabled = true;
+            }
         }
     }
 }

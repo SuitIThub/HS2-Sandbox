@@ -91,73 +91,297 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
         }
 
-        private void DrawGroupEntityActionBar(PoseGroup group, IReadOnlyList<PoseGridItem> members, float barBtnH, float barBtnMinW)
+        private void DrawGroupEntityActionBar(
+            PoseGroup group,
+            IReadOnlyList<PoseGridItem> members,
+            float barBtnH,
+            float barBtnMinW,
+            float wrapWidth)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"Group: {group.Name}", GUILayout.MinWidth(120f), GUILayout.Height(barBtnH));
-            GUILayout.Label($"({members.Count} poses)", GUILayout.Width(72f), GUILayout.Height(barBtnH));
-            GUILayout.Space(8f);
+            var wrap = new ActionBarWrapLayout();
+            wrap.Begin(wrapWidth);
 
-            if (GUILayout.Button("Rename group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
+            string groupTitle = group.Name;
+            float titleW = wrap.MeasureLabel(groupTitle, 48f);
+            wrap.Add(titleW, () => GUILayout.Label(groupTitle, GUILayout.Width(titleW), GUILayout.Height(barBtnH)));
+
+            string poseCount = $"({members.Count} poses)";
+            float countW = wrap.MeasureLabel(poseCount, 48f);
+            wrap.Add(countW, () => GUILayout.Label(poseCount, GUILayout.Width(countW), GUILayout.Height(barBtnH)));
+
+            wrap.AddButton("Rename…", barBtnH, barBtnMinW, () =>
             {
                 _groupNamePopupText = group.Name;
                 _groupNamePopupMode = GroupNamePopupMode.Rename;
                 _groupNamePopupMembers = null;
                 _renameGroupTargetId = group.Id;
                 _showGroupNamePopup = true;
-            }
+            });
 
-            if (GUILayout.Button("Group tags…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
-                OpenGroupTagsForGroupIds(new[] { group.Id });
+            wrap.AddButton("Tags…", barBtnH, barBtnMinW, () => OpenGroupTagsForGroupIds(new[] { group.Id }));
+            wrap.AddButton("Ungroup", barBtnH, barBtnMinW, () => UngroupEntity(group));
+            wrap.AddButton("Export…", barBtnH, barBtnMinW, () => ExportGroupToDisk(group));
+            wrap.AddButton("Move…", barBtnH, barBtnMinW, () => BeginFolderOpForGroupEntities(PendingFolderOperation.MovePoses));
+            wrap.AddButton("Copy…", barBtnH, barBtnMinW, () => BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses));
 
-            if (GUILayout.Button("Ungroup", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                UngroupEntity(group);
-
-            if (GUILayout.Button("Export group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
-                ExportGroupToDisk(group);
-
-            if (GUILayout.Button("Move group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
-                BeginFolderOpForGroupEntities(PendingFolderOperation.MovePoses);
-
-            if (GUILayout.Button("Copy group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(100f)))
-                BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses);
-
-            DrawMultiCharacterApplyButton(barBtnH, barBtnMinW);
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
+            DrawMultiCharacterApplyButton(barBtnH, barBtnMinW, wrap);
+            DrawSaveGroupRelativePositionsButton(group, members, barBtnH, barBtnMinW, wrap);
+            DrawClearGroupRelativePositionsButton(group, barBtnH, barBtnMinW, wrap);
+            DrawApplyGroupRelativePositionsToggle(group, barBtnH, wrap);
+            wrap.End();
         }
 
-        private void DrawMultiGroupEntityActionBar(float barBtnH, float barBtnMinW)
+        private static bool GroupHasStoredRelativePositions(PoseGroup group) =>
+            group.MemberRelativeOffsets.Count > 0;
+
+        private void DrawApplyGroupRelativePositionsToggle(
+            PoseGroup group,
+            float barBtnH,
+            ActionBarWrapLayout wrap)
+        {
+            if (!GroupHasStoredRelativePositions(group))
+                return;
+
+            string label = "Apply relative positions";
+            float toggleW = wrap.MeasureLabel(label, 140f) + 22f;
+            wrap.Add(toggleW, () =>
+            {
+                bool nv = GUILayout.Toggle(
+                    _applyGroupRelativePositions,
+                    label,
+                    GUILayout.Height(barBtnH),
+                    GUILayout.Width(toggleW));
+                if (nv != _applyGroupRelativePositions)
+                {
+                    _applyGroupRelativePositions = nv;
+                    SavePersistedOptions();
+                }
+            });
+        }
+
+        private void DrawClearGroupRelativePositionsButton(
+            PoseGroup group,
+            float barBtnH,
+            float barBtnMinW,
+            ActionBarWrapLayout? wrap = null)
+        {
+            if (ImportPreviewActive) return;
+
+            if (wrap != null)
+            {
+                bool canClear = GroupHasStoredRelativePositions(group);
+                wrap.AddButton("Clear positions", barBtnH, barBtnMinW, () =>
+                {
+                    if (canClear)
+                        ClearGroupRelativePositions(group);
+                }, canClear);
+            }
+            else
+            {
+                GUI.enabled = GroupHasStoredRelativePositions(group);
+                if (GUILayout.Button("Clear positions", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW + 40f)))
+                    ClearGroupRelativePositions(group);
+                GUI.enabled = true;
+            }
+        }
+
+        private void ClearGroupRelativePositions(PoseGroup group)
+        {
+            if (!GroupHasStoredRelativePositions(group))
+                return;
+            _groupDb.ClearMemberRelativeOffsets(group.Id);
+            SandboxServices.Log.LogMessage($"PoseBrowser: Cleared relative positions for group \"{group.Name}\".");
+        }
+
+        private void DrawSaveGroupRelativePositionsButton(
+            PoseGroup group,
+            IReadOnlyList<PoseGridItem> members,
+            float barBtnH,
+            float barBtnMinW,
+            ActionBarWrapLayout? wrap = null)
+        {
+            bool canSave = CanSaveGroupRelativePositions(group, members, out string? tip);
+
+            if (wrap != null)
+            {
+                wrap.AddButton(
+                    "Save positions…",
+                    barBtnH,
+                    barBtnMinW,
+                    () => SaveGroupRelativePositions(group, members),
+                    canSave,
+                    tip ?? "");
+            }
+            else
+            {
+                GUI.enabled = canSave;
+                if (GUILayout.Button(
+                        new GUIContent("Save positions…", tip ?? ""),
+                        GUILayout.Height(barBtnH),
+                        GUILayout.MinWidth(barBtnMinW + 60f)))
+                    SaveGroupRelativePositions(group, members);
+                GUI.enabled = true;
+            }
+        }
+
+        private bool CanSaveGroupRelativePositions(
+            PoseGroup group,
+            IReadOnlyList<PoseGridItem> members,
+            out string? disableReason)
+        {
+            disableReason = null;
+            if (ImportPreviewActive)
+            {
+                disableReason = "Not available during import preview.";
+                return false;
+            }
+
+            if (_anyPoseAppliedSinceLastGroupApply)
+            {
+                disableReason = "Apply this group's poses again without applying other poses first.";
+                return false;
+            }
+
+            if (!string.Equals(_lastAppliedGroupId, group.Id, StringComparison.Ordinal))
+            {
+                disableReason = "Apply this group's poses to characters first (Apply to characters… or compact group apply).";
+                return false;
+            }
+
+            var chars = _dataService.GetSelectedCharacters().ToList();
+            if (chars.Count != members.Count)
+            {
+                disableReason =
+                    $"Select exactly {members.Count} character(s) in Studio (currently {chars.Count} selected).";
+                return false;
+            }
+
+            var poses = GetGroupMemberItemsInDisplayOrder(group.Id);
+            if (!PoseBrowserCharacterApply.CanApplyPosesOneToOne(_characterConfig, poses, chars))
+            {
+                disableReason =
+                    "Selected characters must match group pose genders (male/female tags and Chars priority lists).";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void SaveGroupRelativePositions(PoseGroup group, IReadOnlyList<PoseGridItem> members)
+        {
+            if (!CanSaveGroupRelativePositions(group, members, out string? reason))
+            {
+                SandboxServices.Log.LogMessage($"PoseBrowser: Cannot save relative positions — {reason}");
+                return;
+            }
+
+            var poses = GetGroupMemberItemsInDisplayOrder(group.Id);
+            var chars = _dataService.GetSelectedCharacters().ToList();
+            if (!PoseBrowserCharacterApply.TryBuildPoseCharacterAssignments(
+                    _characterConfig, poses, chars, out var assignments) ||
+                assignments == null || assignments.Count == 0)
+            {
+                SandboxServices.Log.LogMessage("PoseBrowser: Cannot save relative positions — assignment failed.");
+                return;
+            }
+
+            if (!PoseDataService.TryGetCharacterWorldPosition(assignments[0].character, out Vector3 anchorPos))
+            {
+                SandboxServices.Log.LogMessage("PoseBrowser: Cannot read anchor character world position.");
+                return;
+            }
+
+            var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            string anchorRel = assignments[0].pose.RelativePath(_dataService.PoseRootPath);
+            for (int i = 1; i < assignments.Count; i++)
+            {
+                if (!PoseDataService.TryGetCharacterWorldPosition(assignments[i].character, out Vector3 pos))
+                {
+                    SandboxServices.Log.LogMessage(
+                        $"PoseBrowser: Cannot read world position for {PoseDataService.GetOCICharDisplayName(assignments[i].character)}.");
+                    return;
+                }
+
+                string rel = assignments[i].pose.RelativePath(_dataService.PoseRootPath);
+                if (string.IsNullOrEmpty(rel))
+                    continue;
+                offsets[rel] = pos - anchorPos;
+            }
+
+            _groupDb.SetMemberRelativeOffsets(group.Id, offsets);
+            SandboxServices.Log.LogMessage(
+                $"PoseBrowser: Saved relative positions for group \"{group.Name}\" ({offsets.Count} offset(s); anchor: {Path.GetFileName(anchorRel)}).");
+        }
+
+        private void RecordGroupMultiApply(string groupId)
+        {
+            _lastAppliedGroupId = groupId;
+            _anyPoseAppliedSinceLastGroupApply = false;
+        }
+
+        private void RecordNonGroupPoseApply()
+        {
+            _anyPoseAppliedSinceLastGroupApply = true;
+        }
+
+        private bool TryGetGroupIdForExactPoseList(IReadOnlyList<PoseGridItem> poses, out string? groupId)
+        {
+            groupId = null;
+            if (poses.Count == 0)
+                return false;
+
+            string gid = poses[0].GroupId ?? "";
+            if (string.IsNullOrEmpty(gid))
+                return false;
+
+            for (int i = 1; i < poses.Count; i++)
+            {
+                if (!string.Equals(poses[i].GroupId, gid, StringComparison.Ordinal))
+                    return false;
+            }
+
+            var ordered = GetGroupMemberItemsInDisplayOrder(gid);
+            if (ordered.Count != poses.Count)
+                return false;
+
+            for (int i = 0; i < poses.Count; i++)
+            {
+                if (!ReferenceEquals(poses[i], ordered[i]) &&
+                    !string.Equals(poses[i].FilePath, ordered[i].FilePath, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            groupId = gid;
+            return true;
+        }
+
+        private void DrawMultiGroupEntityActionBar(float barBtnH, float barBtnMinW, float wrapWidth)
         {
             var groups = GetSelectedGroupEntities();
             var members = CollectMemberItemsFromSelectedGroups();
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"Groups: {groups.Count}", GUILayout.MinWidth(88f), GUILayout.Height(barBtnH));
-            GUILayout.Label($"({members.Count} poses)", GUILayout.Width(72f), GUILayout.Height(barBtnH));
-            GUILayout.Space(8f);
+            var wrap = new ActionBarWrapLayout();
+            wrap.Begin(wrapWidth);
 
-            if (GUILayout.Button("Group tags…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                OpenGroupTagsForSelectedGroupEntities();
+            string groupsLabel = $"Groups: {groups.Count}";
+            float groupsW = wrap.MeasureLabel(groupsLabel, 72f);
+            wrap.Add(groupsW, () => GUILayout.Label(groupsLabel, GUILayout.Width(groupsW), GUILayout.Height(barBtnH)));
 
-            if (GUILayout.Button("Ungroup", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                UngroupSelectedEntities();
+            string poseCount = $"({members.Count} poses)";
+            float countW = wrap.MeasureLabel(poseCount, 48f);
+            wrap.Add(countW, () => GUILayout.Label(poseCount, GUILayout.Width(countW), GUILayout.Height(barBtnH)));
 
-            if (GUILayout.Button("Export…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+            wrap.AddButton("Group tags…", barBtnH, barBtnMinW, OpenGroupTagsForSelectedGroupEntities);
+            wrap.AddButton("Ungroup", barBtnH, barBtnMinW, UngroupSelectedEntities);
+            wrap.AddButton("Export…", barBtnH, barBtnMinW, () =>
             {
                 string title = groups.Count == 1
                     ? $"Export group \"{groups[0].Name}\" (ZIP)"
                     : $"Export {groups.Count} groups ({members.Count} poses, ZIP)";
                 ExportItemsToDisk(members, title);
-            }
-
-            if (GUILayout.Button("Move to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                BeginFolderOpForGroupEntities(PendingFolderOperation.MovePoses);
-
-            if (GUILayout.Button("Copy to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses);
-
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
+            });
+            wrap.AddButton("Move to folder…", barBtnH, barBtnMinW, () => BeginFolderOpForGroupEntities(PendingFolderOperation.MovePoses));
+            wrap.AddButton("Copy to folder…", barBtnH, barBtnMinW, () => BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses));
+            wrap.End();
         }
 
         private List<PoseGroup> GetSelectedGroupEntities()
@@ -221,33 +445,31 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private void DrawPoseGroupingActions(IReadOnlyList<PoseGridItem> librarySelected, float barBtnH, float barBtnMinW, bool hideUngroup)
+        private void DrawPoseGroupingActions(
+            IReadOnlyList<PoseGridItem> librarySelected,
+            float barBtnH,
+            float barBtnMinW,
+            bool hideUngroup,
+            ActionBarWrapLayout wrap)
         {
             bool anyGrouped = SelectionHasGroupedPose(librarySelected);
+            float groupingW = wrap.MeasureLabel("Grouping", 56f);
+            wrap.Add(groupingW, () => GUILayout.Label("Grouping", GUILayout.Width(groupingW), GUILayout.Height(barBtnH)));
 
-            GUILayout.Label("Grouping", GUILayout.Width(64f), GUILayout.Height(barBtnH));
-
-            GUI.enabled = librarySelected.Count >= 2 && librarySelected.All(s => string.IsNullOrEmpty(s.GroupId));
-            if (GUILayout.Button("Group…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+            bool canGroup = librarySelected.Count >= 2 && librarySelected.All(s => string.IsNullOrEmpty(s.GroupId));
+            wrap.AddButton("Group…", barBtnH, barBtnMinW, () =>
             {
                 _groupNamePopupMembers = librarySelected.ToList();
                 _groupNamePopupText = PoseGroupNameSuggest.Suggest(
                     librarySelected.Select(p => p.DisplayName).ToList());
                 _groupNamePopupMode = GroupNamePopupMode.Create;
                 _showGroupNamePopup = true;
-            }
+            }, canGroup);
 
-            GUI.enabled = anyGrouped;
-            if (GUILayout.Button("Remove from group", GUILayout.Height(barBtnH), GUILayout.MinWidth(110f)))
-                RemoveSelectedFromGroups(librarySelected);
+            wrap.AddButton("Remove from group", barBtnH, 96f, () => RemoveSelectedFromGroups(librarySelected), anyGrouped);
 
             if (!hideUngroup)
-            {
-                if (GUILayout.Button("Ungroup", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                    UngroupSelected(librarySelected);
-            }
-
-            GUI.enabled = true;
+                wrap.AddButton("Ungroup", barBtnH, barBtnMinW, () => UngroupSelected(librarySelected), anyGrouped);
         }
 
         private void ExportGroupToDisk(PoseGroup group)
@@ -888,11 +1110,43 @@ namespace HS2SandboxPlugin
                     id = g.Id,
                     name = g.Name,
                     tags = g.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray(),
-                    members = members.ToArray()
+                    members = members.ToArray(),
+                    memberRelativeOffsets = BuildExportGroupMemberOffsets(g)
                 });
             }
 
             return result;
+        }
+
+        private static float[][]? BuildExportGroupMemberOffsets(PoseGroup group)
+        {
+            if (group.MemberRelativePaths.Count == 0 || group.MemberRelativeOffsets.Count == 0)
+                return null;
+
+            bool any = false;
+            var rows = new float[group.MemberRelativePaths.Count][];
+            for (int i = 0; i < group.MemberRelativePaths.Count; i++)
+            {
+                if (i == 0)
+                {
+                    rows[i] = new float[] { 0f, 0f, 0f };
+                    continue;
+                }
+
+                string rel = group.MemberRelativePaths[i];
+                if (group.MemberRelativeOffsets.TryGetValue(rel, out var offset))
+                {
+                    rows[i] = new float[] { offset.x, offset.y, offset.z };
+                    if (offset.sqrMagnitude >= 1e-12f)
+                        any = true;
+                }
+                else
+                {
+                    rows[i] = new float[] { 0f, 0f, 0f };
+                }
+            }
+
+            return any ? rows : null;
         }
 
         private void ImportGroupsFromPack(
@@ -927,7 +1181,7 @@ namespace HS2SandboxPlugin
                     Name = pg.Name,
                     Tags = new HashSet<string>(pg.Tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
                 };
-                _groupDb.ImportGroup(group, oldToNew);
+                _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets);
             }
         }
 
@@ -957,10 +1211,36 @@ namespace HS2SandboxPlugin
 
             if (copies.Count > 0)
             {
-                _groupDb.CreateGroup(group.Name, copies, group.Tags);
+                var newGroup = _groupDb.CreateGroup(group.Name, copies, group.Tags);
+                CopyGroupRelativeOffsets(group, GetGroupMemberItems(group.Id), copies, newGroup);
                 foreach (var c in copies)
                     NotifyLibraryCachePoseCopied(c);
             }
+        }
+
+        private void CopyGroupRelativeOffsets(
+            PoseGroup sourceGroup,
+            IReadOnlyList<PoseGridItem> sourceMembers,
+            IReadOnlyList<PoseGridItem> copyMembers,
+            PoseGroup destGroup)
+        {
+            if (sourceGroup.MemberRelativeOffsets.Count == 0 ||
+                sourceMembers.Count != copyMembers.Count)
+                return;
+
+            var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 1; i < copyMembers.Count; i++)
+            {
+                string oldRel = sourceMembers[i].RelativePath(_dataService.PoseRootPath);
+                if (!sourceGroup.MemberRelativeOffsets.TryGetValue(oldRel, out var offset))
+                    continue;
+                string newRel = copyMembers[i].RelativePath(_dataService.PoseRootPath);
+                if (!string.IsNullOrEmpty(newRel))
+                    offsets[newRel] = offset;
+            }
+
+            if (offsets.Count > 0)
+                _groupDb.SetMemberRelativeOffsets(destGroup.Id, offsets);
         }
 
         private void ApplyTagToGroups(IReadOnlyList<PoseGroup> groups, string tag, bool add)
@@ -1230,6 +1510,92 @@ namespace HS2SandboxPlugin
 
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
+        }
+
+        /// <summary>Wraps IMGUI toolbar controls onto multiple rows when the window is narrow.</summary>
+        private sealed class ActionBarWrapLayout
+        {
+            private const float ButtonPad = 12f;
+            private const float LabelPad = 4f;
+
+            private float _wrapWidth;
+            private float _used;
+            private bool _rowOpen;
+            private float _gap;
+            private readonly GUIStyle _buttonStyle;
+            private readonly GUIStyle _labelStyle;
+
+            public ActionBarWrapLayout()
+            {
+                _buttonStyle = GUI.skin.button;
+                _labelStyle = GUI.skin.label;
+            }
+
+            public void Begin(float wrapWidth, float gap = 6f)
+            {
+                _wrapWidth = Mathf.Max(80f, wrapWidth);
+                _gap = gap;
+                _used = 0f;
+                _rowOpen = false;
+            }
+
+            public float MeasureLabel(string text, float minWidth = 0f) =>
+                Mathf.Max(minWidth, _labelStyle.CalcSize(new GUIContent(text)).x + LabelPad);
+
+            public float MeasureButton(string text, float minWidth) =>
+                Mathf.Max(minWidth, _buttonStyle.CalcSize(new GUIContent(text)).x + ButtonPad);
+
+            public void AddButton(
+                string text,
+                float height,
+                float minWidth,
+                Action onClick,
+                bool enabled = true,
+                string? tooltip = null)
+            {
+                float width = MeasureButton(text, minWidth);
+                var content = new GUIContent(text, tooltip ?? "");
+                Add(width, () =>
+                {
+                    GUI.enabled = enabled;
+                    if (GUILayout.Button(content, GUILayout.Height(height), GUILayout.Width(width)))
+                        onClick();
+                    GUI.enabled = true;
+                });
+            }
+
+            public void Add(float width, Action draw)
+            {
+                float reserve = (_rowOpen ? _gap : 0f) + width;
+                if (_rowOpen && _used + reserve > _wrapWidth + 0.5f)
+                    EndRow();
+
+                if (!_rowOpen)
+                {
+                    GUILayout.BeginHorizontal(GUILayout.MaxWidth(_wrapWidth), GUILayout.ExpandWidth(false));
+                    _rowOpen = true;
+                    _used = 0f;
+                }
+                else
+                {
+                    GUILayout.Space(_gap);
+                    _used += _gap;
+                }
+
+                draw();
+                _used += Mathf.Max(width, GUILayoutUtility.GetLastRect().width);
+            }
+
+            public void End() => EndRow();
+
+            private void EndRow()
+            {
+                if (!_rowOpen)
+                    return;
+                GUILayout.EndHorizontal();
+                _rowOpen = false;
+                _used = 0f;
+            }
         }
     }
 }

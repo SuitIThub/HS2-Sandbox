@@ -9,9 +9,9 @@ namespace HS2SandboxPlugin
 {
     /// <summary>
     /// Pose ZIP exchange: original <c>.png</c>/<c>.dat</c> files under <c>poses/</c>, plus <c>manifest.json</c> (schema + kind)
-    /// and <c>metadata.json</c> (tags, favorites, paths; v3 adds optional <c>groups</c>). Import parses <c>metadata.json</c> with a
+    /// and <c>metadata.json</c> (tags, favorites, paths; v3+ optional <c>groups</c>; v4 adds <c>memberRelativeOffsets</c>). Import parses <c>metadata.json</c> with a
     /// small JSON reader — not <see cref="JsonUtility"/> — so <c>items</c> arrays round-trip with export. Exports use manifest
-    /// <see cref="ManifestVersion"/> (3); imports accept 2 and 3. Flat <c>poses</c> export uses only <c>poses/&lt;filename&gt;</c>
+    /// <see cref="ManifestVersion"/> (4); imports accept 2–4. Flat <c>poses</c> export uses only <c>poses/&lt;filename&gt;</c>
     /// (no subfolders; collisions get <c>-01</c> suffixes). <c>treeBranch</c> keeps structure under <c>poses/&lt;branchRoot&gt;/…</c>.
     /// Legacy blob packs (v1) still import.
     /// </summary>
@@ -27,7 +27,7 @@ namespace HS2SandboxPlugin
 
         public const string SchemaId = "HS2Sandbox.poseZip";
         /// <summary>Manifest <c>version</c> written on export (current format).</summary>
-        public const int ManifestVersion = 3;
+        public const int ManifestVersion = 4;
         /// <summary>Oldest manifest <c>version</c> still accepted on import (v2 packs without <c>groups</c>).</summary>
         public const int MinImportManifestVersion = 2;
 
@@ -73,6 +73,11 @@ namespace HS2SandboxPlugin
             public string[] tags = Array.Empty<string>();
             /// <summary>ZIP-internal pose paths (<c>poses/…</c>) belonging to this group.</summary>
             public string[] members = Array.Empty<string>();
+            /// <summary>
+            /// Optional layout offsets parallel to <see cref="members"/> (v4). Index 0 is anchor [0,0,0];
+            /// later entries are world-space offsets from the first member's character position.
+            /// </summary>
+            public float[][]? memberRelativeOffsets;
         }
 
         public sealed class PosePackReadGroup
@@ -81,13 +86,20 @@ namespace HS2SandboxPlugin
             public string Name { get; }
             public string[] Tags { get; }
             public string[] MemberZipPaths { get; }
+            public Vector3[]? MemberRelativeOffsets { get; }
 
-            public PosePackReadGroup(string id, string name, string[] tags, string[] memberZipPaths)
+            public PosePackReadGroup(
+                string id,
+                string name,
+                string[] tags,
+                string[] memberZipPaths,
+                Vector3[]? memberRelativeOffsets = null)
             {
                 Id = id;
                 Name = name;
                 Tags = tags;
                 MemberZipPaths = memberZipPaths;
+                MemberRelativeOffsets = memberRelativeOffsets;
             }
         }
 
@@ -527,7 +539,8 @@ namespace HS2SandboxPlugin
                 g.id ?? "",
                 g.name ?? "",
                 g.tags ?? Array.Empty<string>(),
-                g.members ?? Array.Empty<string>())).ToList();
+                g.members ?? Array.Empty<string>(),
+                ConvertGroupMemberOffsets(g))).ToList();
             result = new PosePackReadResult(isTree, branchRoot, manifest.exportedUtc ?? "", list, packGroups);
             return true;
         }
@@ -725,7 +738,56 @@ namespace HS2SandboxPlugin
                 }
             }
 
-            sb.Append("]}");
+            sb.Append(']');
+            if (g.memberRelativeOffsets != null && g.memberRelativeOffsets.Length > 0)
+            {
+                sb.Append(",\"memberRelativeOffsets\":[");
+                for (int o = 0; o < g.memberRelativeOffsets.Length; o++)
+                {
+                    if (o > 0) sb.Append(',');
+                    AppendMetadataVec3Json(sb, g.memberRelativeOffsets[o]);
+                }
+
+                sb.Append(']');
+            }
+
+            sb.Append('}');
+        }
+
+        private static void AppendMetadataVec3Json(StringBuilder sb, float[]? xyz)
+        {
+            sb.Append('[');
+            if (xyz != null && xyz.Length >= 3)
+            {
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                sb.Append(xyz[0].ToString("R", inv));
+                sb.Append(',');
+                sb.Append(xyz[1].ToString("R", inv));
+                sb.Append(',');
+                sb.Append(xyz[2].ToString("R", inv));
+            }
+            else
+            {
+                sb.Append("0,0,0");
+            }
+
+            sb.Append(']');
+        }
+
+        private static Vector3[]? ConvertGroupMemberOffsets(PoseZipGroupJson g)
+        {
+            if (g.memberRelativeOffsets == null || g.memberRelativeOffsets.Length == 0)
+                return null;
+
+            var arr = new Vector3[g.memberRelativeOffsets.Length];
+            for (int i = 0; i < g.memberRelativeOffsets.Length; i++)
+            {
+                float[]? xyz = g.memberRelativeOffsets[i];
+                if (xyz != null && xyz.Length >= 3)
+                    arr[i] = new Vector3(xyz[0], xyz[1], xyz[2]);
+            }
+
+            return arr;
         }
 
         private static void AppendJsonString(StringBuilder sb, string? s)
@@ -1232,6 +1294,7 @@ namespace HS2SandboxPlugin
             error = null;
             var tagsList = new List<string>();
             var membersList = new List<string>();
+            List<float[]>? offsetsList = null;
             MetadataJson_SkipWs(json, ref i);
             if (i >= json.Length || json[i] != '{')
             {
@@ -1248,6 +1311,9 @@ namespace HS2SandboxPlugin
                     i++;
                     group.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
                     group.members = membersList.Count > 0 ? membersList.ToArray() : Array.Empty<string>();
+                    group.memberRelativeOffsets = offsetsList != null && offsetsList.Count > 0
+                        ? offsetsList.ToArray()
+                        : null;
                     return true;
                 }
 
@@ -1284,6 +1350,12 @@ namespace HS2SandboxPlugin
                     if (!MetadataJson_TryReadStringArray(json, ref i, membersList, out error))
                         return false;
                 }
+                else if (string.Equals(key, "memberRelativeOffsets", StringComparison.Ordinal))
+                {
+                    offsetsList ??= new List<float[]>();
+                    if (!MetadataJson_TryReadVec3ArrayArray(json, ref i, offsetsList, out error))
+                        return false;
+                }
                 else
                 {
                     if (!MetadataJson_TrySkipValue(json, ref i, out error))
@@ -1303,12 +1375,142 @@ namespace HS2SandboxPlugin
                     i++;
                     group.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
                     group.members = membersList.Count > 0 ? membersList.ToArray() : Array.Empty<string>();
+                    group.memberRelativeOffsets = offsetsList != null && offsetsList.Count > 0
+                        ? offsetsList.ToArray()
+                        : null;
                     return true;
                 }
 
                 error = "Invalid group object.";
                 return false;
             }
+        }
+
+        private static bool MetadataJson_TryReadVec3ArrayArray(
+            string json,
+            ref int i,
+            List<float[]> sink,
+            out string? error)
+        {
+            error = null;
+            if (i >= json.Length || json[i] != '[')
+            {
+                error = "Expected '[' for memberRelativeOffsets.";
+                return false;
+            }
+
+            i++;
+            MetadataJson_SkipWs(json, ref i);
+            if (i < json.Length && json[i] == ']')
+            {
+                i++;
+                return true;
+            }
+
+            while (true)
+            {
+                if (!MetadataJson_TryReadVec3Array(json, ref i, out float[] vec, out error))
+                    return false;
+                sink.Add(vec);
+                MetadataJson_SkipWs(json, ref i);
+                if (i < json.Length && json[i] == ',')
+                {
+                    i++;
+                    MetadataJson_SkipWs(json, ref i);
+                    continue;
+                }
+
+                if (i < json.Length && json[i] == ']')
+                {
+                    i++;
+                    return true;
+                }
+
+                error = "Invalid memberRelativeOffsets array.";
+                return false;
+            }
+        }
+
+        private static bool MetadataJson_TryReadVec3Array(
+            string json,
+            ref int i,
+            out float[] vec,
+            out string? error)
+        {
+            vec = new float[3];
+            error = null;
+            if (i >= json.Length || json[i] != '[')
+            {
+                error = "Expected '[' for vec3.";
+                return false;
+            }
+
+            i++;
+            for (int c = 0; c < 3; c++)
+            {
+                MetadataJson_SkipWs(json, ref i);
+                if (!MetadataJson_TryReadNumber(json, ref i, out float n, out error))
+                    return false;
+                vec[c] = n;
+                MetadataJson_SkipWs(json, ref i);
+                if (c < 2)
+                {
+                    if (i >= json.Length || json[i] != ',')
+                    {
+                        error = "Invalid vec3 array.";
+                        return false;
+                    }
+
+                    i++;
+                }
+            }
+
+            MetadataJson_SkipWs(json, ref i);
+            if (i >= json.Length || json[i] != ']')
+            {
+                error = "Expected ']' for vec3.";
+                return false;
+            }
+
+            i++;
+            return true;
+        }
+
+        private static bool MetadataJson_TryReadNumber(string json, ref int i, out float value, out string? error)
+        {
+            value = 0f;
+            error = null;
+            MetadataJson_SkipWs(json, ref i);
+            if (i >= json.Length)
+            {
+                error = "Expected number.";
+                return false;
+            }
+
+            int start = i;
+            if (json[i] == '-')
+                i++;
+            while (i < json.Length && (char.IsDigit(json[i]) || json[i] == '.' || json[i] == 'e' || json[i] == 'E' ||
+                                       json[i] == '+' || json[i] == '-'))
+            {
+                i++;
+            }
+
+            if (start == i)
+            {
+                error = "Expected number.";
+                return false;
+            }
+
+            string token = json.Substring(start, i - start);
+            if (!float.TryParse(token, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out value))
+            {
+                error = "Invalid number.";
+                return false;
+            }
+
+            return true;
         }
 
         private static bool MetadataJson_TryReadItemObject(string json, ref int i, out PoseZipItemJson item, out string? error)

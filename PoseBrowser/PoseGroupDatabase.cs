@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -10,10 +11,11 @@ namespace HS2SandboxPlugin
 {
     public sealed class PoseGroupDatabase
     {
-        private const int FileVersion = 1;
-        private const string TsvHeader = "HS2SANDBOX_POSE_GROUPS\t1";
+        private const int FileVersion = 2;
+        private const string TsvHeader = "HS2SANDBOX_POSE_GROUPS\t2";
         private const char TagDelimiter = '\x1e';
         private const char MemberDelimiter = '\x1f';
+        private const char OffsetDelimiter = '\x1f';
 
         private readonly string _poseRoot;
         private readonly string _storagePath;
@@ -124,6 +126,8 @@ namespace HS2SandboxPlugin
 
             if (group.MemberRelativePaths.Count == 0)
                 _groupsById.Remove(groupId);
+            else
+                PruneOffsetsToMembers(group);
             MarkDirty();
         }
 
@@ -160,6 +164,12 @@ namespace HS2SandboxPlugin
                         break;
                     }
                 }
+
+                if (group.MemberRelativeOffsets.TryGetValue(oldK, out var offset))
+                {
+                    group.MemberRelativeOffsets.Remove(oldK);
+                    group.MemberRelativeOffsets[newK] = offset;
+                }
             }
 
             _pathToGroupId[newK] = groupId;
@@ -183,6 +193,43 @@ namespace HS2SandboxPlugin
             MarkDirty();
         }
 
+        public void SetMemberRelativeOffsets(string groupId, IReadOnlyDictionary<string, Vector3> offsetsByMemberPath)
+        {
+            if (!_groupsById.TryGetValue(groupId, out var group)) return;
+            group.MemberRelativeOffsets.Clear();
+            foreach (var kvp in offsetsByMemberPath)
+            {
+                string key = NormalizeStorageKey(kvp.Key);
+                if (string.IsNullOrEmpty(key))
+                    continue;
+                group.MemberRelativeOffsets[key] = kvp.Value;
+            }
+
+            PruneOffsetsToMembers(group);
+            MarkDirty();
+        }
+
+        public void ClearMemberRelativeOffsets(string groupId)
+        {
+            if (!_groupsById.TryGetValue(groupId, out var group)) return;
+            if (group.MemberRelativeOffsets.Count == 0) return;
+            group.MemberRelativeOffsets.Clear();
+            MarkDirty();
+        }
+
+        private static void PruneOffsetsToMembers(PoseGroup group)
+        {
+            if (group.MemberRelativeOffsets.Count == 0)
+                return;
+
+            var memberSet = new HashSet<string>(group.MemberRelativePaths, StringComparer.OrdinalIgnoreCase);
+            var stale = group.MemberRelativeOffsets.Keys
+                .Where(k => !memberSet.Contains(k))
+                .ToList();
+            foreach (var k in stale)
+                group.MemberRelativeOffsets.Remove(k);
+        }
+
         public List<PoseGroup> GetGroupsFullyContainedIn(IReadOnlyCollection<string> relativePaths)
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -204,23 +251,54 @@ namespace HS2SandboxPlugin
             return result;
         }
 
-        public void ImportGroup(PoseGroup group, IReadOnlyDictionary<string, string> oldMemberRelToNewRel)
+        public void ImportGroup(
+            PoseGroup group,
+            IReadOnlyDictionary<string, string> oldMemberRelToNewRel,
+            Vector3[]? memberRelativeOffsets = null)
         {
             var newMembers = new List<string>();
+            var oldMembersOrdered = new List<string>();
             foreach (var kvp in oldMemberRelToNewRel)
             {
-                if (!string.IsNullOrEmpty(kvp.Value))
-                    newMembers.Add(NormalizeStorageKey(kvp.Value));
+                if (string.IsNullOrEmpty(kvp.Value)) continue;
+                oldMembersOrdered.Add(NormalizeStorageKey(kvp.Key));
+                newMembers.Add(NormalizeStorageKey(kvp.Value));
             }
 
             if (newMembers.Count == 0) return;
+
+            var importedOffsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            if (memberRelativeOffsets != null && memberRelativeOffsets.Length > 0)
+            {
+                for (int i = 0; i < newMembers.Count && i < memberRelativeOffsets.Length; i++)
+                {
+                    if (i == 0)
+                        continue;
+                    var offset = memberRelativeOffsets[i];
+                    if (offset.sqrMagnitude < 1e-12f)
+                        continue;
+                    importedOffsets[newMembers[i]] = offset;
+                }
+            }
+            else
+            {
+                foreach (var kvp in group.MemberRelativeOffsets)
+                {
+                    string oldKey = NormalizeStorageKey(kvp.Key);
+                    int idx = oldMembersOrdered.FindIndex(p =>
+                        string.Equals(p, oldKey, StringComparison.OrdinalIgnoreCase));
+                    if (idx > 0 && idx < newMembers.Count)
+                        importedOffsets[newMembers[idx]] = kvp.Value;
+                }
+            }
 
             var imported = new PoseGroup
             {
                 Id = string.IsNullOrEmpty(group.Id) ? Guid.NewGuid().ToString("N") : group.Id,
                 Name = group.Name,
                 Tags = new HashSet<string>(group.Tags, StringComparer.OrdinalIgnoreCase),
-                MemberRelativePaths = newMembers
+                MemberRelativePaths = newMembers,
+                MemberRelativeOffsets = importedOffsets
             };
 
             foreach (var rel in newMembers)
@@ -312,16 +390,22 @@ namespace HS2SandboxPlugin
                     string id = parts[1];
                     if (string.IsNullOrEmpty(id)) continue;
 
+                    var memberPaths = ParseDelimited(parts[4], MemberDelimiter)
+                        .Select(NormalizeStorageKey)
+                        .Where(p => !string.IsNullOrEmpty(p))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    var offsets = parts.Length >= 6
+                        ? ParseMemberOffsetsColumn(parts[5], memberPaths)
+                        : new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+
                     var group = new PoseGroup
                     {
                         Id = id,
                         Name = parts[2] ?? "",
                         Tags = new HashSet<string>(ParseDelimited(parts[3], TagDelimiter), StringComparer.OrdinalIgnoreCase),
-                        MemberRelativePaths = ParseDelimited(parts[4], MemberDelimiter)
-                            .Select(NormalizeStorageKey)
-                            .Where(p => !string.IsNullOrEmpty(p))
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .ToList()
+                        MemberRelativePaths = memberPaths,
+                        MemberRelativeOffsets = offsets
                     };
 
                     if (group.MemberRelativePaths.Count == 0) continue;
@@ -360,6 +444,76 @@ namespace HS2SandboxPlugin
         {
             if (string.IsNullOrEmpty(col)) return new List<string>();
             return col.Split(delimiter).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToList();
+        }
+
+        private static Dictionary<string, Vector3> ParseMemberOffsetsColumn(
+            string? col,
+            IReadOnlyList<string> memberPaths)
+        {
+            var result = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
+                return result;
+
+            var tokens = col.Split(OffsetDelimiter);
+            for (int i = 0; i < memberPaths.Count && i < tokens.Length; i++)
+            {
+                if (i == 0)
+                    continue;
+                string token = tokens[i].Trim();
+                if (token.Length == 0)
+                    continue;
+                if (!TryParseOffsetTriple(token, out var offset))
+                    continue;
+                if (offset.sqrMagnitude < 1e-12f)
+                    continue;
+                result[memberPaths[i]] = offset;
+            }
+
+            return result;
+        }
+
+        private static bool TryParseOffsetTriple(string token, out Vector3 offset)
+        {
+            offset = Vector3.zero;
+            string[] xyz = token.Split(',');
+            if (xyz.Length != 3)
+                return false;
+            if (!float.TryParse(xyz[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x))
+                return false;
+            if (!float.TryParse(xyz[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y))
+                return false;
+            if (!float.TryParse(xyz[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+                return false;
+            offset = new Vector3(x, y, z);
+            return true;
+        }
+
+        private static string FormatMemberOffsetsColumn(PoseGroup group)
+        {
+            if (group.MemberRelativePaths.Count == 0)
+                return "";
+
+            var parts = new List<string>(group.MemberRelativePaths.Count);
+            var inv = CultureInfo.InvariantCulture;
+            for (int i = 0; i < group.MemberRelativePaths.Count; i++)
+            {
+                if (i == 0)
+                {
+                    parts.Add("");
+                    continue;
+                }
+
+                string rel = group.MemberRelativePaths[i];
+                if (!group.MemberRelativeOffsets.TryGetValue(rel, out var offset) || offset.sqrMagnitude < 1e-12f)
+                {
+                    parts.Add("");
+                    continue;
+                }
+
+                parts.Add(string.Format(inv, "{0:R},{1:R},{2:R}", offset.x, offset.y, offset.z));
+            }
+
+            return string.Join(OffsetDelimiter.ToString(), parts);
         }
 
         private bool TryLoadLegacyJson(string path, out int imported)
@@ -429,7 +583,8 @@ namespace HS2SandboxPlugin
                         string membersCol = string.Join(
                             MemberDelimiter.ToString(),
                             group.MemberRelativePaths);
-                        sw.WriteLine($"group\t{group.Id}\t{group.Name}\t{tagsCol}\t{membersCol}");
+                        string offsetsCol = FormatMemberOffsetsColumn(group);
+                        sw.WriteLine($"group\t{group.Id}\t{group.Name}\t{tagsCol}\t{membersCol}\t{offsetsCol}");
                     }
                 }
 

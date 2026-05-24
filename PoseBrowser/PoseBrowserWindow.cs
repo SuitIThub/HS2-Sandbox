@@ -82,6 +82,10 @@ namespace HS2SandboxPlugin
         private Vector2 _chipMouseDownPos;
         private int _compactPoseIndex = -1;
         private string? _compactSelectedGroupId;
+        /// <summary>Last group whose poses were applied to characters; cleared when another pose is applied.</summary>
+        private string? _lastAppliedGroupId;
+        private bool _anyPoseAppliedSinceLastGroupApply;
+        private bool _applyGroupRelativePositions = true;
         private Vector2 _compactListScroll;
         private bool _compactListShowTree = true;
 
@@ -793,6 +797,7 @@ namespace HS2SandboxPlugin
 
         private void ApplyPoseToSelectedWithUsage(PoseGridItem item)
         {
+            RecordNonGroupPoseApply();
             _tagDb.RecordLastUsed(item);
             _dataService.ApplyPoseToSelected(item);
             if (_poseSortMode == PoseSortMode.LastUsed)
@@ -1537,7 +1542,7 @@ namespace HS2SandboxPlugin
                 float gridAvailW = Mathf.Max(120f, windowRect.width - TreePanelWidth - GridPanelChromePad);
                 GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true), GUILayout.MaxWidth(gridAvailW));
                 DrawGridPanel(gridAvailW);
-                DrawBottomBar();
+                DrawBottomBar(gridAvailW);
                 DrawFolderPoseDialogs();
                 GUILayout.EndVertical();
                 GUILayout.EndHorizontal();
@@ -3461,8 +3466,9 @@ namespace HS2SandboxPlugin
 
         // ── Bottom Bar ──
 
-        private void DrawBottomBar()
+        private void DrawBottomBar(float availableWidth)
         {
+            float actionBarWrapWidth = Mathf.Max(120f, availableWidth - 20f);
             var librarySelected = _filteredItems.Where(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId)).ToList();
 
             if (ImportPreviewActive)
@@ -3510,20 +3516,20 @@ namespace HS2SandboxPlugin
 
             if (oneGroupEntity && fullGroup != null && groupMembers != null)
             {
-                DrawGroupEntityActionBar(fullGroup, groupMembers, barBtnH, barBtnMinW);
+                DrawGroupEntityActionBar(fullGroup, groupMembers, barBtnH, barBtnMinW, actionBarWrapWidth);
                 DrawActionBarSeparator();
             }
             else if (multiGroupEntity)
             {
-                DrawMultiGroupEntityActionBar(barBtnH, barBtnMinW);
+                DrawMultiGroupEntityActionBar(barBtnH, barBtnMinW, actionBarWrapWidth);
                 DrawActionBarSeparator();
             }
 
             if (librarySelected.Count > 0)
             {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"Poses: {librarySelected.Count}", GUILayout.Width(100f));
-                GUILayout.Space(6f);
+                var poseBar = new ActionBarWrapLayout();
+                poseBar.Begin(actionBarWrapWidth);
+                poseBar.Add(100f, () => GUILayout.Label($"Poses: {librarySelected.Count}", GUILayout.Width(100f)));
 
                 if (librarySelected.Count == 1)
                 {
@@ -3531,73 +3537,101 @@ namespace HS2SandboxPlugin
                     bool canUpdatePose = selectedCharCount == 1;
                     const string updatePoseNeedOneCharTip =
                         "For updating a pose, exactly one character has to be selected in Studio.";
-                    var prevBtnColor = GUI.color;
-                    if (!canUpdatePose)
-                        GUI.color = new Color(1f, 1f, 1f, 0.45f);
-                    if (GUILayout.Button(
-                            new GUIContent("Update pose", canUpdatePose ? "" : updatePoseNeedOneCharTip),
-                            GUILayout.Height(barBtnH),
-                            GUILayout.MinWidth(barBtnMinW))
-                        && canUpdatePose)
-                        ShowUpdatePoseOptions(librarySelected[0]);
-                    GUI.color = prevBtnColor;
-
-                    if (GUILayout.Button("Rename…", GUILayout.Height(barBtnH), GUILayout.MinWidth(88f)))
+                    poseBar.Add(barBtnMinW, () =>
                     {
-                        _renamePoseText = librarySelected[0].DisplayName;
-                        _renamePoseAlsoFile = true;
-                        _showRenamePosePopup = true;
+                        var prevBtnColor = GUI.color;
+                        if (!canUpdatePose)
+                            GUI.color = new Color(1f, 1f, 1f, 0.45f);
+                        if (GUILayout.Button(
+                                new GUIContent("Update pose", canUpdatePose ? "" : updatePoseNeedOneCharTip),
+                                GUILayout.Height(barBtnH),
+                                GUILayout.MinWidth(barBtnMinW))
+                            && canUpdatePose)
+                            ShowUpdatePoseOptions(librarySelected[0]);
+                        GUI.color = prevBtnColor;
+                    });
+
+                    poseBar.Add(88f, () =>
+                    {
+                        if (GUILayout.Button("Rename…", GUILayout.Height(barBtnH), GUILayout.MinWidth(88f)))
+                        {
+                            _renamePoseText = librarySelected[0].DisplayName;
+                            _renamePoseAlsoFile = true;
+                            _showRenamePosePopup = true;
+                        }
+                    });
+                }
+
+                poseBar.Add(barBtnMinW, () =>
+                {
+                    if (GUILayout.Button("Tag selected", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                    {
+                        _tagWindowForGroup = false;
+                        _tagWindowGroupId = null;
+                        OpenTagAssignWindow();
                     }
-                }
+                });
 
-                if (GUILayout.Button("Tag selected", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                poseBar.Add(barBtnMinW, () =>
                 {
-                    _tagWindowForGroup = false;
-                    _tagWindowGroupId = null;
-                    OpenTagAssignWindow();
-                }
+                    if (GUILayout.Button("Toggle favorite", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                    {
+                        foreach (var it in librarySelected)
+                            _tagDb.ToggleFavorite(it);
+                        NotifyLibraryCacheFavoriteChanged(librarySelected);
+                        ResortPoseItemsInPlace();
+                        ApplyFilters();
+                    }
+                });
 
-                if (GUILayout.Button("Toggle favorite", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                poseBar.Add(barBtnMinW, () =>
                 {
-                    foreach (var it in librarySelected)
-                        _tagDb.ToggleFavorite(it);
-                    NotifyLibraryCacheFavoriteChanged(librarySelected);
-                    ResortPoseItemsInPlace();
-                    ApplyFilters();
-                }
+                    if (GUILayout.Button("Thumbnails…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                        StartThumbnailCapture(librarySelected);
+                });
 
-                if (GUILayout.Button("Thumbnails…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                    StartThumbnailCapture(librarySelected);
-
-                DrawMultiCharacterApplyButton(barBtnH, barBtnMinW);
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
+                DrawMultiCharacterApplyButton(barBtnH, barBtnMinW, poseBar);
+                poseBar.End();
 
                 DrawActionBarSeparator();
 
-                GUILayout.BeginHorizontal();
-                DrawPoseGroupingActions(librarySelected, barBtnH, barBtnMinW, hideUngroup: oneGroupEntity);
-                DrawActionBarVerticalSeparator(barBtnH);
+                var fileBar = new ActionBarWrapLayout();
+                fileBar.Begin(actionBarWrapWidth);
+                DrawPoseGroupingActions(librarySelected, barBtnH, barBtnMinW, hideUngroup: oneGroupEntity, fileBar);
+                fileBar.Add(18f, () => DrawActionBarVerticalSeparator(barBtnH));
 
                 bool canMoveCopyGroup = CanMoveCopyAsWholeGroup(librarySelected, out _);
                 bool blockedGrouped = SelectionHasGroupedPose(librarySelected) && !canMoveCopyGroup;
-                GUI.enabled = !blockedGrouped;
-                if (GUILayout.Button("Export…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                    ExportSelectedPosesToDisk();
+                fileBar.Add(barBtnMinW, () =>
+                {
+                    GUI.enabled = !blockedGrouped;
+                    if (GUILayout.Button("Export…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                        ExportSelectedPosesToDisk();
+                });
 
-                if (GUILayout.Button("Move to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                    BeginFolderOpForPoses(PendingFolderOperation.MovePoses);
+                fileBar.Add(barBtnMinW, () =>
+                {
+                    GUI.enabled = !blockedGrouped;
+                    if (GUILayout.Button("Move to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                        BeginFolderOpForPoses(PendingFolderOperation.MovePoses);
+                });
 
-                if (GUILayout.Button("Copy to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
-                    BeginFolderOpForPoses(PendingFolderOperation.CopyPoses);
+                fileBar.Add(barBtnMinW, () =>
+                {
+                    GUI.enabled = !blockedGrouped;
+                    if (GUILayout.Button("Copy to folder…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                        BeginFolderOpForPoses(PendingFolderOperation.CopyPoses);
+                });
 
                 GUI.enabled = true;
 
-                if (GUILayout.Button("Delete…", GUILayout.Height(barBtnH), GUILayout.MinWidth(88f)))
-                    _showDeletePosesConfirm = true;
+                fileBar.Add(88f, () =>
+                {
+                    if (GUILayout.Button("Delete…", GUILayout.Height(barBtnH), GUILayout.MinWidth(88f)))
+                        _showDeletePosesConfirm = true;
+                });
 
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
+                fileBar.End();
 
                 if (_showDeletePosesConfirm)
                 {
@@ -4701,14 +4735,14 @@ namespace HS2SandboxPlugin
                 "• <b>Tags</b> — docked filter window: <b>AND/OR</b> for <b>+ include</b> tags; click each tag to cycle neutral → include → exclude. Groups keep every member (excluded tags dim those cards).\n" +
                 "• <b>Sort</b> — opens a docked sort panel: <b>Last used</b> (when poses are applied), <b>Last updated</b> / <b>Last created</b> (file times), <b>Name</b>. First click selects; click again on the same row toggles ↑ / ↓.\n" +
                 "• <b>Save Pose</b> — save current character pose into the active folder (selected folder, pose root in <b>All poses</b> or <b>Favorites</b> view).\n" +
-                "• <b>Import…</b> — open a pose pack <b>.zip</b> (manifest v2 or v3; preview in the grid, then pick a destination folder and <b>Apply</b> in the folder footer).",
+                "• <b>Import…</b> — open a pose pack <b>.zip</b> (manifest v2–v4; preview in the grid, then pick a destination folder and <b>Apply</b> in the folder footer).",
                 rich);
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Pose groups (grid)</b>", rich);
             GUILayout.Label(
                 "• Select <b>2+ ungrouped</b> poses → bottom bar <b>Group…</b> (name the group). <b>Ungroup</b> removes membership.\n" +
-                "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, <b>Group tags…</b>, <b>Export group…</b>, <b>Apply to characters…</b>). Card checkboxes = individual poses.\n" +
+                "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, tags, export, <b>Apply to characters…</b>, save/clear <b>positions</b>). If the group has saved layout, <b>Apply relative positions</b> toggles global layout-on-apply (also in <b>Options</b>). Card checkboxes = individual poses.\n" +
                 "• <b>Exclude</b> tag filters: hide ungrouped poses; grouped poses use <b>group + pose</b> tags. In a visible group, excluded tags dim cards (red tag text).\n" +
                 "• <b>Grouped poses</b> / <b>Thumbnails</b> in the tag filter panel cycle neutral → hide (−) → only (+), like per-tag filters.\n" +
                 "• Move/Copy one <b>full group</b> at a time. Data: <b>pose_groups.tsv</b> in Sandbox config.",
@@ -4741,14 +4775,14 @@ namespace HS2SandboxPlugin
                 "• <b>Root only</b> — files in the pose root only; during Move/Copy, also picks <b>pose root</b> as destination.\n" +
                 "• Click a folder name — browse that folder, or during Move/Copy sets <b>destination</b> without changing the grid.\n" +
                 "• Footer: <b>New folder</b>, <b>Rename</b> / <b>Delete</b> (empty only); during Move/Copy/import, <b>Apply</b>/<b>Cancel</b> appear at the top of this footer.\n" +
-                "• <b>Export branch…</b> / <b>Export library tree…</b> — <b>Full</b> layout only: folder footer when a folder is selected / at library root (v3 ZIP of that branch or the whole tree, includes pose groups when present).",
+                "• <b>Export branch…</b> / <b>Export library tree…</b> — <b>Full</b> layout only: folder footer when a folder is selected / at library root (v4 ZIP of that branch or the whole tree, includes pose groups when present).",
                 rich);
 
             GUILayout.Space(8f);
-            GUILayout.Label("<b>Import / export (ZIP v3)</b>", rich);
+            GUILayout.Label("<b>Import / export (ZIP v4)</b>", rich);
             GUILayout.Label(
                 "• After <b>Import…</b>, the grid shows a preview: thumbnail click toggles inclusion (checkbox + Ctrl/Shift work). Use <b>Cancel import</b> in the bottom bar or <b>Cancel</b> in the folder footer to abort. <b>Tree branch</b> packs create a named subfolder under the destination you pick. v2 packs still import.\n" +
-                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v3 <b>.zip</b> (tags/favorites; pose groups when fully selected).\n" +
+                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v4 <b>.zip</b> (tags/favorites; pose groups when fully selected).\n" +
                 "• External tools must build <b>stored</b> (uncompressed) ZIP entries — see <b>Modules/PoseBrowser/POSE_ZIP_FORMAT.md</b> in the repo.",
                 rich);
 
@@ -4767,7 +4801,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Selection bar (bottom)</b>", rich);
             GUILayout.Label(
-                "Shown when something is selected: <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v3 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
+                "Shown when something is selected: <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v4 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
                 rich);
 
             GUILayout.Space(8f);
@@ -4924,6 +4958,13 @@ namespace HS2SandboxPlugin
                 SavePersistedOptions();
             }
             GUILayout.Label($"{newCaptureDelay:0.0} s");
+
+            GUILayout.Space(10f);
+            bool newApplyLayout = GUILayout.Toggle(
+                _applyGroupRelativePositions,
+                "Apply stored relative positions when applying a group");
+            if (newApplyLayout != _applyGroupRelativePositions)
+                _applyGroupRelativePositions = newApplyLayout;
 
             GUILayout.Space(14f);
             GUILayout.Label("Keyboard shortcuts", GUI.skin.label);
@@ -5125,6 +5166,9 @@ namespace HS2SandboxPlugin
                     _tagFilterGroupsMode = ClampDisplayFilterMode(data.tagFilterGroupsMode);
                     _tagFilterThumbnailMode = ClampDisplayFilterMode(data.tagFilterThumbnailMode);
                 }
+
+                if (data.optionsVersion >= 11)
+                    _applyGroupRelativePositions = data.applyGroupRelativePositions;
                 else
                 {
                     if (data.optionsVersion >= 8 && data.tagFilterExcludeGroups)
@@ -5178,7 +5222,8 @@ namespace HS2SandboxPlugin
                     miniWindowY = _savedMiniY,
                     compactListShowTree = _compactListShowTree,
                     tagFilterGroupsMode = (int)_tagFilterGroupsMode,
-                    tagFilterThumbnailMode = (int)_tagFilterThumbnailMode
+                    tagFilterThumbnailMode = (int)_tagFilterThumbnailMode,
+                    applyGroupRelativePositions = _applyGroupRelativePositions
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -5363,5 +5408,6 @@ namespace HS2SandboxPlugin
         public int tagFilterThumbnailMode;
         public bool tagFilterExcludeGroups;
         public bool tagFilterExcludeNoThumbnail;
+        public bool applyGroupRelativePositions = true;
     }
 }

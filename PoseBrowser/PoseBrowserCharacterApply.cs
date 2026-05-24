@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Studio;
+using UnityEngine;
 
 namespace HS2SandboxPlugin
 {
@@ -89,6 +90,118 @@ namespace HS2SandboxPlugin
             }
 
             return applied;
+        }
+
+        /// <summary>
+        /// Returns whether every pose can be assigned to a distinct selected character using the same rules as apply.
+        /// Requires an equal pose and character count.
+        /// </summary>
+        public static bool CanApplyPosesOneToOne(
+            PoseBrowserCharacterConfig config,
+            IReadOnlyList<PoseGridItem> poses,
+            IReadOnlyList<OCIChar> studioSelection)
+        {
+            return TryBuildPoseCharacterAssignments(config, poses, studioSelection, out _);
+        }
+
+        /// <summary>
+        /// Builds pose-to-character assignments in pose order when a full one-to-one apply is possible.
+        /// </summary>
+        public static bool TryBuildPoseCharacterAssignments(
+            PoseBrowserCharacterConfig config,
+            IReadOnlyList<PoseGridItem> poses,
+            IReadOnlyList<OCIChar> studioSelection,
+            out List<(PoseGridItem pose, OCIChar character)>? assignments)
+        {
+            assignments = null;
+            if (poses.Count == 0 || studioSelection.Count != poses.Count)
+                return false;
+
+            var selected = new List<OCIChar>(studioSelection);
+            var posed = new HashSet<OCIChar>();
+            var priorityOrder = BuildOrderedSelectedCharacters(
+                selected, config, PoseGenderTag.Untagged, appendUnlisted: true);
+            var result = new List<(PoseGridItem, OCIChar)>(poses.Count);
+
+            int maleCursor = 0;
+            int femaleCursor = 0;
+            int untaggedCharIndex = 0;
+
+            foreach (var pose in poses)
+            {
+                var tag = GetPoseGenderTag(pose);
+                OCIChar? target = null;
+
+                if (tag == PoseGenderTag.Untagged)
+                {
+                    while (untaggedCharIndex < priorityOrder.Count)
+                    {
+                        var candidate = priorityOrder[untaggedCharIndex++];
+                        if (posed.Contains(candidate))
+                            continue;
+                        target = candidate;
+                        break;
+                    }
+                }
+                else
+                {
+                    var pool = BuildOrderedSelectedCharacters(selected, config, tag, appendUnlisted: false);
+                    if (pool.Count == 0)
+                        return false;
+
+                    ref int cursor = ref (tag == PoseGenderTag.Male ? ref maleCursor : ref femaleCursor);
+                    target = PickNextUnposedCharacter(pool, posed, ref cursor);
+                }
+
+                if (target == null)
+                    return false;
+
+                posed.Add(target);
+                result.Add((pose, target));
+            }
+
+            if (result.Count != poses.Count)
+                return false;
+
+            assignments = result;
+            return true;
+        }
+
+        /// <summary>
+        /// Moves non-anchor characters to stored world offsets from the anchor (first pose / assignment).
+        /// </summary>
+        public static int ApplyGroupRelativePositions(
+            PoseGroup group,
+            PoseBrowserCharacterConfig config,
+            IReadOnlyList<PoseGridItem> poses,
+            IReadOnlyList<OCIChar> studioSelection,
+            string poseRootPath)
+        {
+            if (group.MemberRelativeOffsets.Count == 0 || poses.Count == 0)
+                return 0;
+
+            if (!TryBuildPoseCharacterAssignments(config, poses, studioSelection, out var assignments) ||
+                assignments == null ||
+                assignments.Count == 0)
+                return 0;
+
+            if (!PoseDataService.TryGetCharacterWorldPosition(assignments[0].character, out Vector3 anchorPos))
+                return 0;
+
+            int moved = 0;
+            for (int i = 1; i < assignments.Count; i++)
+            {
+                string rel = PoseGroupDatabase.NormalizeMemberPath(
+                    assignments[i].pose.RelativePath(poseRootPath));
+                if (string.IsNullOrEmpty(rel) ||
+                    !group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 offset))
+                    continue;
+
+                if (PoseDataService.TrySetCharacterWorldPosition(assignments[i].character, anchorPos + offset))
+                    moved++;
+            }
+
+            return moved;
         }
 
         public static List<OCIChar> BuildEligiblePoolForApply(
