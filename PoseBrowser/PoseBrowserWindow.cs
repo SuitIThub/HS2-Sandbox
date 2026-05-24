@@ -4742,10 +4742,24 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Pose groups (grid)</b>", rich);
             GUILayout.Label(
                 "• Select <b>2+ ungrouped</b> poses → bottom bar <b>Group…</b> (name the group). <b>Ungroup</b> removes membership.\n" +
-                "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, tags, export, <b>Apply to characters…</b>, save/clear <b>positions</b>). If the group has saved layout, <b>Apply relative positions</b> toggles global layout-on-apply (also in <b>Options</b>). Card checkboxes = individual poses.\n" +
+                "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, tags, export, <b>Apply to characters…</b>, save/clear <b>positions</b>). Card checkboxes = individual poses.\n" +
                 "• <b>Exclude</b> tag filters: hide ungrouped poses; grouped poses use <b>group + pose</b> tags. In a visible group, excluded tags dim cards (red tag text).\n" +
                 "• <b>Grouped poses</b> / <b>Thumbnails</b> in the tag filter panel cycle neutral → hide (−) → only (+), like per-tag filters.\n" +
                 "• Move/Copy one <b>full group</b> at a time. Data: <b>pose_groups.tsv</b> in Sandbox config.",
+                rich);
+
+            GUILayout.Space(4f);
+            GUILayout.Label("<b>Group relative positions</b>", rich);
+            GUILayout.Label(
+                "Save spacing between characters for a group, then re-apply it with the group. Stored in <b>pose_groups.tsv</b> and v4 ZIP <b>memberRelativeOffsets</b>.\n\n" +
+                "<b>To save positions</b> (<b>Save positions…</b> on the group bar — enabled only when all steps below are satisfied):\n" +
+                "1. <b>Chars</b> — load male/female priority lists and tag poses <b>Male</b> / <b>Female</b> when needed (see <b>Character row</b> above).\n" +
+                "2. In Studio, select <b>exactly as many characters as poses</b> in the group (e.g. 3 poses → 3 characters).\n" +
+                "3. Gender mix must match: e.g. a group with one male-tagged and two female-tagged poses needs one male and two females among the selected characters, assignable via your priority lists.\n" +
+                "4. Select the <b>group header</b> (▦) and <b>Apply to characters…</b> (or compact ▦ group apply) so every pose is on the right character in <b>display order</b>.\n" +
+                "5. Move characters in the scene to the layout you want (poses stay applied).\n" +
+                "6. Without applying any <b>other</b> pose in between, select the group header again and click <b>Save positions…</b>.\n\n" +
+                "<b>To apply saved positions</b> — use the same apply path; after poses are applied, spacing is restored from the anchor (first pose in display order). Global <b>Apply relative positions</b> (group bar when the group has saved layout, or <b>Options</b>) can disable layout without clearing saved data. <b>Clear positions</b> removes stored offsets for that group.",
                 rich);
 
             GUILayout.Space(6f);
@@ -4807,8 +4821,8 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Options panel</b>", rich);
             GUILayout.Label(
-                "Card width, items per page (0 = all on one scroll), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target — same cycle as Mini <b>Folder</b> arrows; only while this window is focused and no text field has keyboard focus).\n" +
-                "Card width and page cap are mirrored in BepInEx under <b>Pose Browser</b>. Window positions, layout tier (<b>Full</b>/<b>List</b>/<b>Mini</b>), and sort mode live in <b>pose_browser_options.json</b> next to the other Sandbox config files.",
+                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b> (global layout toggle), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target — same cycle as Mini <b>Folder</b> arrows; only while this window is focused and no text field has keyboard focus).\n" +
+                "Card width and page cap are mirrored in BepInEx under <b>Pose Browser</b>. Window positions, layout tier (<b>Full</b>/<b>List</b>/<b>Mini</b>), sort mode, and the group layout toggle live in <b>pose_browser_options.json</b> next to the other Sandbox config files.",
                 rich);
 
             GUILayout.Space(10f);

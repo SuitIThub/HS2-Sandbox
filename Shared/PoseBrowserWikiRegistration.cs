@@ -278,7 +278,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Save Pose</b> (top bar) — writes the current character pose into the <i>active save folder</i>: selected folder, pose root when <b>All poses</b> or <b>★ Favorites</b> is active.");
             GUILayout.Label("<b>Update Pose</b> (one selected) — overwrite file from the scene; choose keeping or regenerating the thumbnail.");
             GUILayout.Label("<b>Rename…</b> — optional rename of file to match display name.");
-            GUILayout.Label("<b>Grouping</b> — <b>Group…</b> (2+ ungrouped poses), <b>Ungroup</b>. Group header selection shows a separate bar: rename, <b>Group tags…</b>, <b>Export group…</b>. See <b>Pose groups</b>.");
+            GUILayout.Label("<b>Grouping</b> — <b>Group…</b> (2+ ungrouped poses), <b>Ungroup</b>. Group header selection shows a separate bar: rename, tags, export, apply, save/clear positions. See <b>Pose groups</b>.");
             GUILayout.Label("<b>Tag Selected</b> — tag window in <b>assign</b> mode for <i>pose</i> tags on all selected items.");
             GUILayout.Label("<b>Fav Selected</b> — toggle favorite flag (★ filter).");
             GUILayout.Label("<b>Export…</b> — writes selected on-disk poses to a v2 <b>.zip</b> (embedded tags/favorites metadata).");
@@ -301,7 +301,7 @@ namespace HS2SandboxPlugin
         {
             GUILayout.Label("<size=17><b>Pose groups</b></size>");
             GUILayout.Label(
-                "A <b>pose group</b> is a named set of library poses that stay together in the grid, share optional <b>group tags</b>, and can be exported/imported inside v3 ZIP packs. Membership is stored in <b>pose_groups.tsv</b> (config folder), keyed by pose file paths.");
+                "A <b>pose group</b> is a named set of library poses that stay together in the grid, share optional <b>group tags</b>, and can be exported/imported inside v4 ZIP packs (v2/v3 packs without layout still import). Membership and optional <b>relative positions</b> are stored in <b>pose_groups.tsv</b> (config folder), keyed by pose file paths.");
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Creating and editing groups</b>");
@@ -310,13 +310,41 @@ namespace HS2SandboxPlugin
             GUILayout.Label("2. Click <b>Group…</b>, enter a name, confirm.");
             GUILayout.Label("3. To add poses later, select ungrouped poses + at least one member of the target group, then <b>Group…</b> again (merges into the existing group when applicable).");
             GUILayout.Label("4. <b>Ungroup</b> removes selected poses from their groups (does not delete pose files).");
-            GUILayout.Label("5. <b>Rename group</b> / <b>Group tags…</b> / <b>Export group…</b> appear on the <b>group action bar</b> when the group header is selected as a group entity.");
+            GUILayout.Label("5. <b>Rename…</b> / <b>Tags…</b> / <b>Export…</b> appear on the <b>group action bar</b> when the group header is selected as a group entity.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Relative positions (save & apply)</b>");
+            GUILayout.Label(
+                "Optional <b>world-space spacing</b> between characters when a group is applied multi-character. Offsets are stored <b>per group</b> (which pose is next to which character); the <b>Apply relative positions</b> checkbox is <b>global</b> (group bar + Options).");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Requirements to enable Save positions…</b>");
+            GUILayout.Label("• Not during import preview.");
+            GUILayout.Label("• The group was the <b>last</b> thing you applied with <b>Apply to characters…</b> (or compact ▦ group apply) — no other pose applied since.");
+            GUILayout.Label("• Studio selection: <b>exactly as many characters as poses</b> in the group.");
+            GUILayout.Label("• <b>One-to-one gender match</b>: male-tagged poses must map to male characters on your <b>Chars</b> lists, female-tagged to female; untagged poses use interleaved list order (see <b>Multi-character apply</b>). Example: 1 male + 2 female poses requires 1 male + 2 female selected characters that the matcher can assign.");
+            GUILayout.Label("• Poses are assigned in <b>grid display order</b> (first pose → anchor character; others get offsets relative to that anchor).");
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Workflow — save</b>");
+            GUILayout.Label("1. Set up <b>Chars</b> lists and pose <b>Male</b> / <b>Female</b> tags if needed.");
+            GUILayout.Label("2. Select the right number and mix of characters in Studio.");
+            GUILayout.Label("3. Select the <b>group header</b> → <b>Apply to characters…</b>.");
+            GUILayout.Label("4. Arrange characters in the scene.");
+            GUILayout.Label("5. Select the group header again → <b>Save positions…</b> (tooltip explains if disabled).");
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Workflow — apply</b>");
+            GUILayout.Label("Same apply path as above. After poses are applied, non-anchor characters move to <b>anchor world position + stored offset</b>.");
+            GUILayout.Label("Uncheck <b>Apply relative positions</b> to apply poses only (layout data kept). <b>Clear positions</b> removes stored offsets for that group.");
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Two kinds of selection</b>");
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("<b>Group entity</b> — click the <b>group header</b> (▦ row). Highlights the segment; shows the group bar (rename, group tags, export, <b>Apply to characters…</b>). Ctrl+click toggles group entities; Shift+click range-selects group headers in the filtered list.");
+            GUILayout.Label("<b>Group entity</b> — click the <b>group header</b> (▦ row). Highlights the segment; shows the group bar (rename, tags, export, apply, save/clear positions, layout toggle). Ctrl+click toggles group entities; Shift+click range-selects group headers in the filtered list.");
             GUILayout.Label("<b>Pose members</b> — checkboxes / thumbnail clicks on cards inside the segment. Used for move, copy, delete, tag selected, partial export, etc.");
             GUILayout.Label("During <b>import preview</b>, clicking the group header toggles <b>all member checkboxes</b> for import (not group-entity mode).");
             GUILayout.EndVertical();
@@ -338,12 +366,12 @@ namespace HS2SandboxPlugin
             GUILayout.Label(
                 "• <b>Move…</b> / <b>Copy…</b> — works on ungrouped poses, or when exactly <b>one full group</b> is selected (all members). The whole group moves/copies together.\n" +
                 "• <b>Delete…</b> — can remove group members or entire groups per confirmation.\n" +
-                "• <b>Export…</b> — include group metadata when every member of a group is selected, or use <b>Export group…</b> from the group bar.");
+                "• <b>Export…</b> — include group metadata (and <b>memberRelativeOffsets</b> when saved) when every member of a group is selected, or use <b>Export…</b> from the group bar.");
 
             GUILayout.Space(6f);
-            GUILayout.Label("<b>Import / export (ZIP v3)</b>");
+            GUILayout.Label("<b>Import / export (ZIP v4)</b>");
             GUILayout.Label(
-                "v3 packs may include a <b>groups[]</b> section in <b>metadata.json</b>. On import preview, groups appear as segments; members import with correct membership. v2 packs without groups still import as flat poses.");
+                "v3+ packs may include <b>groups[]</b> in <b>metadata.json</b>; v4 adds optional <b>memberRelativeOffsets</b> parallel to members. On import preview, groups appear as segments; members import with correct membership and layout when present. v2 packs without groups still import as flat poses.");
 
             GUILayout.Space(8f);
             NavButton("← Grid & selection", WikiCategoryRoot, PageGridSelection);
@@ -404,7 +432,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6f);
             GUILayout.Label("<b>Example workflows</b>");
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("<b>Couple (M + F tags)</b> — Group with two poses tagged Male and Female. Select both characters in Studio. Select the group header → <b>Apply to characters…</b>.");
+            GUILayout.Label("<b>Couple (M + F tags)</b> — Group with two poses tagged Male and Female. Select both characters in Studio. Select the group header → <b>Apply to characters…</b>. Optionally save positions after arranging spacing, then re-apply the group later with layout restored.");
             GUILayout.Label("<b>Five generic poses, three characters</b> — Untagged poses; only the top three priority characters are posed; poses 4–5 skipped.");
             GUILayout.Label("<b>Two poses, four characters</b> — After the first pass, two characters remain; second pass applies poses 1 and 2 again to them (different characters, not overwrites).");
             GUILayout.EndVertical();
@@ -434,7 +462,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Export…</b> (selection bar)");
-            GUILayout.Label("Select poses that already live in your library, then export a flat v3 ZIP with tags/favorites and pose groups (when fully selected) in metadata.");
+            GUILayout.Label("Select poses that already live in your library, then export a flat v4 ZIP with tags/favorites and pose groups (when fully selected; memberRelativeOffsets when saved) in metadata.");
 
             GUILayout.Space(6f);
             GUILayout.Label("<b>Export branch…</b> / <b>Export library tree…</b>");
