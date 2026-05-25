@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Studio;
 using UnityEngine;
 
@@ -11,60 +12,86 @@ namespace HS2SandboxPlugin
         private readonly PoseBrowserCharacterConfig _characterConfig = new PoseBrowserCharacterConfig();
         private bool _showCharacterConfigPane;
         private Rect _characterConfigWindowRect;
-        private Vector2 _characterConfigScrollMale;
-        private Vector2 _characterConfigScrollFemale;
-        private int _selectedMaleSlotIndex = -1;
-        private int _selectedFemaleSlotIndex = -1;
+        private Vector2 _characterConfigScroll;
+        private int _selectedSlotIndex = -1;
 
         private void DrawCharacterConfigWindowContent(int id)
         {
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label(
-                "Priority lists for multi-character pose apply. Top = highest priority.",
+                "Priority list for multi-character pose apply. Top = highest priority.",
                 GUILayout.Height(32f));
 
-            if (GUILayout.Button("Load characters from scene", GUILayout.Height(26f)))
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Load characters", GUILayout.Height(26f)))
             {
                 _characterConfig.LoadNewFromScene(_dataService.GetSceneCharacters());
-                _selectedMaleSlotIndex = -1;
-                _selectedFemaleSlotIndex = -1;
+                _selectedSlotIndex = -1;
             }
 
-            GUILayout.Space(4f);
-            GUILayout.Label("Untagged poses (no Male/Female tag) at same list rank:", GUILayout.Height(18f));
-            GUILayout.BeginHorizontal();
-            bool maleFirst = !_characterConfig.UntaggedInterleaveFemaleFirst;
-            bool femaleFirst = _characterConfig.UntaggedInterleaveFemaleFirst;
-            if (GUILayout.Toggle(maleFirst, "Male before female", GUI.skin.button, GUILayout.Height(24f)))
+            if (GUILayout.Button("Remove missing", GUILayout.Height(26f)))
             {
-                if (!maleFirst)
-                    _characterConfig.SetUntaggedInterleaveFemaleFirst(false);
-            }
-
-            if (GUILayout.Toggle(femaleFirst, "Female before male", GUI.skin.button, GUILayout.Height(24f)))
-            {
-                if (!femaleFirst)
-                    _characterConfig.SetUntaggedInterleaveFemaleFirst(true);
+                int removed = _characterConfig.RemoveSlotsNotInScene();
+                if (removed > 0)
+                    _selectedSlotIndex = -1;
             }
 
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6f);
-            GUILayout.BeginHorizontal(GUILayout.ExpandHeight(true));
-            DrawCharacterConfigListColumn(
-                "Male",
-                PoseBrowserCharacterListKind.Male,
-                _characterConfig.Male,
-                ref _characterConfigScrollMale,
-                ref _selectedMaleSlotIndex);
-            GUILayout.Space(8f);
-            DrawCharacterConfigListColumn(
-                "Female",
-                PoseBrowserCharacterListKind.Female,
-                _characterConfig.Female,
-                ref _characterConfigScrollFemale,
-                ref _selectedFemaleSlotIndex);
+            var slots = _characterConfig.Priority;
+            var selectedInStudio = new HashSet<OCIChar>(_dataService.GetSelectedCharacters());
+            _characterConfigScroll = GUILayout.BeginScrollView(_characterConfigScroll, GUILayout.ExpandHeight(true));
+            for (int i = 0; i < slots.Count; i++)
+            {
+                var slot = slots[i];
+                bool inScene = PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci);
+                bool studioSelected = inScene && selectedInStudio.Contains(oci);
+                bool rowOn = _selectedSlotIndex == i;
+                Color prev = GUI.color;
+                if (!inScene)
+                    GUI.color = new Color(1f, 0.75f, 0.55f, 1f);
+                else if (studioSelected)
+                    GUI.color = new Color(0.55f, 1f, 0.65f, 1f);
+
+                GUILayout.BeginHorizontal();
+                string genderLabel = slot.IsFemale ? "f" : "m";
+                if (GUILayout.Button(genderLabel, GUILayout.Width(24f), GUILayout.Height(22f)))
+                    _characterConfig.ToggleSlotGender(i);
+
+                string label = $"{i + 1}. {slot.DisplayName}";
+                if (GUILayout.Toggle(rowOn, label, GUI.skin.button, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
+                    _selectedSlotIndex = i;
+                else if (rowOn)
+                    _selectedSlotIndex = -1;
+                GUILayout.EndHorizontal();
+                GUI.color = prev;
+            }
+
+            GUILayout.EndScrollView();
+
+            GUI.enabled = _selectedSlotIndex >= 0 && _selectedSlotIndex < slots.Count;
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("↑", GUILayout.Width(28f), GUILayout.Height(22f)))
+            {
+                _characterConfig.MoveSlot(_selectedSlotIndex, -1);
+                _selectedSlotIndex = Math.Max(0, _selectedSlotIndex - 1);
+            }
+
+            if (GUILayout.Button("↓", GUILayout.Width(28f), GUILayout.Height(22f)))
+            {
+                _characterConfig.MoveSlot(_selectedSlotIndex, 1);
+                _selectedSlotIndex = Math.Min(slots.Count - 1, _selectedSlotIndex + 1);
+            }
+
+            if (GUILayout.Button("✕", GUILayout.Width(28f), GUILayout.Height(22f)))
+            {
+                _characterConfig.RemoveSlot(_selectedSlotIndex);
+                _selectedSlotIndex = -1;
+            }
+
             GUILayout.EndHorizontal();
+            GUI.enabled = true;
 
             GUILayout.Space(6f);
             if (GUILayout.Button("Close", GUILayout.Height(26f)))
@@ -72,68 +99,6 @@ namespace HS2SandboxPlugin
 
             GUILayout.EndVertical();
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
-        }
-
-        private void DrawCharacterConfigListColumn(
-            string title,
-            PoseBrowserCharacterListKind kind,
-            IReadOnlyList<PoseBrowserCharacterSlot> slots,
-            ref Vector2 scroll,
-            ref int selectedIndex)
-        {
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(136f), GUILayout.ExpandHeight(true));
-            GUILayout.Label(title, GUILayout.Height(20f));
-            scroll = GUILayout.BeginScrollView(scroll, GUILayout.ExpandHeight(true));
-            for (int i = 0; i < slots.Count; i++)
-            {
-                var slot = slots[i];
-                bool inScene = PoseBrowserCharacterSlot.TryResolveInScene(slot, out _);
-                bool rowOn = selectedIndex == i;
-                Color prev = GUI.color;
-                if (!inScene)
-                    GUI.color = new Color(1f, 0.75f, 0.55f, 1f);
-
-                GUILayout.BeginHorizontal();
-                string label = $"{i + 1}. {slot.DisplayName}";
-                if (GUILayout.Toggle(rowOn, label, GUI.skin.button, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
-                    selectedIndex = i;
-                else if (rowOn)
-                    selectedIndex = -1;
-                GUILayout.EndHorizontal();
-                GUI.color = prev;
-            }
-
-            GUILayout.EndScrollView();
-
-            GUI.enabled = selectedIndex >= 0 && selectedIndex < slots.Count;
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("↑", GUILayout.Width(28f), GUILayout.Height(22f)))
-            {
-                _characterConfig.MoveSlot(kind, selectedIndex, -1);
-                selectedIndex = Math.Max(0, selectedIndex - 1);
-            }
-
-            if (GUILayout.Button("↓", GUILayout.Width(28f), GUILayout.Height(22f)))
-            {
-                _characterConfig.MoveSlot(kind, selectedIndex, 1);
-                selectedIndex = Math.Min(slots.Count - 1, selectedIndex + 1);
-            }
-
-            if (GUILayout.Button("⇄", GUILayout.Width(28f), GUILayout.Height(22f)))
-            {
-                _characterConfig.TransferSlot(kind, selectedIndex);
-                selectedIndex = -1;
-            }
-
-            if (GUILayout.Button("✕", GUILayout.Width(28f), GUILayout.Height(22f)))
-            {
-                _characterConfig.RemoveSlot(kind, selectedIndex);
-                selectedIndex = -1;
-            }
-
-            GUILayout.EndHorizontal();
-            GUI.enabled = true;
-            GUILayout.EndVertical();
         }
 
         private bool CanShowMultiCharacterApply()
@@ -270,15 +235,90 @@ namespace HS2SandboxPlugin
             else
             {
                 SandboxServices.Log.LogMessage(
-                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} selected character(s) using priority lists.");
+                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} selected character(s) using the priority list.");
             }
         }
 
-        private void DrawMultiCharacterApplyButton(float barBtnH, float barBtnMinW, ActionBarWrapLayout? wrap = null)
+        private bool TryGetGroupIdForApplyTooltip(out string? groupId)
+        {
+            groupId = null;
+            if (TryGetSingleSelectedGroup(out var group) && group != null)
+            {
+                groupId = group.Id;
+                return true;
+            }
+
+            var poses = GetPosesForMultiCharacterApply();
+            if (poses.Count > 0 &&
+                TryGetGroupIdForExactPoseList(poses, out string? exactGroupId) &&
+                !string.IsNullOrEmpty(exactGroupId))
+            {
+                groupId = exactGroupId;
+                return true;
+            }
+
+            return false;
+        }
+
+        private string? BuildGroupApplyAssignmentTooltip(string groupId)
+        {
+            var poses = GetGroupMemberItemsInDisplayOrder(groupId);
+            if (poses.Count == 0)
+                return null;
+
+            var chars = _dataService.GetSelectedCharacters().ToList();
+            if (chars.Count == 0)
+                return "Select characters in Studio to preview assignments.";
+
+            var plan = PoseBrowserCharacterApply.BuildFullPlannedPoseAssignmentPlan(_characterConfig, poses, chars);
+            var sb = new StringBuilder(poses.Count * 40);
+            for (int i = 0; i < plan.Count; i++)
+            {
+                var (pose, characters) = plan[i];
+                if (i > 0)
+                    sb.Append('\n');
+                string poseLabel = GetPoseLabelForTooltip(pose);
+                sb.Append(poseLabel).Append(" → ");
+                if (characters.Count == 0)
+                    sb.Append("(none)");
+                else
+                {
+                    for (int c = 0; c < characters.Count; c++)
+                    {
+                        if (c > 0)
+                            sb.Append(", ");
+                        sb.Append(PoseDataService.GetOCICharDisplayName(characters[c]));
+                    }
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        private string GetPoseLabelForTooltip(PoseGridItem pose)
+        {
+            if (!string.IsNullOrWhiteSpace(pose.DisplayName))
+                return pose.DisplayName.Trim();
+            string rel = pose.RelativePath(_dataService.PoseRootPath);
+            if (!string.IsNullOrEmpty(rel))
+                return rel;
+            return pose.FilePath;
+        }
+
+        private void DrawMultiCharacterApplyButton(
+            float barBtnH,
+            float barBtnMinW,
+            ActionBarWrapLayout? wrap = null,
+            string? groupIdForTooltip = null)
         {
             if (!CanShowMultiCharacterApply()) return;
 
             bool canApply = _dataService.GetSelectedCharacters().Any();
+            if (string.IsNullOrEmpty(groupIdForTooltip))
+                TryGetGroupIdForApplyTooltip(out groupIdForTooltip);
+            string? tooltip = !string.IsNullOrEmpty(groupIdForTooltip)
+                ? BuildGroupApplyAssignmentTooltip(groupIdForTooltip)
+                : null;
             if (wrap != null)
             {
                 wrap.AddButton(
@@ -286,12 +326,16 @@ namespace HS2SandboxPlugin
                     barBtnH,
                     barBtnMinW,
                     ApplyPosesToCharactersMulti,
-                    canApply);
+                    canApply,
+                    tooltip);
             }
             else
             {
                 GUI.enabled = canApply;
-                if (GUILayout.Button("Apply to characters…", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW + 24f)))
+                if (GUILayout.Button(
+                        new GUIContent("Apply to characters…", tooltip ?? ""),
+                        GUILayout.Height(barBtnH),
+                        GUILayout.MinWidth(barBtnMinW + 24f)))
                     ApplyPosesToCharactersMulti();
                 GUI.enabled = true;
             }

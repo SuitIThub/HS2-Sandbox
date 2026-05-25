@@ -1414,9 +1414,10 @@ namespace HS2SandboxPlugin
                 var cardStyle = groupSelected ? _groupCardSelectedStyle! : _groupCardStyle!;
                 GUILayout.BeginVertical(cardStyle, GUILayout.ExpandWidth(true));
                 string groupLabel = "▦ " + group.Name;
+                string? applyTooltip = BuildGroupApplyAssignmentTooltip(gid!);
                 var groupBtnContent = new GUIContent(
                     groupLabel,
-                    "Apply all poses in this group to selected Studio characters (male/female priority lists in Chars pane).");
+                    applyTooltip ?? "Apply all poses in this group to selected Studio characters (Chars priority list).");
                 bool canGroupApply = _dataService.GetSelectedCharacters().Any() && i > start;
                 var groupHeaderStyle = groupSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
                 GUI.enabled = canGroupApply;
@@ -4768,9 +4769,9 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Character row & multi-apply</b>", rich);
             GUILayout.Label(
                 "• Row shows Studio character count/names (tooltip). Props ignored.\n" +
-                "• <b>Chars</b> — male/female <b>priority lists</b> (top = first). <b>Load characters from scene</b>, ↑↓ reorder, ⇄ transfer list, ✕ remove. Saved in <b>pose_browser_character_config.json</b>.\n" +
+                "• <b>Chars</b> — single <b>priority list</b> (top = first). <b>Load characters from scene</b>, <b>Remove missing from scene</b>, ↑↓ reorder, <b>m</b>/<b>f</b> gender button, ✕ remove. Saved in <b>pose_browser_character_config.json</b>.\n" +
                 "• <b>Apply to characters…</b> when <b>2+ poses</b> selected, or <b>one group header</b> selected. Select characters in Studio first.\n" +
-                "• <b>Male</b> / <b>Female</b> <i>pose</i> tags → next free character on that list only. <b>Untagged</b> → interleaved by list rank (<b>Chars</b> pane: <b>Male before female</b> or <b>Female before male</b>); each character gets at most <b>one</b> pose per apply (extras skipped; leftover chars may get a second-pass pose).\n" +
+                "• <b>Male</b> / <b>Female</b> <i>pose</i> tags → next free character of that gender in list order. <b>Untagged</b> → list order top to bottom; each character gets at most <b>one</b> pose per apply (extras skipped; leftover chars may get a second-pass pose).\n" +
                 "• Left-click thumbnail still applies <b>one</b> pose to <b>all</b> selected characters (separate from multi-apply).",
                 rich);
 

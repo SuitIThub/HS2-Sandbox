@@ -124,7 +124,7 @@ namespace HS2SandboxPlugin
             wrap.AddButton("Move…", barBtnH, barBtnMinW, () => BeginFolderOpForGroupEntities(PendingFolderOperation.MovePoses));
             wrap.AddButton("Copy…", barBtnH, barBtnMinW, () => BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses));
 
-            DrawMultiCharacterApplyButton(barBtnH, barBtnMinW, wrap);
+            DrawMultiCharacterApplyButton(barBtnH, barBtnMinW, wrap, group.Id);
             DrawSaveGroupRelativePositionsButton(group, members, barBtnH, barBtnMinW, wrap);
             DrawClearGroupRelativePositionsButton(group, barBtnH, barBtnMinW, wrap);
             DrawApplyGroupRelativePositionsToggle(group, barBtnH, wrap);
@@ -293,7 +293,7 @@ namespace HS2SandboxPlugin
             if (!PoseBrowserCharacterApply.CanApplyPosesOneToOne(_characterConfig, poses, chars))
             {
                 disableReason =
-                    "Selected characters must match group pose genders (male/female tags and Chars priority lists).";
+                    "Selected characters must match group pose genders (male/female tags and Chars priority list).";
                 return false;
             }
 
@@ -1572,10 +1572,20 @@ namespace HS2SandboxPlugin
                 Event evHdr = Event.current;
                 string prefix = segment.IsContinuation ? "→ " : "";
                 string fullTitle = prefix + segment.GroupName;
-                float titleW = Mathf.Max(20f, headerRect.width - headerCbRect.width - 8f);
+                const float applyBtnW = 24f;
+                float titleW = Mathf.Max(20f, headerRect.width - headerCbRect.width - applyBtnW - 10f);
                 var titleRect = new Rect(headerCbRect.xMax + 4f, headerRect.y, titleW, headerRect.height);
+                var applyBtnRect = new Rect(headerRect.xMax - applyBtnW - 2f, headerRect.y + 2f, applyBtnW, headerRect.height - 4f);
                 string shownTitle = TruncateWithEllipsis(fullTitle, _groupTitleStyle!, titleW);
                 GUI.Label(titleRect, new GUIContent(shownTitle, fullTitle), _groupTitleStyle!);
+
+                bool canGroupApply = !ImportPreviewActive &&
+                    _dataService.GetSelectedCharacters().Any() && segment.Poses.Count > 0;
+                string? applyTooltip = BuildGroupApplyAssignmentTooltip(segment.GroupId);
+                GUI.enabled = canGroupApply;
+                if (GUI.Button(applyBtnRect, new GUIContent("▶", applyTooltip ?? "")))
+                    ApplyGroupMembersToSelectedCharacters(segment.GroupId);
+                GUI.enabled = true;
 
                 if (evHdr.type == EventType.Repaint)
                 {
@@ -1590,7 +1600,9 @@ namespace HS2SandboxPlugin
                         GUI.color = prev;
                     }
                 }
-                else if (evHdr.type == EventType.MouseDown && evHdr.button == 0 && headerRect.Contains(evHdr.mousePosition))
+                else if (evHdr.type == EventType.MouseDown && evHdr.button == 0 &&
+                         headerRect.Contains(evHdr.mousePosition) &&
+                         !applyBtnRect.Contains(evHdr.mousePosition))
                 {
                     HandleGroupHeaderClick(segment.GroupId, anchorIdx);
                     evHdr.Use();

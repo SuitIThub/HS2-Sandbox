@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Studio;
 using UnityEngine;
 
@@ -108,6 +109,143 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>
+        /// Planned first-pass pose-to-character mapping (one character per pose).
+        /// </summary>
+        public static List<(PoseGridItem pose, OCIChar? character)> BuildPlannedPoseAssignments(
+            PoseBrowserCharacterConfig config,
+            IReadOnlyList<PoseGridItem> poses,
+            IReadOnlyList<OCIChar> studioSelection)
+        {
+            var result = new List<(PoseGridItem, OCIChar?)>(poses.Count);
+            if (poses.Count == 0 || studioSelection.Count == 0)
+                return result;
+
+            var selected = new List<OCIChar>(studioSelection);
+            var posed = new HashSet<OCIChar>();
+            var priorityOrder = BuildOrderedSelectedCharacters(
+                selected, config, PoseGenderTag.Untagged, appendUnlisted: true);
+
+            int maleCursor = 0;
+            int femaleCursor = 0;
+            int untaggedCharIndex = 0;
+
+            foreach (var pose in poses)
+            {
+                if (TryPickTargetForPose(
+                        pose, selected, config, priorityOrder, posed,
+                        ref maleCursor, ref femaleCursor, ref untaggedCharIndex,
+                        out var target) &&
+                    target != null)
+                    posed.Add(target);
+                result.Add((pose, target));
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Full planned apply (first pass + second pass), grouped by pose display order.
+        /// </summary>
+        public static List<(PoseGridItem pose, List<OCIChar> characters)> BuildFullPlannedPoseAssignmentPlan(
+            PoseBrowserCharacterConfig config,
+            IReadOnlyList<PoseGridItem> poses,
+            IReadOnlyList<OCIChar> studioSelection)
+        {
+            var charsPerPose = new List<OCIChar>[poses.Count];
+            for (int i = 0; i < poses.Count; i++)
+                charsPerPose[i] = new List<OCIChar>();
+
+            if (poses.Count == 0 || studioSelection.Count == 0)
+            {
+                var empty = new List<(PoseGridItem, List<OCIChar>)>(poses.Count);
+                foreach (var pose in poses)
+                    empty.Add((pose, new List<OCIChar>()));
+                return empty;
+            }
+
+            var selected = new List<OCIChar>(studioSelection);
+            var posed = new HashSet<OCIChar>();
+            var priorityOrder = BuildOrderedSelectedCharacters(
+                selected, config, PoseGenderTag.Untagged, appendUnlisted: true);
+
+            int maleCursor = 0;
+            int femaleCursor = 0;
+            int untaggedCharIndex = 0;
+
+            for (int pi = 0; pi < poses.Count; pi++)
+            {
+                if (TryPickTargetForPose(
+                        poses[pi], selected, config, priorityOrder, posed,
+                        ref maleCursor, ref femaleCursor, ref untaggedCharIndex,
+                        out var target) &&
+                    target != null)
+                {
+                    posed.Add(target);
+                    charsPerPose[pi].Add(target);
+                }
+            }
+
+            for (int i = 0; i < priorityOrder.Count; i++)
+            {
+                var oci = priorityOrder[i];
+                if (posed.Contains(oci))
+                    continue;
+
+                int pi = i % poses.Count;
+                var pose = poses[pi];
+                if (!IsCharacterEligibleForPose(oci, pose, selected, config))
+                    continue;
+
+                posed.Add(oci);
+                charsPerPose[pi].Add(oci);
+            }
+
+            var result = new List<(PoseGridItem, List<OCIChar>)>(poses.Count);
+            for (int i = 0; i < poses.Count; i++)
+                result.Add((poses[i], charsPerPose[i]));
+            return result;
+        }
+
+        private static bool TryPickTargetForPose(
+            PoseGridItem pose,
+            List<OCIChar> selected,
+            PoseBrowserCharacterConfig config,
+            List<OCIChar> priorityOrder,
+            HashSet<OCIChar> posed,
+            ref int maleCursor,
+            ref int femaleCursor,
+            ref int untaggedCharIndex,
+            out OCIChar? target)
+        {
+            target = null;
+            var tag = GetPoseGenderTag(pose);
+
+            if (tag == PoseGenderTag.Untagged)
+            {
+                while (untaggedCharIndex < priorityOrder.Count)
+                {
+                    var candidate = priorityOrder[untaggedCharIndex++];
+                    if (posed.Contains(candidate))
+                        continue;
+                    target = candidate;
+                    return true;
+                }
+            }
+            else
+            {
+                var pool = BuildOrderedSelectedCharacters(selected, config, tag, appendUnlisted: false);
+                if (pool.Count == 0)
+                    return false;
+
+                ref int cursor = ref (tag == PoseGenderTag.Male ? ref maleCursor : ref femaleCursor);
+                target = PickNextUnposedCharacter(pool, posed, ref cursor);
+                return target != null;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Builds pose-to-character assignments in pose order when a full one-to-one apply is possible.
         /// </summary>
         public static bool TryBuildPoseCharacterAssignments(
@@ -120,53 +258,11 @@ namespace HS2SandboxPlugin
             if (poses.Count == 0 || studioSelection.Count != poses.Count)
                 return false;
 
-            var selected = new List<OCIChar>(studioSelection);
-            var posed = new HashSet<OCIChar>();
-            var priorityOrder = BuildOrderedSelectedCharacters(
-                selected, config, PoseGenderTag.Untagged, appendUnlisted: true);
-            var result = new List<(PoseGridItem, OCIChar)>(poses.Count);
-
-            int maleCursor = 0;
-            int femaleCursor = 0;
-            int untaggedCharIndex = 0;
-
-            foreach (var pose in poses)
-            {
-                var tag = GetPoseGenderTag(pose);
-                OCIChar? target = null;
-
-                if (tag == PoseGenderTag.Untagged)
-                {
-                    while (untaggedCharIndex < priorityOrder.Count)
-                    {
-                        var candidate = priorityOrder[untaggedCharIndex++];
-                        if (posed.Contains(candidate))
-                            continue;
-                        target = candidate;
-                        break;
-                    }
-                }
-                else
-                {
-                    var pool = BuildOrderedSelectedCharacters(selected, config, tag, appendUnlisted: false);
-                    if (pool.Count == 0)
-                        return false;
-
-                    ref int cursor = ref (tag == PoseGenderTag.Male ? ref maleCursor : ref femaleCursor);
-                    target = PickNextUnposedCharacter(pool, posed, ref cursor);
-                }
-
-                if (target == null)
-                    return false;
-
-                posed.Add(target);
-                result.Add((pose, target));
-            }
-
-            if (result.Count != poses.Count)
+            var planned = BuildPlannedPoseAssignments(config, poses, studioSelection);
+            if (planned.Count != poses.Count || planned.Any(p => p.character == null))
                 return false;
 
-            assignments = result;
+            assignments = planned.Select(p => (p.pose, p.character!)).ToList();
             return true;
         }
 
@@ -309,29 +405,16 @@ namespace HS2SandboxPlugin
             var result = new List<OCIChar>();
             var used = new HashSet<OCIChar>();
 
-            void AddFromSlots(IEnumerable<PoseBrowserCharacterSlot> slots)
+            foreach (var slot in config.Priority)
             {
-                foreach (var slot in slots)
-                {
-                    if (!PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci) || !selectedSet.Contains(oci))
-                        continue;
-                    if (used.Add(oci))
-                        result.Add(oci);
-                }
-            }
-
-            switch (tagFilter)
-            {
-                case PoseGenderTag.Male:
-                    AddFromSlots(config.Male);
-                    break;
-                case PoseGenderTag.Female:
-                    AddFromSlots(config.Female);
-                    break;
-                default:
-                    AppendInterleavedByRank(
-                        config, selectedSet, used, result, config.UntaggedInterleaveFemaleFirst);
-                    break;
+                if (tagFilter == PoseGenderTag.Male && slot.IsFemale)
+                    continue;
+                if (tagFilter == PoseGenderTag.Female && !slot.IsFemale)
+                    continue;
+                if (!PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci) || !selectedSet.Contains(oci))
+                    continue;
+                if (used.Add(oci))
+                    result.Add(oci);
             }
 
             if (appendUnlisted)
@@ -374,48 +457,6 @@ namespace HS2SandboxPlugin
                 ? currentMemberH / savedMemberH
                 : 1f;
             return rySaved * 0.5f * (scaleAnchor + scaleMember);
-        }
-
-        private static void AppendInterleavedByRank(
-            PoseBrowserCharacterConfig config,
-            HashSet<OCIChar> selectedSet,
-            HashSet<OCIChar> used,
-            List<OCIChar> result,
-            bool femaleFirst)
-        {
-            int maleCount = config.Male.Count;
-            int femaleCount = config.Female.Count;
-            int maxRank = Math.Max(maleCount, femaleCount);
-            for (int r = 0; r < maxRank; r++)
-            {
-                if (femaleFirst)
-                {
-                    TryAddSlotAtRank(config.Female, femaleCount, r, selectedSet, used, result);
-                    TryAddSlotAtRank(config.Male, maleCount, r, selectedSet, used, result);
-                }
-                else
-                {
-                    TryAddSlotAtRank(config.Male, maleCount, r, selectedSet, used, result);
-                    TryAddSlotAtRank(config.Female, femaleCount, r, selectedSet, used, result);
-                }
-            }
-        }
-
-        private static void TryAddSlotAtRank(
-            IReadOnlyList<PoseBrowserCharacterSlot> slots,
-            int slotCount,
-            int rank,
-            HashSet<OCIChar> selectedSet,
-            HashSet<OCIChar> used,
-            List<OCIChar> result)
-        {
-            if (rank >= slotCount)
-                return;
-
-            var slot = slots[rank];
-            if (PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci) &&
-                selectedSet.Contains(oci) && used.Add(oci))
-                result.Add(oci);
         }
 
         /// <summary>

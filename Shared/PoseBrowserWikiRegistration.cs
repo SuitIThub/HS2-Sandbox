@@ -488,11 +488,10 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Setup — Chars window</b>");
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("1. Open <b>Chars</b> (docked pane, like Tags / Sort).");
-            GUILayout.Label("2. Click <b>Load characters from scene</b> to fill <b>Male</b> and <b>Female</b> lists from the current scene.");
+            GUILayout.Label("2. <b>Load characters from scene</b> appends new characters (gender from scene). <b>Remove missing from scene</b> deletes orange (not found) slots.");
             GUILayout.Label("3. Reorder with <b>↑</b> / <b>↓</b> — <b>top = highest priority</b>.");
-            GUILayout.Label("4. <b>⇄</b> moves a slot to the other list; <b>✕</b> removes it. Orange names are not found in the scene.");
-            GUILayout.Label("5. <b>Male before female</b> / <b>Female before male</b> — for <b>untagged</b> poses, which gender gets the next slot at the same list rank (default: male first).");
-            GUILayout.Label("6. Lists and this setting are saved to <b>pose_browser_character_config.json</b> in the Sandbox config folder.");
+            GUILayout.Label("4. <b>m</b> / <b>f</b> toggles gender for that slot; <b>✕</b> removes it. <color=#ffbb88>Orange</color> = not in scene; <color=#88ffaa>green</color> = selected in Studio.");
+            GUILayout.Label("5. The list is saved to <b>pose_browser_character_config.json</b> in the Sandbox config folder.");
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
@@ -506,16 +505,16 @@ namespace HS2SandboxPlugin
 
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("<b>Male / Female pose tags</b> (case-insensitive, on the pose only)");
-            GUILayout.Label("• Pose tagged <b>Male</b> (not Female) → next available selected character from the <b>Male</b> list, in priority order.");
-            GUILayout.Label("• Pose tagged <b>Female</b> → same for the <b>Female</b> list.");
-            GUILayout.Label("• Characters not on the matching list are skipped for that pose.");
+            GUILayout.Label("• Pose tagged <b>Male</b> (not Female) → next available selected character marked <b>m</b> in the priority list.");
+            GUILayout.Label("• Pose tagged <b>Female</b> → next available selected character marked <b>f</b> in list order.");
+            GUILayout.Label("• Characters not in the list (or wrong gender for a tagged pose) are skipped for that pose.");
             GUILayout.Label("• If both Male and Female tags are present, or neither tag is present, the pose is treated as <b>untagged</b> (see below).");
             GUILayout.EndVertical();
 
             GUILayout.Space(4f);
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("<b>Untagged poses</b>");
-            GUILayout.Label("• Build priority order: interleave Male and Female lists by rank (order set in <b>Chars</b>: <b>Male before female</b> or <b>Female before male</b> at each rank), then any selected characters not in either list.");
+            GUILayout.Label("• Build priority order: top-to-bottom in <b>Chars</b>, then any selected characters not in the list.");
             GUILayout.Label("• First pass: pose 1 → first free slot, pose 2 → second free slot, etc. Extra poses with no free character are <b>skipped</b>.");
             GUILayout.Label("• Second pass: any selected character still without a pose gets a pose by cycling through the pose list (only if eligible for that pose’s gender tag).");
             GUILayout.EndVertical();
@@ -603,7 +602,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("• <b>pose_browser_options.json</b> — layout tier (Full/List/Mini) with remembered window rects per mode, sort mode + direction, card width, items per page.");
             GUILayout.Label("• <b>pose_tags.tsv</b> — per-pose tags and favorites (atomic save).");
             GUILayout.Label("• <b>pose_groups.tsv</b> — group membership, tags, relative offsets, body heights per pose (v3 TSV).");
-            GUILayout.Label("• <b>pose_browser_character_config.json</b> — male/female priority lists for multi-character apply.");
+            GUILayout.Label("• <b>pose_browser_character_config.json</b> — unified character priority list for multi-character apply.");
             GUILayout.Label("• BepInEx <b>Pose Browser</b> section — <b>Card column width</b> and <b>Items per page</b> mirrored from Options.");
 
             GUILayout.Space(8f);
