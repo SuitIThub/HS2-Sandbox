@@ -137,9 +137,9 @@ From manifest **version 3**, `metadata.json` may include a **`groups`** array. E
 | `name` | string | Display name in Pose Browser. |
 | `tags` | string[] | Group-level tags (not pose tags). |
 | `members` | string[] | ZIP-internal paths (`poses/…`) listed in `items`. |
-| `memberRelativeOffsets` | number[][] | Optional (v4+). Parallel to `members`. Index `0` is the anchor `[0,0,0]`; later entries are world-space offsets from the first member's character position when the layout was saved. |
+| `memberRelativeOffsets` | number[][] | Optional (v4+). Parallel to `members`. Index `0` is the anchor `[0,0,0]`; later entries are position offsets in the anchor's local frame when the layout was saved (applied as `anchorPos + anchorRot * offset`). |
 | `memberBodyHeights` | number[] | Optional (v5). Parallel to `members`. Maker body-height slider per pose (including anchor at index `0`) when layout was saved. |
-| `memberRelativeRotations` | number[][] | Optional (v6). Parallel to `members`. Index `0` is anchor `[0,0,0]`; later entries are Euler angles of rotation relative to the anchor when layout was saved. |
+| `memberRelativeRotations` | number[][] | Optional (v6). Parallel to `members`. Index `0` is anchor identity `[0,0,0,1]`; later entries are quaternion `[x,y,z,w]` for rotation relative to the anchor (`Inverse(anchorRot) * memberRot`). Legacy 3-value rows are Euler degrees. |
 
 Omit `groups` or use manifest **version 2** for packs without grouping. v2–v5 packs import unchanged. Groups without layout fields behave as before.
 

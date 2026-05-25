@@ -903,12 +903,18 @@ namespace HS2SandboxPlugin
             }
         }
 
-        /// <summary>Guide-object rotation (<see cref="ChangeAmount.rot"/> as Euler).</summary>
+        /// <summary>World rotation from the guide target (falls back to <see cref="ChangeAmount.rot"/>).</summary>
         public static bool TryGetCharacterWorldRotation(OCIChar oci, out Quaternion rotation)
         {
             rotation = Quaternion.identity;
             try
             {
+                if (oci?.guideObject?.transformTarget != null)
+                {
+                    rotation = oci.guideObject.transformTarget.rotation;
+                    return true;
+                }
+
                 if (oci?.guideObject?.changeAmount != null)
                 {
                     rotation = Quaternion.Euler(oci.guideObject.changeAmount.rot);

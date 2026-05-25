@@ -212,7 +212,7 @@ namespace HS2SandboxPlugin
             string groupId,
             IReadOnlyDictionary<string, Vector3> offsetsByMemberPath,
             IReadOnlyDictionary<string, float>? bodyHeightsByMemberPath,
-            IReadOnlyDictionary<string, Vector3>? rotationsByMemberPath = null)
+            IReadOnlyDictionary<string, Quaternion>? rotationsByMemberPath = null)
         {
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
             group.MemberRelativeOffsets.Clear();
@@ -320,7 +320,7 @@ namespace HS2SandboxPlugin
             IReadOnlyDictionary<string, string> oldMemberRelToNewRel,
             Vector3[]? memberRelativeOffsets = null,
             float[]? memberBodyHeights = null,
-            Vector3[]? memberRelativeRotations = null)
+            Quaternion[]? memberRelativeRotations = null)
         {
             var newMembers = new List<string>();
             var oldMembersOrdered = new List<string>();
@@ -335,7 +335,7 @@ namespace HS2SandboxPlugin
 
             var importedOffsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var importedHeights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            var importedRotations = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            var importedRotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             if (memberRelativeOffsets != null && memberRelativeOffsets.Length > 0)
             {
                 for (int i = 0; i < newMembers.Count && i < memberRelativeOffsets.Length; i++)
@@ -514,7 +514,7 @@ namespace HS2SandboxPlugin
                         : new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
                     var rotations = parts.Length >= 8
                         ? ParseMemberRelativeRotationsColumn(parts[7], memberPaths)
-                        : new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+                        : new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
 
                     var group = new PoseGroup
                     {
@@ -652,11 +652,11 @@ namespace HS2SandboxPlugin
             return string.Join(OffsetDelimiter.ToString(), parts);
         }
 
-        private static Dictionary<string, Vector3> ParseMemberRelativeRotationsColumn(
+        private static Dictionary<string, Quaternion> ParseMemberRelativeRotationsColumn(
             string? col,
             IReadOnlyList<string> memberPaths)
         {
-            var result = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            var result = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
                 return result;
 
@@ -668,7 +668,7 @@ namespace HS2SandboxPlugin
                 string token = tokens[i].Trim();
                 if (token.Length == 0)
                     continue;
-                if (!TryParseOffsetTriple(token, out var rot))
+                if (!TryParseRelativeRotationToken(token, out var rot))
                     continue;
                 if (PoseBrowserCharacterApply.IsNearIdentityRelativeRotation(rot))
                     continue;
@@ -676,6 +676,35 @@ namespace HS2SandboxPlugin
             }
 
             return result;
+        }
+
+        /// <summary>Quaternion <c>x,y,z,w</c>; legacy TSV tokens with three values are treated as Euler degrees.</summary>
+        private static bool TryParseRelativeRotationToken(string token, out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+            string[] parts = token.Split(',');
+            var inv = CultureInfo.InvariantCulture;
+            if (parts.Length >= 4)
+            {
+                if (!float.TryParse(parts[0], NumberStyles.Float, inv, out float x) ||
+                    !float.TryParse(parts[1], NumberStyles.Float, inv, out float y) ||
+                    !float.TryParse(parts[2], NumberStyles.Float, inv, out float z) ||
+                    !float.TryParse(parts[3], NumberStyles.Float, inv, out float w))
+                    return false;
+                rotation = new Quaternion(x, y, z, w);
+                return true;
+            }
+
+            if (parts.Length == 3 &&
+                float.TryParse(parts[0], NumberStyles.Float, inv, out float ex) &&
+                float.TryParse(parts[1], NumberStyles.Float, inv, out float ey) &&
+                float.TryParse(parts[2], NumberStyles.Float, inv, out float ez))
+            {
+                rotation = Quaternion.Euler(ex, ey, ez);
+                return true;
+            }
+
+            return false;
         }
 
         private static string FormatMemberRelativeRotationsColumn(PoseGroup group)
@@ -701,7 +730,7 @@ namespace HS2SandboxPlugin
                     continue;
                 }
 
-                parts.Add(string.Format(inv, "{0:R},{1:R},{2:R}", rot.x, rot.y, rot.z));
+                parts.Add(string.Format(inv, "{0:R},{1:R},{2:R},{3:R}", rot.x, rot.y, rot.z, rot.w));
             }
 
             return string.Join(OffsetDelimiter.ToString(), parts);

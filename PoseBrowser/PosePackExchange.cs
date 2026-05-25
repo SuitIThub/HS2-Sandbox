@@ -77,7 +77,7 @@ namespace HS2SandboxPlugin
             public string[] members = Array.Empty<string>();
             /// <summary>
             /// Optional layout offsets parallel to <see cref="members"/> (v4). Index 0 is anchor [0,0,0];
-            /// later entries are world-space offsets from the first member's character position.
+            /// later entries are anchor-local position offsets (orbit with anchor rotation on apply).
             /// </summary>
             public float[][]? memberRelativeOffsets;
             /// <summary>Maker body-height slider per member, parallel to <see cref="members"/> (v5).</summary>
@@ -97,7 +97,7 @@ namespace HS2SandboxPlugin
             public string[] MemberZipPaths { get; }
             public Vector3[]? MemberRelativeOffsets { get; }
             public float[]? MemberBodyHeights { get; }
-            public Vector3[]? MemberRelativeRotations { get; }
+            public Quaternion[]? MemberRelativeRotations { get; }
 
             public PosePackReadGroup(
                 string id,
@@ -106,7 +106,7 @@ namespace HS2SandboxPlugin
                 string[] memberZipPaths,
                 Vector3[]? memberRelativeOffsets = null,
                 float[]? memberBodyHeights = null,
-                Vector3[]? memberRelativeRotations = null)
+                Quaternion[]? memberRelativeRotations = null)
             {
                 Id = id;
                 Name = name;
@@ -787,7 +787,7 @@ namespace HS2SandboxPlugin
                 for (int r = 0; r < g.memberRelativeRotations.Length; r++)
                 {
                     if (r > 0) sb.Append(',');
-                    AppendMetadataVec3Json(sb, g.memberRelativeRotations[r]);
+                    AppendMetadataQuatJson(sb, g.memberRelativeRotations[r]);
                 }
 
                 sb.Append(']');
@@ -839,20 +839,56 @@ namespace HS2SandboxPlugin
             return (float[])g.memberBodyHeights.Clone();
         }
 
-        private static Vector3[]? ConvertGroupMemberRotations(PoseZipGroupJson g)
+        private static Quaternion[]? ConvertGroupMemberRotations(PoseZipGroupJson g)
         {
             if (g.memberRelativeRotations == null || g.memberRelativeRotations.Length == 0)
                 return null;
 
-            var arr = new Vector3[g.memberRelativeRotations.Length];
+            var arr = new Quaternion[g.memberRelativeRotations.Length];
             for (int i = 0; i < g.memberRelativeRotations.Length; i++)
             {
-                float[]? xyz = g.memberRelativeRotations[i];
-                if (xyz != null && xyz.Length >= 3)
-                    arr[i] = new Vector3(xyz[0], xyz[1], xyz[2]);
+                float[]? comp = g.memberRelativeRotations[i];
+                if (comp != null && comp.Length >= 4)
+                    arr[i] = new Quaternion(comp[0], comp[1], comp[2], comp[3]);
+                else if (comp != null && comp.Length >= 3)
+                    arr[i] = Quaternion.Euler(comp[0], comp[1], comp[2]);
             }
 
             return arr;
+        }
+
+        private static void AppendMetadataQuatJson(StringBuilder sb, float[]? xyzw)
+        {
+            sb.Append('[');
+            if (xyzw != null && xyzw.Length >= 4)
+            {
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                sb.Append(xyzw[0].ToString("R", inv));
+                sb.Append(',');
+                sb.Append(xyzw[1].ToString("R", inv));
+                sb.Append(',');
+                sb.Append(xyzw[2].ToString("R", inv));
+                sb.Append(',');
+                sb.Append(xyzw[3].ToString("R", inv));
+            }
+            else if (xyzw != null && xyzw.Length >= 3)
+            {
+                Quaternion q = Quaternion.Euler(xyzw[0], xyzw[1], xyzw[2]);
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                sb.Append(q.x.ToString("R", inv));
+                sb.Append(',');
+                sb.Append(q.y.ToString("R", inv));
+                sb.Append(',');
+                sb.Append(q.z.ToString("R", inv));
+                sb.Append(',');
+                sb.Append(q.w.ToString("R", inv));
+            }
+            else
+            {
+                sb.Append("0,0,0,1");
+            }
+
+            sb.Append(']');
         }
 
         private static void AppendJsonString(StringBuilder sb, string? s)

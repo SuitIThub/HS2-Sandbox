@@ -405,7 +405,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Anchor (first pose)</b>");
             GUILayout.Label("• The <b>first pose</b> in display order is the anchor.");
             GUILayout.Label("• At save: anchor world position + body height are recorded on that pose path.");
-            GUILayout.Label("• At apply: anchor character is <b>not moved</b> by layout; all other poses use offsets from the <b>current</b> anchor position.");
+            GUILayout.Label("• At apply: anchor character is <b>not moved</b> by layout; other characters use <b>anchor position + anchor rotation × saved local offset</b> (orbit with anchor).");
             GUILayout.EndVertical();
             GUILayout.Space(4f);
             GUILayout.BeginVertical(GUI.skin.box);
@@ -420,13 +420,13 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Workflow — save</b>");
             GUILayout.Label("1. Set up <b>Chars</b> and pose tags if needed.");
             GUILayout.Label("2. Select characters in Studio → apply group → arrange scene.");
-            GUILayout.Label("3. <b>Save positions…</b> stores per other pose: <b>offset</b> = world − anchor, plus <b>body height</b> on every pose path.");
+            GUILayout.Label("3. <b>Save positions…</b> stores per other pose: local <b>offset</b> and <b>rotation</b> vs anchor, plus <b>body height</b> on every pose path.");
             GUILayout.EndVertical();
             GUILayout.Space(4f);
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("<b>Workflow — apply</b>");
             GUILayout.Label("Same apply path and assignment order. After poses are applied:");
-            GUILayout.Label("• <b>Apply relative positions</b> (global) — <b>anchor + offset</b> for X, Y, and Z on each non-anchor pose.");
+            GUILayout.Label("• <b>Apply relative positions</b> (global) — <b>anchor + rotated offset</b> (orbits with anchor) and relative rotation on each non-anchor pose.");
             GUILayout.Label("• <b>Adjust for body height</b> (global; requires relative positions) — same full offset, but <b>offset.y</b> is scaled from saved vs current body-height ratios on each pose path (no hardcoded world multiplier).");
             GUILayout.Label("• <b>Clear positions</b> — removes offsets and heights for that group.");
             GUILayout.EndVertical();

@@ -194,11 +194,11 @@ Offsets and **maker body height** (slider value per pose) are stored in **pose_g
 2. Select the correct characters in Studio.
 3. Select the **group header** → **Apply to characters…** (first pose → anchor character).
 4. Move characters in the scene to the layout you want.
-5. Select the group header again → **Save positions…** (stores **offset** = world − anchor per other pose, plus **body height** on every pose path; hover the button if disabled).
+5. Select the group header again → **Save positions…** (stores local **offset** and **rotation** vs anchor per other pose, plus **body height** on every pose path; hover the button if disabled).
 
 **Apply workflow:** Use the same apply path and assignment order. After poses are applied:
 
-- **Apply relative positions** — each non-anchor character moves to **anchor position + saved offset** (X, Y, and Z).
+- **Apply relative positions** — each non-anchor character moves to **anchor position + anchor rotation × saved local offset** (orbits with the anchor).
 - **Adjust for body height** (requires relative positions on) — same full offset, but **offset.y** is scaled from saved vs current body-height ratios on each pose path (spread ratio when heights differed at save; otherwise anchor or averaged scale; no fixed meter constant).
 - Uncheck **Apply relative positions** to apply poses only (saved layout is kept; turning it off also disables height adjust).
 - **Clear positions** removes stored offsets **and** heights for that group.

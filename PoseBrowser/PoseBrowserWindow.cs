@@ -4752,14 +4752,14 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
             GUILayout.Label("<b>Group relative positions</b>", rich);
             GUILayout.Label(
-                "Save character spacing and facing for a group and re-apply it with the group. The <b>first pose</b> in grid display order is the <b>anchor</b> (position and rotation reference). Every other pose stores a <b>relative offset</b> (world position − anchor), <b>relative rotation</b> (vs anchor), and <b>maker body height</b> on that pose path. Persisted in <b>pose_groups.tsv</b> and v6 ZIP (<b>memberRelativeOffsets</b>, <b>memberRelativeRotations</b>, <b>memberBodyHeights</b>).\n\n" +
+                "Save character spacing and facing for a group and re-apply it with the group. The <b>first pose</b> in grid display order is the <b>anchor</b> (position and rotation reference). Every other pose stores a <b>local position offset</b> (in the anchor's frame), <b>relative rotation</b> (vs anchor), and <b>maker body height</b> on that pose path. Persisted in <b>pose_groups.tsv</b> and v6 ZIP (<b>memberRelativeOffsets</b>, <b>memberRelativeRotations</b>, <b>memberBodyHeights</b>).\n\n" +
                 "<b>To save positions</b> (<b>Save positions…</b> on the group bar):\n" +
                 "1. Set up <b>Chars</b> and pose <b>Male</b> / <b>Female</b> tags if needed.\n" +
                 "2. Select <b>exactly as many characters as poses</b> in Studio.\n" +
                 "3. Apply the group (<b>Apply to characters…</b>) so poses map in <b>display order</b> (first pose → anchor character).\n" +
                 "4. Arrange characters, then <b>Save positions…</b> without applying another pose in between (see button tooltip if disabled).\n\n" +
                 "<b>To apply saved positions</b> — same apply path (same pose order and <b>Chars</b> priority). After poses are applied:\n" +
-                "• <b>Apply relative positions</b> (global; group bar or <b>Options</b>) — each non-anchor character moves to <b>anchor position + saved offset</b> and rotates to <b>anchor rotation × saved relative rotation</b>. The anchor character is not moved.\n" +
+                "• <b>Apply relative positions</b> (global; group bar or <b>Options</b>) — each non-anchor character moves to <b>anchor position + anchor rotation × saved offset</b> (orbits with the anchor) and rotates to <b>anchor rotation × saved relative rotation</b>. The anchor character is not moved.\n" +
                 "• <b>Adjust for body height</b> (needs relative positions on) — still applies the full offset, but <b>offset.y</b> is scaled from saved vs current body-height ratios on each pose path (spread ratio when heights differed at save; otherwise anchor or averaged scale). No fixed meter constant.\n" +
                 "• <b>Clear positions</b> — removes stored offsets and heights for that group.",
                 rich);

@@ -215,27 +215,30 @@ namespace HS2SandboxPlugin
 
                 bool applied = false;
                 if (haveAnchorPos &&
-                    group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 offset))
+                    group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 localOffset))
                 {
-                    Vector3 target = anchorPos + offset;
-
                     if (useHeights &&
                         group.MemberBodyHeights.TryGetValue(rel, out float savedMemberH) &&
                         PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float currentMemberH))
                     {
                         float ryScaled = ScaleRelativeOffsetY(
-                            offset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
-                        target.y = anchorPos.y + ryScaled;
+                            localOffset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
+                        localOffset.y = ryScaled;
                     }
+
+                    Vector3 target = WorldPositionFromRelativeOffset(
+                        haveAnchorRot ? anchorRot : Quaternion.identity,
+                        anchorPos,
+                        localOffset);
 
                     if (PoseDataService.TrySetCharacterWorldPosition(assignments[i].character, target))
                         applied = true;
                 }
 
                 if (haveAnchorRot &&
-                    group.MemberRelativeRotations.TryGetValue(rel, out Vector3 relativeEuler))
+                    group.MemberRelativeRotations.TryGetValue(rel, out Quaternion relativeRot))
                 {
-                    Quaternion targetRot = anchorRot * Quaternion.Euler(relativeEuler);
+                    Quaternion targetRot = anchorRot * relativeRot;
                     if (PoseDataService.TrySetCharacterWorldRotation(assignments[i].character, targetRot))
                         applied = true;
                 }
@@ -247,11 +250,31 @@ namespace HS2SandboxPlugin
             return moved;
         }
 
-        internal static Vector3 RelativeRotationEuler(Quaternion anchorRot, Quaternion memberRot) =>
-            (Quaternion.Inverse(anchorRot) * memberRot).eulerAngles;
+        internal static Vector3 RelativePositionOffset(Quaternion anchorRot, Vector3 anchorPos, Vector3 memberPos) =>
+            Quaternion.Inverse(anchorRot) * (memberPos - anchorPos);
 
-        internal static bool IsNearIdentityRelativeRotation(Vector3 relativeEuler) =>
-            Quaternion.Angle(Quaternion.Euler(relativeEuler), Quaternion.identity) < 0.05f;
+        internal static Vector3 WorldPositionFromRelativeOffset(
+            Quaternion anchorRot,
+            Vector3 anchorPos,
+            Vector3 localOffset) =>
+            anchorPos + anchorRot * localOffset;
+
+        internal static Quaternion RelativeRotation(Quaternion anchorRot, Quaternion memberRot)
+        {
+            Quaternion relative = Quaternion.Inverse(anchorRot) * memberRot;
+            float mag = Mathf.Sqrt(
+                relative.x * relative.x + relative.y * relative.y +
+                relative.z * relative.z + relative.w * relative.w);
+            if (mag < 1e-8f)
+                return Quaternion.identity;
+            if (Mathf.Abs(mag - 1f) > 1e-4f)
+                relative = new Quaternion(
+                    relative.x / mag, relative.y / mag, relative.z / mag, relative.w / mag);
+            return relative;
+        }
+
+        internal static bool IsNearIdentityRelativeRotation(Quaternion relative) =>
+            Quaternion.Angle(relative, Quaternion.identity) < 0.05f;
 
         public static List<OCIChar> BuildEligiblePoolForApply(
             PoseGridItem pose,

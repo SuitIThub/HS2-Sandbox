@@ -332,7 +332,7 @@ namespace HS2SandboxPlugin
 
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            var rotations = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            var rotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             string anchorRel = assignments[0].pose.RelativePath(_dataService.PoseRootPath);
             if (!string.IsNullOrEmpty(anchorRel) &&
                 PoseDataService.TryGetCharacterBodyHeight(assignments[0].character, out float anchorH))
@@ -357,8 +357,8 @@ namespace HS2SandboxPlugin
                 string rel = assignments[i].pose.RelativePath(_dataService.PoseRootPath);
                 if (string.IsNullOrEmpty(rel))
                     continue;
-                offsets[rel] = pos - anchorPos;
-                Vector3 relativeRot = PoseBrowserCharacterApply.RelativeRotationEuler(anchorRot, memberRot);
+                offsets[rel] = PoseBrowserCharacterApply.RelativePositionOffset(anchorRot, anchorPos, pos);
+                Quaternion relativeRot = PoseBrowserCharacterApply.RelativeRotation(anchorRot, memberRot);
                 if (!PoseBrowserCharacterApply.IsNearIdentityRelativeRotation(relativeRot))
                     rotations[rel] = relativeRot;
                 if (PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float h))
@@ -1239,7 +1239,7 @@ namespace HS2SandboxPlugin
             {
                 if (i == 0)
                 {
-                    rows[i] = new float[] { 0f, 0f, 0f };
+                    rows[i] = new float[] { 0f, 0f, 0f, 1f };
                     continue;
                 }
 
@@ -1247,12 +1247,12 @@ namespace HS2SandboxPlugin
                 if (group.MemberRelativeRotations.TryGetValue(rel, out var rot) &&
                     !PoseBrowserCharacterApply.IsNearIdentityRelativeRotation(rot))
                 {
-                    rows[i] = new float[] { rot.x, rot.y, rot.z };
+                    rows[i] = new float[] { rot.x, rot.y, rot.z, rot.w };
                     any = true;
                 }
                 else
                 {
-                    rows[i] = new float[] { 0f, 0f, 0f };
+                    rows[i] = new float[] { 0f, 0f, 0f, 1f };
                 }
             }
 
@@ -1342,7 +1342,7 @@ namespace HS2SandboxPlugin
 
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            var rotations = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            var rotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < copyMembers.Count; i++)
             {
                 string oldRel = sourceMembers[i].RelativePath(_dataService.PoseRootPath);
