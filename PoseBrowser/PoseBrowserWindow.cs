@@ -4752,14 +4752,14 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
             GUILayout.Label("<b>Group relative positions</b>", rich);
             GUILayout.Label(
-                "Save character spacing for a group and re-apply it with the group. The <b>first pose</b> in grid display order is the <b>anchor</b> (its world position is the reference). Every other pose stores a <b>relative offset</b> (world position − anchor) and <b>maker body height</b> on that pose path. Persisted in <b>pose_groups.tsv</b> and v5 ZIP (<b>memberRelativeOffsets</b>, <b>memberBodyHeights</b>).\n\n" +
+                "Save character spacing and facing for a group and re-apply it with the group. The <b>first pose</b> in grid display order is the <b>anchor</b> (position and rotation reference). Every other pose stores a <b>relative offset</b> (world position − anchor), <b>relative rotation</b> (vs anchor), and <b>maker body height</b> on that pose path. Persisted in <b>pose_groups.tsv</b> and v6 ZIP (<b>memberRelativeOffsets</b>, <b>memberRelativeRotations</b>, <b>memberBodyHeights</b>).\n\n" +
                 "<b>To save positions</b> (<b>Save positions…</b> on the group bar):\n" +
                 "1. Set up <b>Chars</b> and pose <b>Male</b> / <b>Female</b> tags if needed.\n" +
                 "2. Select <b>exactly as many characters as poses</b> in Studio.\n" +
                 "3. Apply the group (<b>Apply to characters…</b>) so poses map in <b>display order</b> (first pose → anchor character).\n" +
                 "4. Arrange characters, then <b>Save positions…</b> without applying another pose in between (see button tooltip if disabled).\n\n" +
                 "<b>To apply saved positions</b> — same apply path (same pose order and <b>Chars</b> priority). After poses are applied:\n" +
-                "• <b>Apply relative positions</b> (global; group bar or <b>Options</b>) — each non-anchor character moves to <b>anchor position + saved offset</b> (X, Y, and Z). The anchor character is not moved.\n" +
+                "• <b>Apply relative positions</b> (global; group bar or <b>Options</b>) — each non-anchor character moves to <b>anchor position + saved offset</b> and rotates to <b>anchor rotation × saved relative rotation</b>. The anchor character is not moved.\n" +
                 "• <b>Adjust for body height</b> (needs relative positions on) — still applies the full offset, but <b>offset.y</b> is scaled from saved vs current body-height ratios on each pose path (spread ratio when heights differed at save; otherwise anchor or averaged scale). No fixed meter constant.\n" +
                 "• <b>Clear positions</b> — removes stored offsets and heights for that group.",
                 rich);
@@ -4795,10 +4795,10 @@ namespace HS2SandboxPlugin
                 rich);
 
             GUILayout.Space(8f);
-            GUILayout.Label("<b>Import / export (ZIP v5)</b>", rich);
+            GUILayout.Label("<b>Import / export (ZIP v6)</b>", rich);
             GUILayout.Label(
-                "• After <b>Import…</b>, the grid shows a preview: thumbnail click toggles inclusion (checkbox + Ctrl/Shift work). Use <b>Cancel import</b> in the bottom bar or <b>Cancel</b> in the folder footer to abort. <b>Tree branch</b> packs create a named subfolder under the destination you pick. v2–v4 packs still import.\n" +
-                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v5 <b>.zip</b> (tags/favorites; pose groups with offsets/heights when fully selected).\n" +
+                "• After <b>Import…</b>, the grid shows a preview: thumbnail click toggles inclusion (checkbox + Ctrl/Shift work). Use <b>Cancel import</b> in the bottom bar or <b>Cancel</b> in the folder footer to abort. <b>Tree branch</b> packs create a named subfolder under the destination you pick. v2–v5 packs still import.\n" +
+                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v6 <b>.zip</b> (tags/favorites; pose groups with offsets/rotations/heights when fully selected).\n" +
                 "• External tools must build <b>stored</b> (uncompressed) ZIP entries — see <b>Modules/PoseBrowser/POSE_ZIP_FORMAT.md</b> in the repo.",
                 rich);
 
@@ -4828,22 +4828,7 @@ namespace HS2SandboxPlugin
                 rich);
 
             GUILayout.Space(10f);
-            GUILayout.Label("<b>HS2Wiki</b>", rich);
-            GUILayout.Label(
-                "If <b>HS2Wiki</b> is installed, press <b>F3</b> for the full manual under <b>HS2 Sandbox / Pose Browser</b> (linked pages, images).",
-                rich);
-            if (GUILayout.Button("Wiki: Overview", GUILayout.Height(24f)))
-                PoseBrowserWikiRegistration.TryOpenWikiPage(
-                    PoseBrowserWikiRegistration.WikiCategoryRoot,
-                    PoseBrowserWikiRegistration.PageOverview);
-            if (GUILayout.Button("Wiki: Pose groups", GUILayout.Height(24f)))
-                PoseBrowserWikiRegistration.TryOpenWikiPage(
-                    PoseBrowserWikiRegistration.WikiCategoryRoot,
-                    PoseBrowserWikiRegistration.PagePoseGroups);
-            if (GUILayout.Button("Wiki: Multi-character apply", GUILayout.Height(24f)))
-                PoseBrowserWikiRegistration.TryOpenWikiPage(
-                    PoseBrowserWikiRegistration.WikiCategoryRoot,
-                    PoseBrowserWikiRegistration.PageMultiCharacterApply);
+            PoseBrowserWikiRegistration.DrawHelpWikiSection(rich);
 
             GUILayout.EndScrollView();
 

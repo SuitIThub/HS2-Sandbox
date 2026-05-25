@@ -171,7 +171,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>
-        /// Moves non-anchor characters to stored world offsets from the anchor (first pose / assignment).
+        /// Applies stored relative layout (position and/or rotation) for non-anchor characters from the anchor (first pose / assignment).
         /// </summary>
         public static int ApplyGroupRelativePositions(
             PoseGroup group,
@@ -181,7 +181,8 @@ namespace HS2SandboxPlugin
             string poseRootPath,
             bool adjustForBodyHeight = false)
         {
-            if (group.MemberRelativeOffsets.Count == 0 || poses.Count == 0)
+            if ((group.MemberRelativeOffsets.Count == 0 && group.MemberRelativeRotations.Count == 0) ||
+                poses.Count == 0)
                 return 0;
 
             if (!TryBuildPoseCharacterAssignments(config, poses, studioSelection, out var assignments) ||
@@ -189,8 +190,10 @@ namespace HS2SandboxPlugin
                 assignments.Count == 0)
                 return 0;
 
-            if (!PoseDataService.TryGetCharacterWorldPosition(assignments[0].character, out Vector3 anchorPos))
-                return 0;
+            bool haveAnchorPos = PoseDataService.TryGetCharacterWorldPosition(
+                assignments[0].character, out Vector3 anchorPos);
+            bool haveAnchorRot = PoseDataService.TryGetCharacterWorldRotation(
+                assignments[0].character, out Quaternion anchorRot);
 
             string anchorRel = PoseGroupDatabase.NormalizeMemberPath(
                 assignments[0].pose.RelativePath(poseRootPath));
@@ -207,28 +210,48 @@ namespace HS2SandboxPlugin
             {
                 string rel = PoseGroupDatabase.NormalizeMemberPath(
                     assignments[i].pose.RelativePath(poseRootPath));
-                if (string.IsNullOrEmpty(rel) ||
-                    !group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 offset))
+                if (string.IsNullOrEmpty(rel))
                     continue;
 
-                // Full saved relative position (anchor = first pose in assignment order).
-                Vector3 target = anchorPos + offset;
-
-                if (useHeights &&
-                    group.MemberBodyHeights.TryGetValue(rel, out float savedMemberH) &&
-                    PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float currentMemberH))
+                bool applied = false;
+                if (haveAnchorPos &&
+                    group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 offset))
                 {
-                    float ryScaled = ScaleRelativeOffsetY(
-                        offset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
-                    target.y = anchorPos.y + ryScaled;
+                    Vector3 target = anchorPos + offset;
+
+                    if (useHeights &&
+                        group.MemberBodyHeights.TryGetValue(rel, out float savedMemberH) &&
+                        PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float currentMemberH))
+                    {
+                        float ryScaled = ScaleRelativeOffsetY(
+                            offset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
+                        target.y = anchorPos.y + ryScaled;
+                    }
+
+                    if (PoseDataService.TrySetCharacterWorldPosition(assignments[i].character, target))
+                        applied = true;
                 }
 
-                if (PoseDataService.TrySetCharacterWorldPosition(assignments[i].character, target))
+                if (haveAnchorRot &&
+                    group.MemberRelativeRotations.TryGetValue(rel, out Vector3 relativeEuler))
+                {
+                    Quaternion targetRot = anchorRot * Quaternion.Euler(relativeEuler);
+                    if (PoseDataService.TrySetCharacterWorldRotation(assignments[i].character, targetRot))
+                        applied = true;
+                }
+
+                if (applied)
                     moved++;
             }
 
             return moved;
         }
+
+        internal static Vector3 RelativeRotationEuler(Quaternion anchorRot, Quaternion memberRot) =>
+            (Quaternion.Inverse(anchorRot) * memberRot).eulerAngles;
+
+        internal static bool IsNearIdentityRelativeRotation(Vector3 relativeEuler) =>
+            Quaternion.Angle(Quaternion.Euler(relativeEuler), Quaternion.identity) < 0.05f;
 
         public static List<OCIChar> BuildEligiblePoolForApply(
             PoseGridItem pose,

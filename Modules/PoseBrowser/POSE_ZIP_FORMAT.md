@@ -114,7 +114,7 @@ Every `file` listed in `items` **must** exist as a **stored** ZIP entry with **e
 
 ### `groups` (v3+, optional)
 
-From manifest **version 3**, `metadata.json` may include a **`groups`** array. Each element describes a Pose Browser pose group. Manifest **version 4** adds optional per-member layout offsets; **version 5** adds per-member body heights.
+From manifest **version 3**, `metadata.json` may include a **`groups`** array. Each element describes a Pose Browser pose group. Manifest **version 4** adds optional per-member layout offsets; **version 5** adds per-member body heights; **version 6** adds per-member relative rotations.
 
 ```json
 {
@@ -139,8 +139,9 @@ From manifest **version 3**, `metadata.json` may include a **`groups`** array. E
 | `members` | string[] | ZIP-internal paths (`poses/…`) listed in `items`. |
 | `memberRelativeOffsets` | number[][] | Optional (v4+). Parallel to `members`. Index `0` is the anchor `[0,0,0]`; later entries are world-space offsets from the first member's character position when the layout was saved. |
 | `memberBodyHeights` | number[] | Optional (v5). Parallel to `members`. Maker body-height slider per pose (including anchor at index `0`) when layout was saved. |
+| `memberRelativeRotations` | number[][] | Optional (v6). Parallel to `members`. Index `0` is anchor `[0,0,0]`; later entries are Euler angles of rotation relative to the anchor when layout was saved. |
 
-Omit `groups` or use manifest **version 2** for packs without grouping. v2–v4 packs import unchanged. Groups without layout fields behave as before.
+Omit `groups` or use manifest **version 2** for packs without grouping. v2–v5 packs import unchanged. Groups without layout fields behave as before.
 
 ## Pose files under `poses/`
 
@@ -181,7 +182,7 @@ Violating these will fail import with an explicit error string.
 2. Choose **`kind`**:
    - **Flat:** place files as `poses/YourFile.png`, ensuring unique leaf names.
    - **Tree:** pick `<branchRoot>` (e.g. `MyPack`), place files under `poses/MyPack/...`.
-3. Write **`manifest.json`** with `schema`, `version: 5` (or `2`–`4` without newer layout fields), `kind`, timestamps, `branchRoot`, and `metadata`.
+3. Write **`manifest.json`** with `schema`, `version: 6` (or `2`–`5` without newer layout fields), `kind`, timestamps, `branchRoot`, and `metadata`.
 4. Write **`metadata.json`** with one `items[]` entry per file: matching `file` path, `tags`, `favorite`, timestamps (ISO UTC strings are fine).
 5. Build a **ZIP** with **all entries stored (method 0)**, UTF-8 names / EFS bit as appropriate.
 6. Name the archive **`.zip`** and import through Pose Browser.
@@ -190,9 +191,9 @@ You can also export a small pack from the game once and **replace** the contents
 
 ## Legacy v1 packs (still imported)
 
-Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility. **New** exports use manifest **version 5**; older v2–v4 packs still import.
+Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility. **New** exports use manifest **version 6**; older v2–v5 packs still import.
 
-For new tooling, **target version 5**.
+For new tooling, **target version 6**.
 
 ## Reference implementation in this repository
 

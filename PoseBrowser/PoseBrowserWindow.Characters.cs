@@ -238,7 +238,7 @@ namespace HS2SandboxPlugin
             bool heightAdjust = _applyGroupRelativeHeights && _applyGroupRelativePositions;
             if (_applyGroupRelativePositions &&
                 layoutGroup != null &&
-                layoutGroup.MemberRelativeOffsets.Count > 0)
+                (layoutGroup.MemberRelativeOffsets.Count > 0 || layoutGroup.MemberRelativeRotations.Count > 0))
             {
                 layoutMoved = PoseBrowserCharacterApply.ApplyGroupRelativePositions(
                     layoutGroup,
@@ -259,12 +259,13 @@ namespace HS2SandboxPlugin
             {
                 string heightNote = heightAdjust ? " (body-height Y adjustment on)" : "";
                 SandboxServices.Log.LogMessage(
-                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} character(s) and {layoutMoved} relative position(s) from group \"{layoutGroup!.Name}\"{heightNote}.");
+                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} character(s) and {layoutMoved} relative layout change(s) from group \"{layoutGroup!.Name}\"{heightNote}.");
             }
-            else if (layoutGroup != null && layoutGroup.MemberRelativeOffsets.Count > 0)
+            else if (layoutGroup != null &&
+                     (layoutGroup.MemberRelativeOffsets.Count > 0 || layoutGroup.MemberRelativeRotations.Count > 0))
             {
                 SandboxServices.Log.LogMessage(
-                    $"PoseBrowser: Applied {applied} pose(s); relative positions were not applied — select {poses.Count} matching character(s) (same gender layout as when saved).");
+                    $"PoseBrowser: Applied {applied} pose(s); relative layout was not applied — select {poses.Count} matching character(s) (same gender layout as when saved).");
             }
             else
             {

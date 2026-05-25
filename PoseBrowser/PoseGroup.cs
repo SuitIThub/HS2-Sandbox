@@ -23,6 +23,12 @@ namespace HS2SandboxPlugin
         /// </summary>
         public Dictionary<string, float> MemberBodyHeights { get; set; } =
             new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Rotation relative to the anchor (first member), keyed by member relative path.
+        /// Stored as Euler angles of <c>Quaternion.Inverse(anchorRot) * memberRot</c>; anchor is not stored here.
+        /// </summary>
+        public Dictionary<string, Vector3> MemberRelativeRotations { get; set; } =
+            new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
     }
 
     [Serializable]

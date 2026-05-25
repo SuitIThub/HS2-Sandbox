@@ -903,6 +903,56 @@ namespace HS2SandboxPlugin
             }
         }
 
+        /// <summary>Guide-object rotation (<see cref="ChangeAmount.rot"/> as Euler).</summary>
+        public static bool TryGetCharacterWorldRotation(OCIChar oci, out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+            try
+            {
+                if (oci?.guideObject?.changeAmount != null)
+                {
+                    rotation = Quaternion.Euler(oci.guideObject.changeAmount.rot);
+                    return true;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return false;
+        }
+
+        public static bool TrySetCharacterWorldRotation(OCIChar oci, Quaternion worldRotation)
+        {
+            if (oci?.guideObject?.changeAmount == null)
+                return false;
+
+            try
+            {
+                var ca = oci.guideObject.changeAmount;
+                Quaternion current = Quaternion.Euler(ca.rot);
+                if (Quaternion.Angle(current, worldRotation) < 0.01f)
+                    return true;
+
+                ca.rot = worldRotation.eulerAngles;
+                try
+                {
+                    ca.OnChange();
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static string GetOCICharDisplayName(OCIChar oci)
         {
             try

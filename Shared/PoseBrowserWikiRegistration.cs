@@ -27,14 +27,22 @@ namespace HS2SandboxPlugin
         public const string PageMultiCharacterApply = "Multi-character apply";
         public const string PageOptionsData = "Options & data files";
 
+        public const string WikiDownloadUrl = "https://github.com/SuIT-pub/HS2Wiki";
+
         private static bool _registerSucceeded;
         private static bool _loggedMissingWiki;
         private static ManualLogSource? _log;
         private static object? _api;
+        private static object? _wikiPluginInstance;
         private static MethodInfo? _registerPage;
         private static MethodInfo? _openPage;
         private static MethodInfo? _openImage;
+        private static FieldInfo? _wikiUiShowField;
         private static Texture2D? _wikiBannerTex;
+
+        /// <summary>True when the HS2Wiki assembly is loaded and the API resolved (pages may still fail to register).</summary>
+        public static bool IsWikiInstalled =>
+            _registerSucceeded || TryResolveApi(out _, out _, out _, out _);
 
         public static void TryRegister(ManualLogSource log)
         {
@@ -74,7 +82,26 @@ namespace HS2SandboxPlugin
             }
         }
 
-        /// <summary>Opens a wiki page if HS2Wiki API is available (safe no-op otherwise).</summary>
+        /// <summary>Opens the HS2Wiki window (<c>_uiShow</c> on <c>WikiPlugin</c>) if the plugin is loaded.</summary>
+        public static void TryShowWikiWindow()
+        {
+            if (!TryGetWikiPluginInstance(out object? plugin) || plugin == null)
+                return;
+
+            try
+            {
+                _wikiUiShowField ??= plugin.GetType().GetField(
+                    "_uiShow",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                _wikiUiShowField?.SetValue(plugin, true);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning($"ShowWikiWindow failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>Opens the wiki window and navigates to a page if HS2Wiki is available (safe no-op otherwise).</summary>
         public static void TryOpenWikiPage(string category, string pageName)
         {
             if (_openPage == null && _api == null && !TryResolveApi(out _api, out _, out _openPage, out _openImage))
@@ -82,12 +109,41 @@ namespace HS2SandboxPlugin
             if (_openPage == null || _api == null) return;
             try
             {
+                TryShowWikiWindow();
                 _openPage.Invoke(_api, new object[] { category, pageName });
             }
             catch (Exception ex)
             {
                 _log?.LogWarning($"OpenWikiPage failed: {ex.Message}");
             }
+        }
+
+        /// <summary>HS2Wiki block for the in-game Help pane.</summary>
+        public static void DrawHelpWikiSection(GUIStyle rich)
+        {
+            GUILayout.Label("<b>HS2Wiki</b>", rich);
+            if (!IsWikiInstalled)
+            {
+                GUILayout.Label(
+                    "<b>HS2Wiki</b> is not loaded. Install it for the full Pose Browser manual (linked pages, images) in a separate window. Download:",
+                    rich);
+                if (GUILayout.Button("Open HS2Wiki on GitHub", GUILayout.Height(26f)))
+                    Application.OpenURL(WikiDownloadUrl);
+                GUILayout.Label(
+                    "After installing, restart Studio. Pages appear under <b>HS2 Sandbox / Pose Browser</b> (default key <b>F3</b>).",
+                    rich);
+                return;
+            }
+
+            GUILayout.Label(
+                "Open the full manual in <b>HS2Wiki</b> (<b>F3</b> by default). These buttons open the wiki window on the selected page:",
+                rich);
+            if (GUILayout.Button("Wiki: Overview", GUILayout.Height(24f)))
+                TryOpenWikiPage(WikiCategoryRoot, PageOverview);
+            if (GUILayout.Button("Wiki: Pose groups", GUILayout.Height(24f)))
+                TryOpenWikiPage(WikiCategoryRoot, PagePoseGroups);
+            if (GUILayout.Button("Wiki: Multi-character apply", GUILayout.Height(24f)))
+                TryOpenWikiPage(WikiCategoryRoot, PageMultiCharacterApply);
         }
 
         public static void TryOpenPoseIconImage()
@@ -133,6 +189,34 @@ namespace HS2SandboxPlugin
             openImage = api.GetType().GetMethod("OpenImage", new[] { typeof(string) });
 
             return registerPage != null;
+        }
+
+        private static bool TryGetWikiPluginInstance(out object? plugin)
+        {
+            plugin = _wikiPluginInstance;
+            if (plugin != null)
+                return true;
+
+            if (_api == null && !TryResolveApi(out _api, out _, out _openPage, out _openImage))
+                return false;
+
+            if (_api == null)
+                return false;
+
+            try
+            {
+                FieldInfo? pluginField = _api.GetType().GetField(
+                    "_plugin",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+                plugin = pluginField?.GetValue(_api);
+                if (plugin != null)
+                    _wikiPluginInstance = plugin;
+                return plugin != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string? TryGetPoseIconPath()

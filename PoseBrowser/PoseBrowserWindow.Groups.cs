@@ -133,7 +133,7 @@ namespace HS2SandboxPlugin
         }
 
         private static bool GroupHasStoredRelativePositions(PoseGroup group) =>
-            group.MemberRelativeOffsets.Count > 0;
+            group.MemberRelativeOffsets.Count > 0 || group.MemberRelativeRotations.Count > 0;
 
         private static bool GroupHasStoredBodyHeights(PoseGroup group) =>
             group.MemberBodyHeights.Count > 0;
@@ -324,8 +324,15 @@ namespace HS2SandboxPlugin
                 return;
             }
 
+            if (!PoseDataService.TryGetCharacterWorldRotation(assignments[0].character, out Quaternion anchorRot))
+            {
+                SandboxServices.Log.LogMessage("PoseBrowser: Cannot read anchor character rotation.");
+                return;
+            }
+
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var rotations = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             string anchorRel = assignments[0].pose.RelativePath(_dataService.PoseRootPath);
             if (!string.IsNullOrEmpty(anchorRel) &&
                 PoseDataService.TryGetCharacterBodyHeight(assignments[0].character, out float anchorH))
@@ -340,17 +347,27 @@ namespace HS2SandboxPlugin
                     return;
                 }
 
+                if (!PoseDataService.TryGetCharacterWorldRotation(assignments[i].character, out Quaternion memberRot))
+                {
+                    SandboxServices.Log.LogMessage(
+                        $"PoseBrowser: Cannot read rotation for {PoseDataService.GetOCICharDisplayName(assignments[i].character)}.");
+                    return;
+                }
+
                 string rel = assignments[i].pose.RelativePath(_dataService.PoseRootPath);
                 if (string.IsNullOrEmpty(rel))
                     continue;
                 offsets[rel] = pos - anchorPos;
+                Vector3 relativeRot = PoseBrowserCharacterApply.RelativeRotationEuler(anchorRot, memberRot);
+                if (!PoseBrowserCharacterApply.IsNearIdentityRelativeRotation(relativeRot))
+                    rotations[rel] = relativeRot;
                 if (PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float h))
                     heights[rel] = h;
             }
 
-            _groupDb.SetMemberRelativeLayout(group.Id, offsets, heights);
+            _groupDb.SetMemberRelativeLayout(group.Id, offsets, heights, rotations);
             SandboxServices.Log.LogMessage(
-                $"PoseBrowser: Saved relative positions for group \"{group.Name}\" ({offsets.Count} offset(s), {heights.Count} height(s); anchor: {Path.GetFileName(anchorRel)}).");
+                $"PoseBrowser: Saved relative layout for group \"{group.Name}\" ({offsets.Count} offset(s), {rotations.Count} rotation(s), {heights.Count} height(s); anchor: {Path.GetFileName(anchorRel)}).");
         }
 
         private void RecordGroupMultiApply(string groupId)
@@ -1152,7 +1169,8 @@ namespace HS2SandboxPlugin
                     tags = g.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray(),
                     members = members.ToArray(),
                     memberRelativeOffsets = BuildExportGroupMemberOffsets(g),
-                    memberBodyHeights = BuildExportGroupMemberBodyHeights(g)
+                    memberBodyHeights = BuildExportGroupMemberBodyHeights(g),
+                    memberRelativeRotations = BuildExportGroupMemberRotations(g)
                 });
             }
 
@@ -1210,6 +1228,37 @@ namespace HS2SandboxPlugin
             return any ? rows : null;
         }
 
+        private static float[][]? BuildExportGroupMemberRotations(PoseGroup group)
+        {
+            if (group.MemberRelativePaths.Count == 0 || group.MemberRelativeRotations.Count == 0)
+                return null;
+
+            bool any = false;
+            var rows = new float[group.MemberRelativePaths.Count][];
+            for (int i = 0; i < group.MemberRelativePaths.Count; i++)
+            {
+                if (i == 0)
+                {
+                    rows[i] = new float[] { 0f, 0f, 0f };
+                    continue;
+                }
+
+                string rel = group.MemberRelativePaths[i];
+                if (group.MemberRelativeRotations.TryGetValue(rel, out var rot) &&
+                    !PoseBrowserCharacterApply.IsNearIdentityRelativeRotation(rot))
+                {
+                    rows[i] = new float[] { rot.x, rot.y, rot.z };
+                    any = true;
+                }
+                else
+                {
+                    rows[i] = new float[] { 0f, 0f, 0f };
+                }
+            }
+
+            return any ? rows : null;
+        }
+
         private void ImportGroupsFromPack(
             IReadOnlyList<PosePackExchange.PosePackReadGroup> packGroups,
             IReadOnlyDictionary<string, string> zipPathToNewRel)
@@ -1242,7 +1291,7 @@ namespace HS2SandboxPlugin
                     Name = pg.Name,
                     Tags = new HashSet<string>(pg.Tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
                 };
-                _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets, pg.MemberBodyHeights);
+                _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets, pg.MemberBodyHeights, pg.MemberRelativeRotations);
             }
         }
 
@@ -1285,12 +1334,15 @@ namespace HS2SandboxPlugin
             IReadOnlyList<PoseGridItem> copyMembers,
             PoseGroup destGroup)
         {
-            if ((sourceGroup.MemberRelativeOffsets.Count == 0 && sourceGroup.MemberBodyHeights.Count == 0) ||
+            if ((sourceGroup.MemberRelativeOffsets.Count == 0 &&
+                 sourceGroup.MemberBodyHeights.Count == 0 &&
+                 sourceGroup.MemberRelativeRotations.Count == 0) ||
                 sourceMembers.Count != copyMembers.Count)
                 return;
 
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var rotations = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < copyMembers.Count; i++)
             {
                 string oldRel = sourceMembers[i].RelativePath(_dataService.PoseRootPath);
@@ -1301,12 +1353,15 @@ namespace HS2SandboxPlugin
                 if (i > 0 && sourceGroup.MemberRelativeOffsets.TryGetValue(oldRel, out var offset))
                     offsets[newRel] = offset;
 
+                if (i > 0 && sourceGroup.MemberRelativeRotations.TryGetValue(oldRel, out var rot))
+                    rotations[newRel] = rot;
+
                 if (sourceGroup.MemberBodyHeights.TryGetValue(oldRel, out float h))
                     heights[newRel] = h;
             }
 
-            if (offsets.Count > 0 || heights.Count > 0)
-                _groupDb.SetMemberRelativeLayout(destGroup.Id, offsets, heights);
+            if (offsets.Count > 0 || heights.Count > 0 || rotations.Count > 0)
+                _groupDb.SetMemberRelativeLayout(destGroup.Id, offsets, heights, rotations);
         }
 
         private void ApplyTagToGroups(IReadOnlyList<PoseGroup> groups, string tag, bool add)
