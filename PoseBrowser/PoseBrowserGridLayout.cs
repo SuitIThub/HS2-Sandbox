@@ -213,6 +213,7 @@ namespace HS2SandboxPlugin
         public static void SortDisplayEntries(
             List<PoseBrowserDisplayEntry> entries,
             PoseGroupDatabase groupDb,
+            string poseRootPath,
             PoseSortMode sortMode,
             bool ascending,
             IReadOnlyDictionary<string, PoseGroup>? groupsOverride = null)
@@ -223,11 +224,11 @@ namespace HS2SandboxPlugin
             foreach (var e in entries)
             {
                 string? gid = e.Item.GroupId;
-                if (!string.IsNullOrEmpty(gid) && ResolveGroup(groupDb, gid, groupsOverride) != null)
+                if (!string.IsNullOrEmpty(gid) && ResolveGroup(groupDb, gid, groupsOverride) is PoseGroup group)
                 {
                     if (!seenGroup.Add(gid)) continue;
                     var members = entries.Where(x => x.Item.GroupId == gid).ToList();
-                    SortMembersInPlace(members, sortMode, ascending);
+                    OrderGroupMembersByGroupDefinition(members, group, poseRootPath);
                     blocks.Add(SortBlock.ForGroup(gid, members));
                 }
                 else
@@ -457,9 +458,43 @@ namespace HS2SandboxPlugin
             return rep;
         }
 
-        private static void SortMembersInPlace(List<PoseBrowserDisplayEntry> members, PoseSortMode sortMode, bool ascending)
+        /// <summary>
+        /// Keeps group members in persisted group order (first member = anchor). Grid sort must not reorder within a group.
+        /// </summary>
+        private static void OrderGroupMembersByGroupDefinition(
+            List<PoseBrowserDisplayEntry> members,
+            PoseGroup group,
+            string poseRootPath)
         {
-            members.Sort((a, b) => CompareItems(a.Item, b.Item, sortMode, ascending));
+            var byRel = new Dictionary<string, PoseBrowserDisplayEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in members)
+            {
+                string rel = PoseGroupDatabase.NormalizeMemberPath(entry.Item.RelativePath(poseRootPath));
+                if (string.IsNullOrEmpty(rel) || byRel.ContainsKey(rel))
+                    continue;
+                byRel[rel] = entry;
+            }
+
+            var ordered = new List<PoseBrowserDisplayEntry>(members.Count);
+            var used = new HashSet<PoseBrowserDisplayEntry>();
+            foreach (var rel in group.MemberRelativePaths)
+            {
+                string norm = PoseGroupDatabase.NormalizeMemberPath(rel);
+                if (byRel.TryGetValue(norm, out var entry))
+                {
+                    ordered.Add(entry);
+                    used.Add(entry);
+                }
+            }
+
+            foreach (var entry in members)
+            {
+                if (!used.Contains(entry))
+                    ordered.Add(entry);
+            }
+
+            members.Clear();
+            members.AddRange(ordered);
         }
 
         private static int CompareItems(PoseGridItem a, PoseGridItem b, PoseSortMode sortMode, bool ascending)

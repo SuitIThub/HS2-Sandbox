@@ -45,6 +45,7 @@ namespace HS2SandboxPlugin
             for (int i = 0; i < slots.Count; i++)
             {
                 var slot = slots[i];
+                int slotIndex = i;
                 bool inScene = PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci);
                 bool studioSelected = inScene && selectedInStudio.Contains(oci);
                 bool rowOn = _selectedSlotIndex == i;
@@ -64,6 +65,19 @@ namespace HS2SandboxPlugin
                     _selectedSlotIndex = i;
                 else if (rowOn)
                     _selectedSlotIndex = -1;
+
+                if (GUILayout.Button(
+                        new GUIContent("✕", "Remove this character from the priority list."),
+                        GUILayout.Width(28f),
+                        GUILayout.Height(22f)))
+                {
+                    _characterConfig.RemoveSlot(slotIndex);
+                    if (_selectedSlotIndex == slotIndex)
+                        _selectedSlotIndex = -1;
+                    else if (_selectedSlotIndex > slotIndex)
+                        _selectedSlotIndex--;
+                }
+
                 GUILayout.EndHorizontal();
                 GUI.color = prev;
             }

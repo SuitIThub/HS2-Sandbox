@@ -890,7 +890,8 @@ namespace HS2SandboxPlugin
                 _showFavoritesOnly,
                 _tagFilterGroupsMode,
                 _tagFilterThumbnailMode);
-            PoseBrowserGridLayout.SortDisplayEntries(_displayEntries, _groupDb, _poseSortMode, _sortAscending);
+            PoseBrowserGridLayout.SortDisplayEntries(
+                _displayEntries, _groupDb, _dataService.PoseRootPath, _poseSortMode, _sortAscending);
             SyncFilteredItemsFromDisplay();
             PruneSelectedGroups();
         }
@@ -976,7 +977,7 @@ namespace HS2SandboxPlugin
 
             _displayEntries = result;
             PoseBrowserGridLayout.SortDisplayEntries(
-                _displayEntries, _groupDb, _poseSortMode, _sortAscending, _importPreviewGroupsById);
+                _displayEntries, _groupDb, _dataService.PoseRootPath, _poseSortMode, _sortAscending, _importPreviewGroupsById);
             SyncFilteredItemsFromDisplay();
         }
 
