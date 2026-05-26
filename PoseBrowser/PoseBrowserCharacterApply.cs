@@ -270,6 +270,7 @@ namespace HS2SandboxPlugin
         /// Applies stored relative layout (position and/or rotation) for non-anchor poses from the anchor (first pose).
         /// Uses the same pose-to-character plan as multi-character apply (including when more characters than poses).
         /// Offsets are keyed by pose path; every character that received a given pose gets that pose's saved layout.
+        /// When a member has a saved offset but no saved relative rotation (near-identity at save), facing is aligned to the anchor.
         /// </summary>
         public static int ApplyGroupRelativePositions(
             PoseGroup group,
@@ -312,8 +313,8 @@ namespace HS2SandboxPlugin
                     continue;
 
                 bool hasOffset = group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 localOffset);
-                bool hasRotation = group.MemberRelativeRotations.TryGetValue(rel, out Quaternion relativeRot);
-                if (!hasOffset && !hasRotation)
+                bool hasStoredRotation = group.MemberRelativeRotations.TryGetValue(rel, out Quaternion relativeRot);
+                if (!hasOffset && !hasStoredRotation)
                     continue;
 
                 foreach (var character in characters)
@@ -339,9 +340,12 @@ namespace HS2SandboxPlugin
                             applied = true;
                     }
 
-                    if (haveAnchorRot && hasRotation)
+                    // Apply facing whenever this pose has layout data. Near-identity rotations are not persisted on save;
+                    // use identity so a prior group's guide rotation on the member is cleared.
+                    if (haveAnchorRot && (hasStoredRotation || hasOffset))
                     {
-                        Quaternion targetRot = anchorRot * relativeRot;
+                        Quaternion memberRelative = hasStoredRotation ? relativeRot : Quaternion.identity;
+                        Quaternion targetRot = anchorRot * memberRelative;
                         if (PoseDataService.TrySetCharacterWorldRotation(character, targetRot))
                             applied = true;
                     }
