@@ -230,7 +230,7 @@ namespace HS2SandboxPlugin
                      (layoutGroup.MemberRelativeOffsets.Count > 0 || layoutGroup.MemberRelativeRotations.Count > 0))
             {
                 SandboxServices.Log.LogMessage(
-                    $"PoseBrowser: Applied {applied} pose(s); relative layout was not applied — select {poses.Count} matching character(s) (same gender layout as when saved).");
+                    "PoseBrowser: Applied pose(s); relative layout was not applied — the anchor pose (first in the group) must be assigned to a selected character (gender tags and Chars priority).");
             }
             else
             {

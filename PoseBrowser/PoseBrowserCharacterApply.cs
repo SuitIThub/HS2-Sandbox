@@ -267,7 +267,9 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>
-        /// Applies stored relative layout (position and/or rotation) for non-anchor characters from the anchor (first pose / assignment).
+        /// Applies stored relative layout (position and/or rotation) for non-anchor poses from the anchor (first pose).
+        /// Uses the same pose-to-character plan as multi-character apply (including when more characters than poses).
+        /// Offsets are keyed by pose path; every character that received a given pose gets that pose's saved layout.
         /// </summary>
         public static int ApplyGroupRelativePositions(
             PoseGroup group,
@@ -281,66 +283,72 @@ namespace HS2SandboxPlugin
                 poses.Count == 0)
                 return 0;
 
-            if (!TryBuildPoseCharacterAssignments(config, poses, studioSelection, out var assignments) ||
-                assignments == null ||
-                assignments.Count == 0)
+            var plan = BuildFullPlannedPoseAssignmentPlan(config, poses, studioSelection);
+            if (plan.Count == 0 || plan[0].characters.Count == 0)
                 return 0;
 
-            bool haveAnchorPos = PoseDataService.TryGetCharacterWorldPosition(
-                assignments[0].character, out Vector3 anchorPos);
-            bool haveAnchorRot = PoseDataService.TryGetCharacterWorldRotation(
-                assignments[0].character, out Quaternion anchorRot);
+            OCIChar anchorChar = plan[0].characters[0];
+            bool haveAnchorPos = PoseDataService.TryGetCharacterWorldPosition(anchorChar, out Vector3 anchorPos);
+            bool haveAnchorRot = PoseDataService.TryGetCharacterWorldRotation(anchorChar, out Quaternion anchorRot);
 
-            string anchorRel = PoseGroupDatabase.NormalizeMemberPath(
-                assignments[0].pose.RelativePath(poseRootPath));
+            string anchorRel = PoseGroupDatabase.NormalizeMemberPath(plan[0].pose.RelativePath(poseRootPath));
             float savedAnchorH = 0f;
             float currentAnchorH = 0f;
             bool useHeights = adjustForBodyHeight &&
                               group.MemberBodyHeights.Count > 0 &&
                               !string.IsNullOrEmpty(anchorRel) &&
                               group.MemberBodyHeights.TryGetValue(anchorRel, out savedAnchorH) &&
-                              PoseDataService.TryGetCharacterBodyHeight(assignments[0].character, out currentAnchorH);
+                              PoseDataService.TryGetCharacterBodyHeight(anchorChar, out currentAnchorH);
 
             int moved = 0;
-            for (int i = 1; i < assignments.Count; i++)
+            for (int pi = 1; pi < plan.Count; pi++)
             {
-                string rel = PoseGroupDatabase.NormalizeMemberPath(
-                    assignments[i].pose.RelativePath(poseRootPath));
+                var (pose, characters) = plan[pi];
+                if (characters.Count == 0)
+                    continue;
+
+                string rel = PoseGroupDatabase.NormalizeMemberPath(pose.RelativePath(poseRootPath));
                 if (string.IsNullOrEmpty(rel))
                     continue;
 
-                bool applied = false;
-                if (haveAnchorPos &&
-                    group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 localOffset))
+                bool hasOffset = group.MemberRelativeOffsets.TryGetValue(rel, out Vector3 localOffset);
+                bool hasRotation = group.MemberRelativeRotations.TryGetValue(rel, out Quaternion relativeRot);
+                if (!hasOffset && !hasRotation)
+                    continue;
+
+                foreach (var character in characters)
                 {
-                    if (useHeights &&
-                        group.MemberBodyHeights.TryGetValue(rel, out float savedMemberH) &&
-                        PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float currentMemberH))
+                    bool applied = false;
+                    if (haveAnchorPos && hasOffset)
                     {
-                        float ryScaled = ScaleRelativeOffsetY(
-                            localOffset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
-                        localOffset.y = ryScaled;
+                        Vector3 offset = localOffset;
+                        if (useHeights &&
+                            group.MemberBodyHeights.TryGetValue(rel, out float savedMemberH) &&
+                            PoseDataService.TryGetCharacterBodyHeight(character, out float currentMemberH))
+                        {
+                            offset.y = ScaleRelativeOffsetY(
+                                offset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
+                        }
+
+                        Vector3 target = WorldPositionFromRelativeOffset(
+                            haveAnchorRot ? anchorRot : Quaternion.identity,
+                            anchorPos,
+                            offset);
+
+                        if (PoseDataService.TrySetCharacterWorldPosition(character, target))
+                            applied = true;
                     }
 
-                    Vector3 target = WorldPositionFromRelativeOffset(
-                        haveAnchorRot ? anchorRot : Quaternion.identity,
-                        anchorPos,
-                        localOffset);
+                    if (haveAnchorRot && hasRotation)
+                    {
+                        Quaternion targetRot = anchorRot * relativeRot;
+                        if (PoseDataService.TrySetCharacterWorldRotation(character, targetRot))
+                            applied = true;
+                    }
 
-                    if (PoseDataService.TrySetCharacterWorldPosition(assignments[i].character, target))
-                        applied = true;
+                    if (applied)
+                        moved++;
                 }
-
-                if (haveAnchorRot &&
-                    group.MemberRelativeRotations.TryGetValue(rel, out Quaternion relativeRot))
-                {
-                    Quaternion targetRot = anchorRot * relativeRot;
-                    if (PoseDataService.TrySetCharacterWorldRotation(assignments[i].character, targetRot))
-                        applied = true;
-                }
-
-                if (applied)
-                    moved++;
             }
 
             return moved;
