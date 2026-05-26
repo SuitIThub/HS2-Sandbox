@@ -1,6 +1,6 @@
 # HS2 Sandbox Plugin
 
-[![License: MIT](https://img.shields.io/github/license/SuitIThub/HS2-Sandbox?style=flat-square)](LICENSE)
+[![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey?style=flat-square)](LICENSE)
 [![CI](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/main.yml)
 
 [![All-in-one](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=All-in-one&query=%24.allInOne&style=flat-square&color=0366d6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/HS2SandboxPlugin.cs)
@@ -229,7 +229,7 @@ Restore may show **NU1603** warnings; builds usually still succeed.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](LICENSE). You may use and modify it freely if you credit **Suit-Ji** as the original creator. Contact: [suit.it.pub@gmail.com](mailto:suit.it.pub@gmail.com).
 
 ## Contributing
 
