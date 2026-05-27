@@ -1006,12 +1006,34 @@ namespace HS2SandboxPlugin
                 _setExHookValue?.Invoke(item.FilePath, ociChar);
                 fileInfo.Load(br, version);
                 fileInfo.Apply(ociChar);
+                MaybeFreezeAnimationSpeedAfterApply(ociChar);
                 return true;
             }
             catch (Exception ex)
             {
                 SandboxServices.Log.LogError($"PoseBrowser: Failed to apply pose: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>Sets <see cref="ObjectCtrlInfo.animeSpeed"/> to 0 when the option is enabled in config.</summary>
+        internal static void MaybeFreezeAnimationSpeedAfterApply(OCIChar? oci)
+        {
+            if (oci == null)
+                return;
+
+            try
+            {
+                PoseBrowserConfig.Register(SandboxServices.Config);
+                if (PoseBrowserConfig.FreezeAnimationSpeedOnApply is not { Value: true })
+                    return;
+
+                oci.animeSpeed = 0f;
+                PoseBrowserAnimationUiBridge.TryRefreshAnimationPanel(oci);
+            }
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: Could not set animation speed: {ex.Message}");
             }
         }
 
@@ -1302,6 +1324,96 @@ namespace HS2SandboxPlugin
                 SandboxServices.Log.LogError($"PoseBrowser: Failed to convert dat to png: {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>Absolute character state for pose history (pose skeleton + world transform).</summary>
+        internal static bool TryCaptureCharacterSnapshot(OCIChar oci, out PoseCharacterSnapshot snapshot)
+        {
+            snapshot = new PoseCharacterSnapshot();
+            if (oci == null)
+                return false;
+
+            try
+            {
+                var fileInfo = new PauseCtrl.FileInfo(oci);
+                using var ms = new MemoryStream();
+                using var bw = new BinaryWriter(ms);
+                fileInfo.Save(bw);
+                snapshot.PoseData = ms.ToArray();
+            }
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: Could not capture pose snapshot: {ex.Message}");
+                return false;
+            }
+
+            snapshot.HasPosition = TryGetCharacterWorldPosition(oci, out snapshot.Position);
+            snapshot.HasRotation = TryGetCharacterWorldRotation(oci, out snapshot.Rotation);
+            return snapshot.PoseData.Length > 0;
+        }
+
+        internal static bool TryRestoreCharacterSnapshot(
+            OCIChar oci,
+            PoseCharacterSnapshot snapshot,
+            bool restorePose,
+            bool restorePosition,
+            bool restoreRotation)
+        {
+            if (oci == null || snapshot == null)
+                return false;
+
+            bool ok = true;
+            if (restorePose && snapshot.PoseData.Length > 0)
+            {
+                try
+                {
+                    using var ms = new MemoryStream(snapshot.PoseData);
+                    using var br = new BinaryReader(ms);
+                    var fileInfo = new PauseCtrl.FileInfo(null);
+                    fileInfo.Load(br, PoseVersion);
+                    fileInfo.Apply(oci);
+                }
+                catch (Exception ex)
+                {
+                    SandboxServices.Log.LogWarning($"PoseBrowser: Could not restore pose snapshot: {ex.Message}");
+                    ok = false;
+                }
+            }
+
+            if (restorePosition && snapshot.HasPosition &&
+                !TrySetCharacterWorldPosition(oci, snapshot.Position))
+                ok = false;
+
+            if (restoreRotation && snapshot.HasRotation &&
+                !TrySetCharacterWorldRotation(oci, snapshot.Rotation))
+                ok = false;
+
+            MaybeFreezeAnimationSpeedAfterApply(oci);
+            return ok;
+        }
+    }
+
+    internal sealed class PoseCharacterSnapshot
+    {
+        public byte[] PoseData = Array.Empty<byte>();
+        public Vector3 Position;
+        public Quaternion Rotation = Quaternion.identity;
+        public bool HasPosition;
+        public bool HasRotation;
+
+        public bool StateEquals(PoseCharacterSnapshot? other)
+        {
+            if (other == null)
+                return false;
+            if (!PoseData.SequenceEqual(other.PoseData))
+                return false;
+            if (HasPosition != other.HasPosition || HasRotation != other.HasRotation)
+                return false;
+            if (HasPosition && (Position - other.Position).sqrMagnitude > 1e-8f)
+                return false;
+            if (HasRotation && Quaternion.Angle(Rotation, other.Rotation) > 0.05f)
+                return false;
+            return true;
         }
     }
 }

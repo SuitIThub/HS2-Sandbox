@@ -20,6 +20,10 @@ namespace HS2SandboxPlugin
         public static ConfigEntry<KeyboardShortcut>? HotkeyPrevBrowse;
         public static ConfigEntry<KeyboardShortcut>? HotkeyToggleVisible;
         public static ConfigEntry<KeyboardShortcut>? HotkeyToggleMinimize;
+        public static ConfigEntry<int>? HistoryMaxEntries;
+        public static ConfigEntry<bool>? FreezeAnimationSpeedOnApply;
+        public static ConfigEntry<KeyboardShortcut>? HotkeyUndo;
+        public static ConfigEntry<KeyboardShortcut>? HotkeyRedo;
 
         public static void Register(ConfigFile cfg)
         {
@@ -49,6 +53,21 @@ namespace HS2SandboxPlugin
                 new ConfigDescription(
                     "Pause after applying each pose before taking a thumbnail during Auto-capture. Editable in Pose Browser → Options.",
                     new AcceptableValueRange<float>(0.5f, 30f)));
+
+            HistoryMaxEntries = cfg.Bind(
+                "Pose Browser",
+                "History entries per character",
+                PoseBrowserHistory.DefaultMaxEntriesPerCharacter,
+                new ConfigDescription(
+                    "Maximum pose history snapshots kept per character; oldest entries are removed. Editable in Pose Browser → Options.",
+                    new AcceptableValueRange<int>(10, 5000)));
+
+            FreezeAnimationSpeedOnApply = cfg.Bind(
+                "Pose Browser",
+                "Freeze animation speed on apply",
+                false,
+                new ConfigDescription(
+                    "When enabled, sets each affected character's animation speed to 0 after applying a pose from the browser or restoring a history entry. Editable in Pose Browser → Options."));
 
             const string hk =
                 "Active while Pose Browser is open. Uses BepInEx KeyboardShortcut (main key + optional modifiers in Configuration Manager). " +
@@ -95,6 +114,20 @@ namespace HS2SandboxPlugin
                 new KeyboardShortcut(KeyCode.None),
                 new ConfigDescription(
                     "When the window is open: minimize to the draggable PB chip or restore from it. " + windowHk));
+
+            HotkeyUndo = cfg.Bind(
+                KeyboardSection,
+                "Undo pose change",
+                new KeyboardShortcut(KeyCode.None),
+                new ConfigDescription(
+                    "Undo the last pose history step for Studio-selected characters. " + hk));
+
+            HotkeyRedo = cfg.Bind(
+                KeyboardSection,
+                "Redo pose change",
+                new KeyboardShortcut(KeyCode.None),
+                new ConfigDescription(
+                    "Redo pose history for Studio-selected characters. " + hk));
         }
     }
 }

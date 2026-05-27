@@ -191,6 +191,7 @@ namespace HS2SandboxPlugin
                 _tagDb.ApplyToItem(pose);
 
             var chars = _dataService.GetSelectedCharacters().ToList();
+            RecordPoseHistoryBeforeMultiApply(poses, chars);
             if (poses.Count == 0)
             {
                 SandboxServices.Log.LogMessage("PoseBrowser: No poses selected for multi-character apply.");
@@ -227,6 +228,8 @@ namespace HS2SandboxPlugin
                     _dataService.PoseRootPath,
                     heightAdjust);
             }
+
+            RecordPoseHistoryAfterMultiApply(poses, chars);
 
             if (_poseSortMode == PoseSortMode.LastUsed)
             {
