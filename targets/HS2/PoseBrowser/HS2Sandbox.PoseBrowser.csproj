@@ -6,15 +6,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\Shared\**\*.cs" />
-    <Compile Include="..\..\PoseBrowser\**\*.cs" />
-    <Compile Include="PoseBrowserModulePlugin.cs" />
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)PoseBrowser\**\*.cs" />
+    <Compile Include="Plugin.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\pose-icon.png" CopyToOutputDirectory="Always" />
-    <EmbeddedResource Include="..\..\pose-icon.png">
+    <Content Include="$(AssetsRoot)pose-icon.png" CopyToOutputDirectory="Always" Link="pose-icon.png" />
+    <EmbeddedResource Include="$(AssetsRoot)pose-icon.png">
       <LogicalName>$(AssemblyName).pose-icon.png</LogicalName>
+      <Link>pose-icon.png</Link>
     </EmbeddedResource>
   </ItemGroup>
 </Project>

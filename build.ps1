@@ -68,7 +68,7 @@ $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $deployDir = "D:\Honey Select\BepInEx\plugins\HS2-Sandbox"
 $studioExePath = "D:\Honey Select\StudioNEOV2.exe"
 
-function Read-Choice {
+function Read-MultiChoice {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Prompt,
@@ -83,112 +83,136 @@ function Read-Choice {
             $n = $i + 1
             Write-Host "  [$n] $($Options[$i])"
         }
+        Write-Host "  [A] All"
         Write-Host "  [C] Cancel"
-        $response = Read-Host "Choose"
+        $response = Read-Host "Choose (comma-separated, e.g. 1,3,5)"
         if ($null -eq $response) { Stop-BuildFlow "Cancelled." }
         $trimmed = $response.Trim()
         if ($trimmed -eq "" -or $trimmed.ToLowerInvariant() -eq "c" -or $trimmed.ToLowerInvariant() -eq "cancel") {
             Stop-BuildFlow "Cancelled."
         }
-        $idx = 0
-        if ([int]::TryParse($trimmed, [ref]$idx)) {
-            if ($idx -ge 1 -and $idx -le $Options.Count) {
-                return ($idx - 1)
+        if ($trimmed.ToLowerInvariant() -eq "a" -or $trimmed.ToLowerInvariant() -eq "all") {
+            return @(0..($Options.Count - 1))
+        }
+
+        $parts = $trimmed -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+        $indices = @()
+        $valid = $true
+        foreach ($part in $parts) {
+            $idx = 0
+            if ([int]::TryParse($part, [ref]$idx)) {
+                if ($idx -ge 1 -and $idx -le $Options.Count) {
+                    $indices += ($idx - 1)
+                } else {
+                    $valid = $false
+                    break
+                }
+            } else {
+                $valid = $false
+                break
             }
         }
-        Write-Host "Please enter 1-$($Options.Count) or C." -ForegroundColor Yellow
+
+        if ($valid -and $indices.Count -gt 0) {
+            return @($indices | Select-Object -Unique)
+        }
+        Write-Host "Please enter 1-$($Options.Count) (comma-separated), A for all, or C to cancel." -ForegroundColor Yellow
     }
 }
 
 $targets = @(
     @{
-        Key = "AllInOne"
-        DisplayName = "All-in-one (HS2SandboxPlugin.dll)"
-        BuildPath = "HS2-Sandbox.sln"
-        BuiltDllRelPath = "bin\Release\HS2SandboxPlugin.dll"
-        DeployFileName = "HS2SandboxPlugin.dll"
-        DeactivatedFileName = "HS2SandboxPlugin.dl_"
-    },
-    @{
         Key = "CopyScript"
         DisplayName = "CopyScript module (HS2Sandbox.CopyScript.dll)"
-        BuildPath = "Modules\CopyScript\HS2Sandbox.CopyScript.csproj"
-        BuiltDllRelPath = "Modules\CopyScript\bin\Release\HS2Sandbox.CopyScript.dll"
+        BuildPath = "targets\HS2\CopyScript\HS2Sandbox.CopyScript.csproj"
+        BuiltDllRelPath = "targets\HS2\CopyScript\bin\Release\HS2Sandbox.CopyScript.dll"
         DeployFileName = "HS2Sandbox.CopyScript.dll"
         DeactivatedFileName = "HS2Sandbox.CopyScript.dl_"
     },
     @{
         Key = "Timeline"
         DisplayName = "Timeline module (HS2Sandbox.Timeline.dll)"
-        BuildPath = "Modules\Timeline\HS2Sandbox.Timeline.csproj"
-        BuiltDllRelPath = "Modules\Timeline\bin\Release\HS2Sandbox.Timeline.dll"
+        BuildPath = "targets\HS2\Timeline\HS2Sandbox.Timeline.csproj"
+        BuiltDllRelPath = "targets\HS2\Timeline\bin\Release\HS2Sandbox.Timeline.dll"
         DeployFileName = "HS2Sandbox.Timeline.dll"
         DeactivatedFileName = "HS2Sandbox.Timeline.dl_"
     },
     @{
         Key = "SearchBarManager"
         DisplayName = "SearchBarManager module (HS2Sandbox.SearchBarManager.dll)"
-        BuildPath = "Modules\SearchBarManager\HS2Sandbox.SearchBarManager.csproj"
-        BuiltDllRelPath = "Modules\SearchBarManager\bin\Release\HS2Sandbox.SearchBarManager.dll"
+        BuildPath = "targets\HS2\SearchBarManager\HS2Sandbox.SearchBarManager.csproj"
+        BuiltDllRelPath = "targets\HS2\SearchBarManager\bin\Release\HS2Sandbox.SearchBarManager.dll"
         DeployFileName = "HS2Sandbox.SearchBarManager.dll"
         DeactivatedFileName = "HS2Sandbox.SearchBarManager.dl_"
     },
     @{
         Key = "SonScale"
         DisplayName = "Son scale module (HS2Sandbox.SonScale.dll)"
-        BuildPath = "Modules\SonScale\HS2Sandbox.SonScale.csproj"
-        BuiltDllRelPath = "Modules\SonScale\bin\Release\HS2Sandbox.SonScale.dll"
+        BuildPath = "targets\HS2\SonScale\HS2Sandbox.SonScale.csproj"
+        BuiltDllRelPath = "targets\HS2\SonScale\bin\Release\HS2Sandbox.SonScale.dll"
         DeployFileName = "HS2Sandbox.SonScale.dll"
         DeactivatedFileName = "HS2Sandbox.SonScale.dl_"
     },
     @{
         Key = "WorkspaceTreeLock"
         DisplayName = "Workspace tree lock module (HS2Sandbox.WorkspaceTreeLock.dll)"
-        BuildPath = "Modules\WorkspaceTreeLock\HS2Sandbox.WorkspaceTreeLock.csproj"
-        BuiltDllRelPath = "Modules\WorkspaceTreeLock\bin\Release\HS2Sandbox.WorkspaceTreeLock.dll"
+        BuildPath = "targets\HS2\WorkspaceTreeLock\HS2Sandbox.WorkspaceTreeLock.csproj"
+        BuiltDllRelPath = "targets\HS2\WorkspaceTreeLock\bin\Release\HS2Sandbox.WorkspaceTreeLock.dll"
         DeployFileName = "HS2Sandbox.WorkspaceTreeLock.dll"
         DeactivatedFileName = "HS2Sandbox.WorkspaceTreeLock.dl_"
     },
     @{
         Key = "Notebook"
         DisplayName = "Notebook module (HS2Sandbox.Notebook.dll)"
-        BuildPath = "Modules\Notebook\HS2Sandbox.Notebook.csproj"
-        BuiltDllRelPath = "Modules\Notebook\bin\Release\HS2Sandbox.Notebook.dll"
+        BuildPath = "targets\HS2\Notebook\HS2Sandbox.Notebook.csproj"
+        BuiltDllRelPath = "targets\HS2\Notebook\bin\Release\HS2Sandbox.Notebook.dll"
         DeployFileName = "HS2Sandbox.Notebook.dll"
         DeactivatedFileName = "HS2Sandbox.Notebook.dl_"
     },
     @{
         Key = "PoseBrowser"
         DisplayName = "PoseBrowser module (HS2Sandbox.PoseBrowser.dll)"
-        BuildPath = "Modules\PoseBrowser\HS2Sandbox.PoseBrowser.csproj"
-        BuiltDllRelPath = "Modules\PoseBrowser\bin\Release\HS2Sandbox.PoseBrowser.dll"
+        BuildPath = "targets\HS2\PoseBrowser\HS2Sandbox.PoseBrowser.csproj"
+        BuiltDllRelPath = "targets\HS2\PoseBrowser\bin\Release\HS2Sandbox.PoseBrowser.dll"
         DeployFileName = "HS2Sandbox.PoseBrowser.dll"
         DeactivatedFileName = "HS2Sandbox.PoseBrowser.dl_"
     }
 )
 
-$choiceIdx = Read-Choice "What do you want to build/deploy?" ($targets | ForEach-Object { $_.DisplayName })
-$target = $targets[$choiceIdx]
-$builtDllPath = Join-Path $repoRoot $target.BuiltDllRelPath
-$deployDllPath = Join-Path $deployDir $target.DeployFileName
-$deactivatedDllPath = Join-Path $deployDir $target.DeactivatedFileName
+$choiceIndices = Read-MultiChoice "What do you want to build/deploy?" ($targets | ForEach-Object { $_.DisplayName })
+$selectedTargets = @($choiceIndices | ForEach-Object { $targets[$_] })
 
-Write-Host "Building: $($target.DisplayName)" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Building $($selectedTargets.Count) module(s)..." -ForegroundColor Cyan
 Push-Location $repoRoot
 
 try {
-    dotnet build $target.BuildPath -c Release
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet build failed with exit code $LASTEXITCODE."
-    }
+    # --- Build all selected modules ---
+    $builtDlls = @()
+    foreach ($target in $selectedTargets) {
+        Write-Host ""
+        Write-Host "Building: $($target.DisplayName)" -ForegroundColor Cyan
+        dotnet build $target.BuildPath -c Release
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet build failed for $($target.Key) with exit code $LASTEXITCODE."
+        }
 
-    if (-not (Test-Path $builtDllPath)) {
-        throw "Built DLL was not found at $builtDllPath."
+        $builtDllPath = Join-Path $repoRoot $target.BuiltDllRelPath
+        if (-not (Test-Path $builtDllPath)) {
+            throw "Built DLL was not found at $builtDllPath."
+        }
+        $builtDlls += $builtDllPath
+        Write-Host "  OK: $builtDllPath" -ForegroundColor Green
     }
 
     Write-Host ""
-    Write-Host "Build successful." -ForegroundColor Green
-    Write-Host "Built DLL: $builtDllPath" -ForegroundColor Yellow
+    Write-Host "All $($selectedTargets.Count) module(s) built successfully." -ForegroundColor Green
+
+    # --- Deployment ---
+    $copyConfirmed = Read-YesNo "Deploy $($selectedTargets.Count) DLL(s) to $deployDir ?"
+    if (-not $copyConfirmed) {
+        Stop-BuildFlow "Build flow stopped before deployment."
+    }
 
     $runningProcesses = @(
         @("StudioNeoV2", "HoneySelect2") |
@@ -207,31 +231,33 @@ try {
         Write-Host "Stopped: $processList" -ForegroundColor Yellow
     }
 
-    $copyConfirmed = Read-YesNo "Copy the newly built DLL to $deployDir ?"
-    if (-not $copyConfirmed) {
-        Stop-BuildFlow "Build flow stopped before deployment."
-    }
-
     New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
 
-    if (Test-Path $deployDllPath) {
-        $existingAction = Read-OverwriteOrDeactivate "An existing deployed DLL was found. What should happen before copying?"
-        if ($existingAction -eq "deactivate") {
-            if (Test-Path $deactivatedDllPath) {
-                Remove-Item $deactivatedDllPath -Force
-            }
+    $existingAction = $null
+    foreach ($target in $selectedTargets) {
+        $builtDllPath = Join-Path $repoRoot $target.BuiltDllRelPath
+        $deployDllPath = Join-Path $deployDir $target.DeployFileName
+        $deactivatedDllPath = Join-Path $deployDir $target.DeactivatedFileName
 
-            Move-Item $deployDllPath $deactivatedDllPath -Force
-            Write-Host "Deactivated existing DLL to $deactivatedDllPath" -ForegroundColor Yellow
-        } else {
-            Write-Host "Existing DLL will be overwritten." -ForegroundColor Yellow
+        if (Test-Path $deployDllPath) {
+            if ($null -eq $existingAction) {
+                $existingAction = Read-OverwriteOrDeactivate "Existing deployed DLL(s) found. What should happen before copying?"
+            }
+            if ($existingAction -eq "deactivate") {
+                if (Test-Path $deactivatedDllPath) {
+                    Remove-Item $deactivatedDllPath -Force
+                }
+                Move-Item $deployDllPath $deactivatedDllPath -Force
+                Write-Host "  Deactivated: $($target.DeployFileName) -> $($target.DeactivatedFileName)" -ForegroundColor Yellow
+            }
         }
+
+        Copy-Item $builtDllPath $deployDllPath -Force
+        Write-Host "  Deployed: $($target.DeployFileName)" -ForegroundColor Green
     }
 
-    Copy-Item $builtDllPath $deployDllPath -Force
     Write-Host ""
-    Write-Host "Deployment completed." -ForegroundColor Green
-    Write-Host "Copied to: $deployDllPath" -ForegroundColor Yellow
+    Write-Host "Deployment completed ($($selectedTargets.Count) module(s))." -ForegroundColor Green
 
     $launchStudioConfirmed = Read-YesNo "Open StudioNeoV2 now?"
     if ($launchStudioConfirmed) {
@@ -252,4 +278,3 @@ catch {
 finally {
     Pop-Location
 }
-

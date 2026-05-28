@@ -2,21 +2,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2SandboxPlugin", "HS2SandboxPlugin.csproj", "{BB629464-3672-2AC7-C653-84126D9717A0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.CopyScript", "targets\HS2\CopyScript\HS2Sandbox.CopyScript.csproj", "{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.CopyScript", "Modules\\CopyScript\\HS2Sandbox.CopyScript.csproj", "{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.Timeline", "targets\HS2\Timeline\HS2Sandbox.Timeline.csproj", "{6E9D0BBA-59B3-41E4-AE77-A7F9A5D23A44}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.Timeline", "Modules\\Timeline\\HS2Sandbox.Timeline.csproj", "{6E9D0BBA-59B3-41E4-AE77-A7F9A5D23A44}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.SearchBarManager", "targets\HS2\SearchBarManager\HS2Sandbox.SearchBarManager.csproj", "{37B6D0AF-48D1-4E4D-9A3D-1C29A4A7E3D9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.SearchBarManager", "Modules\\SearchBarManager\\HS2Sandbox.SearchBarManager.csproj", "{37B6D0AF-48D1-4E4D-9A3D-1C29A4A7E3D9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.SonScale", "targets\HS2\SonScale\HS2Sandbox.SonScale.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.SonScale", "Modules\\SonScale\\HS2Sandbox.SonScale.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.WorkspaceTreeLock", "targets\HS2\WorkspaceTreeLock\HS2Sandbox.WorkspaceTreeLock.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.WorkspaceTreeLock", "Modules\\WorkspaceTreeLock\\HS2Sandbox.WorkspaceTreeLock.csproj", "{B2C3D4E5-F6A7-8901-BCDE-F12345678901}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.Notebook", "targets\HS2\Notebook\HS2Sandbox.Notebook.csproj", "{C3D4E5F6-A7B8-9012-CDEF-234567890123}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.Notebook", "Modules\\Notebook\\HS2Sandbox.Notebook.csproj", "{C3D4E5F6-A7B8-9012-CDEF-234567890123}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.PoseBrowser", "Modules\\PoseBrowser\\HS2Sandbox.PoseBrowser.csproj", "{D4E5F6A7-B8C9-0123-DEFA-345678901234}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HS2Sandbox.PoseBrowser", "targets\HS2\PoseBrowser\HS2Sandbox.PoseBrowser.csproj", "{D4E5F6A7-B8C9-0123-DEFA-345678901234}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,10 +22,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{BB629464-3672-2AC7-C653-84126D9717A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BB629464-3672-2AC7-C653-84126D9717A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{BB629464-3672-2AC7-C653-84126D9717A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{BB629464-3672-2AC7-C653-84126D9717A0}.Release|Any CPU.Build.0 = Release|Any CPU
 		{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C5EBB6D1-BA64-4D51-8B42-22C9F1FC8D2B}.Release|Any CPU.ActiveCfg = Release|Any CPU

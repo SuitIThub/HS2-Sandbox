@@ -6,5 +6,6 @@ namespace HS2SandboxPlugin
     internal static class PluginProcessTargets
     {
         public const string StudioNeoV2 = "StudioNEOV2.exe";
+        public const string CharaStudio = "CharaStudio.exe";
     }
 }

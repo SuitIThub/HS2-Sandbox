@@ -20,11 +20,6 @@ on:
         required: false
         default: false
         type: boolean
-      rerelease_allinone:
-        description: "Rerelease — All-in-one (HS2SandboxPlugin)"
-        required: false
-        default: false
-        type: boolean
       rerelease_copyscript:
         description: "Rerelease — Copy Script"
         required: false
@@ -156,7 +151,6 @@ jobs:
       - name: Collect selected plugins
         id: plugins
         env:
-          RERELEASE_ALLINONE: ${{ inputs.rerelease_allinone }}
           RERELEASE_COPYSCRIPT: ${{ inputs.rerelease_copyscript }}
           RERELEASE_TIMELINE: ${{ inputs.rerelease_timeline }}
           RERELEASE_SEARCHBARMANAGER: ${{ inputs.rerelease_searchbarmanager }}

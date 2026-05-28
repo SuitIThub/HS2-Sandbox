@@ -16,25 +16,23 @@ extract_version() {
 }
 
 declare -A FILES=(
-  [allinone]="HS2SandboxPlugin.cs"
-  [copyscript]="Modules/CopyScript/CopyScriptModulePlugin.cs"
-  [timeline]="Modules/Timeline/TimelineModulePlugin.cs"
-  [searchbarmanager]="Modules/SearchBarManager/SearchBarManagerModulePlugin.cs"
-  [sonscale]="Modules/SonScale/SonScaleModulePlugin.cs"
-  [workspacetreelock]="Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs"
-  [notebook]="Modules/Notebook/NotebookModulePlugin.cs"
-  [posebrowser]="PoseBrowser/PoseBrowserVersionInfo.cs"
+  [copyscript]="targets/HS2/CopyScript/Plugin.cs"
+  [timeline]="targets/HS2/Timeline/Plugin.cs"
+  [searchbarmanager]="targets/HS2/SearchBarManager/Plugin.cs"
+  [sonscale]="targets/HS2/SonScale/Plugin.cs"
+  [workspacetreelock]="targets/HS2/WorkspaceTreeLock/Plugin.cs"
+  [notebook]="targets/HS2/Notebook/Plugin.cs"
+  [posebrowser]="src/PoseBrowser/PoseBrowserVersionInfo.cs"
 )
 
 declare -A DLLS=(
-  [allinone]="bin/Release/HS2SandboxPlugin.dll"
-  [copyscript]="Modules/CopyScript/bin/Release/HS2Sandbox.CopyScript.dll"
-  [timeline]="Modules/Timeline/bin/Release/HS2Sandbox.Timeline.dll"
-  [searchbarmanager]="Modules/SearchBarManager/bin/Release/HS2Sandbox.SearchBarManager.dll"
-  [sonscale]="Modules/SonScale/bin/Release/HS2Sandbox.SonScale.dll"
-  [workspacetreelock]="Modules/WorkspaceTreeLock/bin/Release/HS2Sandbox.WorkspaceTreeLock.dll"
-  [notebook]="Modules/Notebook/bin/Release/HS2Sandbox.Notebook.dll"
-  [posebrowser]="Modules/PoseBrowser/bin/Release/HS2Sandbox.PoseBrowser.dll"
+  [copyscript]="targets/HS2/CopyScript/bin/Release/HS2Sandbox.CopyScript.dll"
+  [timeline]="targets/HS2/Timeline/bin/Release/HS2Sandbox.Timeline.dll"
+  [searchbarmanager]="targets/HS2/SearchBarManager/bin/Release/HS2Sandbox.SearchBarManager.dll"
+  [sonscale]="targets/HS2/SonScale/bin/Release/HS2Sandbox.SonScale.dll"
+  [workspacetreelock]="targets/HS2/WorkspaceTreeLock/bin/Release/HS2Sandbox.WorkspaceTreeLock.dll"
+  [notebook]="targets/HS2/Notebook/bin/Release/HS2Sandbox.Notebook.dll"
+  [posebrowser]="targets/HS2/PoseBrowser/bin/Release/HS2Sandbox.PoseBrowser.dll"
 )
 
 CHANGED=()
@@ -42,7 +40,7 @@ NOTES=()
 CHANGELOG=()
 VERSIONS_CHANGED="false"
 
-for key in allinone copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser; do
+for key in copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser; do
   f="${FILES[$key]}"
   old_v="$(extract_version "$BEFORE" "$f")"
   new_v="$(extract_version "$AFTER" "$f")"
@@ -112,10 +110,10 @@ if [[ -n "$SELECTED" ]]; then
   NOTES+=("- **trigger**: manual rerelease via workflow_dispatch")
 elif [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
   CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
-  NOTES+=("- **manual force**: including all module DLLs plus all-in-one")
+  NOTES+=("- **manual force**: including all module DLLs")
 elif [[ "$INITIAL_RELEASE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
   CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
-  NOTES+=("- **initial GitHub release**: repository had no prior releases; publishing all module DLLs plus all-in-one")
+  NOTES+=("- **initial GitHub release**: repository had no prior releases; publishing all module DLLs")
 fi
 
 {
@@ -130,11 +128,8 @@ if [[ "$SHOULD_RELEASE" != "true" ]]; then
 fi
 
 ASSETS=()
-ASSETS+=("${DLLS[allinone]}")
 for key in "${CHANGED[@]}"; do
-  if [[ "$key" != "allinone" ]]; then
-    ASSETS+=("${DLLS[$key]}")
-  fi
+  ASSETS+=("${DLLS[$key]}")
 done
 
 UNIQUE=()
@@ -180,7 +175,7 @@ if [[ ${#CHANGED[@]} -gt 0 ]]; then
     RELEASE_KEYS+=("$key")
   done
 else
-  RELEASE_KEYS=(allinone)
+  RELEASE_KEYS=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
 fi
 IFS=$'\n' RELEASE_KEYS=($(printf '%s\n' "${RELEASE_KEYS[@]}" | sort -u))
 unset IFS

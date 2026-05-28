@@ -1,9 +1,9 @@
 ---
 name: build-bepinex-plugin
-description: Build HS2SandboxPlugin with dotnet, verify output, then deploy to the game BepInEx folder (interactive vs background rules). Use when the user asks to build, compile, deploy, or test the plugin.
+description: Build HS2SandboxPlugin modules with dotnet, verify output, then deploy to the game BepInEx folder (interactive vs background rules). Use when the user asks to build, compile, deploy, or test the plugin.
 ---
 
-# Build & deploy BepInEx plugin (HS2SandboxPlugin)
+# Build & deploy BepInEx plugin modules
 
 ## When to use
 
@@ -25,11 +25,13 @@ Always use the **Ask Question** tool (or equivalent user prompt) everywhere when
 | Role | Path |
 |------|------|
 | Solution / repo root | Workspace root (where `HS2-Sandbox.sln` lives) |
-| Built DLL | `bin/Release/HS2SandboxPlugin.dll` (under repo root) |
+| Module projects | `targets/HS2/<Module>/HS2Sandbox.<Module>.csproj` |
+| Built DLLs | `targets/HS2/<Module>/bin/Release/HS2Sandbox.<Module>.dll` |
 | Game exe | `D:/Honey Select/StudioNEOV2.exe` |
 | Plugin deploy folder | `D:/Honey Select/BepInEx/plugins/HS2-Sandbox/` |
-| Deployed DLL name | `HS2SandboxPlugin.dll` |
 | Game log | `D:/Honey Select/output_log.txt` |
+
+Available modules: `CopyScript`, `Timeline`, `SearchBarManager`, `SonScale`, `WorkspaceTreeLock`, `Notebook`, `PoseBrowser`
 
 Run shell commands from the **repo root** unless a step uses absolute paths.
 
@@ -37,17 +39,23 @@ Run shell commands from the **repo root** unless a step uses absolute paths.
 
 ## 1. Build
 
-Generate assembly file metadata from `PluginVersion` constants (Windows Explorer “File version”), then build:
+Generate assembly file metadata from `PluginVersion` constants (Windows Explorer "File version"), then build:
 
 ```powershell
 python .github/scripts/generate_plugin_versions_props.py
 dotnet build HS2-Sandbox.sln -c Release
 ```
 
-Verify the file exists:
+Or build a single module:
 
 ```powershell
-Test-Path .\bin\Release\HS2SandboxPlugin.dll
+dotnet build targets/HS2/Timeline/HS2Sandbox.Timeline.csproj -c Release
+```
+
+Verify the file exists (example for Timeline):
+
+```powershell
+Test-Path .\targets\HS2\Timeline\bin\Release\HS2Sandbox.Timeline.dll
 ```
 
 If the build failed, fix errors before any deploy step.
@@ -85,7 +93,7 @@ Stop-Process -Name "StudioNeoV2" -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path "D:\Honey Select\BepInEx\plugins\HS2-Sandbox" | Out-Null
 ```
 
-### 3.3 If `HS2SandboxPlugin.dll` already exists at the target
+### 3.3 If the module DLL already exists at the target
 
 - **Normal:** Ask: **overwrite** in place, or **deactivate** the old file (rename extension to `.dl_`) then copy the new DLL?
 - **Background:** Backup then replace (see next); optionally deactivate instead if that matches prior user preference—default to **backup + overwrite** for a single clear path.
@@ -93,22 +101,14 @@ New-Item -ItemType Directory -Force -Path "D:\Honey Select\BepInEx\plugins\HS2-S
 Backup existing DLL before overwrite (recommended, required in background):
 
 ```powershell
-$dll = "D:\Honey Select\BepInEx\plugins\HS2-Sandbox\HS2SandboxPlugin.dll"
+$dll = "D:\Honey Select\BepInEx\plugins\HS2-Sandbox\HS2Sandbox.Timeline.dll"
 if (Test-Path $dll) { Copy-Item $dll "$dll.bak" -Force }
 ```
-
-Deactivate old DLL (only if user chose this):
-
-```powershell
-Rename-Item "D:\Honey Select\BepInEx\plugins\HS2-Sandbox\HS2SandboxPlugin.dll" "HS2SandboxPlugin.dl_" -Force
-```
-
-If `HS2SandboxPlugin.dl_` already exists, resolve by renaming with a suffix (e.g. `HS2SandboxPlugin_1.dl_`) or overwriting—**ask in normal mode**; in **background**, append an increment or overwrite the older `.dl_` so the new `.dll` can be written.
 
 ### 3.4 Copy built DLL to the game
 
 ```powershell
-Copy-Item -Path ".\bin\Release\HS2SandboxPlugin.dll" -Destination "D:\Honey Select\BepInEx\plugins\HS2-Sandbox\HS2SandboxPlugin.dll" -Force
+Copy-Item -Path ".\targets\HS2\Timeline\bin\Release\HS2Sandbox.Timeline.dll" -Destination "D:\Honey Select\BepInEx\plugins\HS2-Sandbox\HS2Sandbox.Timeline.dll" -Force
 ```
 
 ---
@@ -138,17 +138,27 @@ If log lines show **errors** mentioning this plugin, summarize them and ask whet
 ```
 HS2-Sandbox/
 ├── HS2-Sandbox.sln
-├── HS2SandboxPlugin.csproj
-├── HS2SandboxPlugin.cs
-├── SubWindows/
-├── Timeline/
-├── bin/Release/HS2SandboxPlugin.dll
+├── Directory.Build.props          (common settings)
+├── src/
+│   ├── Core/                      (shared infrastructure)
+│   ├── Timeline/                  (timeline source)
+│   ├── PoseBrowser/               (pose browser source)
+│   ├── ...                        (other modules)
+├── targets/
+│   ├── HS2/
+│   │   ├── Directory.Build.props  (HS2 NuGet refs)
+│   │   ├── Timeline/
+│   │   │   ├── Plugin.cs
+│   │   │   └── HS2Sandbox.Timeline.csproj
+│   │   └── ...
+│   └── KK/                        (Koikatsu targets)
+├── assets/                        (icons)
 └── .cursor/skills/
 ```
 
 ## References
 
-- `BepInEx.Core`, `UnityEngine.Modules`, IllusionLibs (`IllusionLibs.HoneySelect2.*`), and `IllusionModdingAPI.HS2API` via `Directory.Build.props` and `nuget.config`.
+- `BepInEx.Core`, `UnityEngine.Modules`, IllusionLibs (`IllusionLibs.HoneySelect2.*`), and `IllusionModdingAPI.HS2API` via `Directory.Build.props` hierarchy and `nuget.config`.
 
 ## Troubleshooting
 

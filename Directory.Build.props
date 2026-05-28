@@ -1,5 +1,5 @@
 <Project>
-  <!-- Shared MSBuild settings for all plugin/module projects -->
+  <!-- Shared MSBuild settings for all plugin/module projects (all game targets) -->
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -7,10 +7,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin\$(Configuration)\</OutputPath>
-    <!-- File/Product version in Explorer; values come from PluginVersions.generated.props -->
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
-    <!-- KKManager "Website" / "Open website" reads AssemblyCompany (BepisPlugins pattern). -->
     <PluginRepositoryUrl>https://github.com/SuitIThub/HS2-Sandbox</PluginRepositoryUrl>
     <Company>$(PluginRepositoryUrl)</Company>
     <RepositoryUrl>$(PluginRepositoryUrl)</RepositoryUrl>
@@ -21,30 +19,13 @@
     Project="PluginVersions.generated.props"
     Condition="Exists('$(MSBuildThisFileDirectory)PluginVersions.generated.props')" />
 
-  <!--
-    Game and Unity UI references come from IllusionLibs (IllusionMods NuGet feed), same pattern as other HS2 plugins.
-    Requires nuget.config with the IllusionLibs source — no local HS2_Data/Managed path.
-  -->
+  <!-- Packages shared across all game targets -->
   <ItemGroup>
     <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.4.21" />
     <PackageReference Include="BepInEx.PluginInfoProps" Version="1.1.0" />
     <PackageReference Include="IronPython" Version="3.4.2" />
     <PackageReference Include="System.Memory" Version="4.6.3" />
-    <PackageReference Include="UnityEngine.Modules" Version="2018.4.30" IncludeAssets="compile" />
-
-    <PackageReference Include="IllusionLibs.HoneySelect2.Assembly-CSharp" Version="2020.5.29.5">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="IllusionLibs.HoneySelect2.UnityEngine.UI" Version="2018.4.11.4">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="IllusionModdingAPI.HS2API" Version="1.46.1">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>compile</IncludeAssets>
-    </PackageReference>
     <PackageReference Include="IllusionLibs.BepInEx.Harmony" Version="2.9.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>compile</IncludeAssets>

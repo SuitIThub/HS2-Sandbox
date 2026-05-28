@@ -7,17 +7,17 @@ description: Scaffold a new HS2 Sandbox timeline command. Covers the full workfl
 
 ## Overview
 
-Every command lives in `Timeline/` and directly extends `TimelineCommand` (no intermediate bases). Three files must change to add one:
+Every command lives in `src/Timeline/` and directly extends `TimelineCommand` (no intermediate bases). Three files must change to add one:
 
-1. **Create** `Timeline/YourCommand.cs`
-2. **Register** in `Timeline/TimelineCommandFactory.cs`
-3. **Add button** in `SubWindows/ActionTimeline.cs`
+1. **Create** `src/Timeline/YourCommand.cs`
+2. **Register** in `src/Timeline/TimelineCommandFactory.cs`
+3. **Add button** in `src/Timeline/Window/ActionTimelineWindow.cs`
 
 ## Checklist
 
-- [ ] Create `Timeline/YourCommand.cs`
+- [ ] Create `src/Timeline/YourCommand.cs`
 - [ ] Add case in `TimelineCommandFactory.Create()` switch
-- [ ] Add `DrawAddButton(...)` call in the right category in `ActionTimeline`
+- [ ] Add `DrawAddButton(...)` call in the right category in `ActionTimelineWindow`
 - [ ] Optionally add a `CommandColors` entry
 
 ---
@@ -103,7 +103,7 @@ namespace HS2SandboxPlugin
 
 ## Step 2 — Factory Registration
 
-In `Timeline/TimelineCommandFactory.cs`, add one line to the switch expression:
+In `src/Timeline/TimelineCommandFactory.cs`, add one line to the switch expression:
 
 ```csharp
 "your_type_id" => new YourCommand(),
@@ -113,7 +113,7 @@ In `Timeline/TimelineCommandFactory.cs`, add one line to the switch expression:
 
 ## Step 3 — Toolbar Button
 
-In `SubWindows/ActionTimeline.cs`, add to `switch (_selectedCategory)`:
+In `src/Timeline/Window/ActionTimelineWindow.cs`, add to `switch (_selectedCategory)`:
 
 ```csharp
 DrawAddButton("YrLabel", "your_type_id", btnW, btnH);
@@ -257,7 +257,7 @@ Then find instance via `FindObjectOfType` (also by reflection, as the concrete t
 
 Two canonical implementations to read directly:
 
-- **`Timeline/OutfitByNameCommand.cs`** — Simple sync command with reflection-based plugin access, 3-field `\u0001`-separated payload, interpolation, graceful fallback when plugin is absent.
-- **`Timeline/ListInsertCommand.cs`** — Multi-mode command with a cycling button, conditional UI row, `TryResolveIntOperand`, `GetValidationError`, and `SimulateVariableEffects`.
+- **`src/Timeline/OutfitByNameCommand.cs`** — Simple sync command with reflection-based plugin access, 3-field `\u0001`-separated payload, interpolation, graceful fallback when plugin is absent.
+- **`src/Timeline/ListInsertCommand.cs`** — Multi-mode command with a cycling button, conditional UI row, `TryResolveIntOperand`, `GetValidationError`, and `SimulateVariableEffects`.
 
 For full variable store API, serialization conventions, and all category details, see [REFERENCE.md](REFERENCE.md).

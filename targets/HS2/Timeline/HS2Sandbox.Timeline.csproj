@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>HS2Sandbox.Timeline</AssemblyName>
+    <RootNamespace>HS2SandboxPlugin</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)CopyScript\CopyScriptApiClient.cs" />
+    <Compile Include="$(SrcRoot)Timeline\**\*.cs" />
+    <Compile Include="Plugin.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(AssetsRoot)timeline-icon.png" CopyToOutputDirectory="Always" Link="timeline-icon.png" />
+  </ItemGroup>
+</Project>

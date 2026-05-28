@@ -3,18 +3,18 @@
 ## Full Class Architecture
 
 ```
-TimelineCommand  (abstract, Timeline/TimelineCommand.cs)
+TimelineCommand  (abstract, src/Timeline/TimelineCommand.cs)
 └── every command directly — no intermediate bases
 
-SubWindow  (abstract, SubWindows/SubWindow.cs)
-└── ActionTimeline  (SubWindows/ActionTimeline.cs)
+SubWindow  (abstract, src/Core/SubWindow.cs)
+└── ActionTimeline  (src/Timeline/Window/ActionTimelineWindow.cs)
      owns: List<TimelineCommand> _commands
            TimelineContext _runContext
            TimelineVariableStore _persistentVariables
            TimelineVariableStore _designTimeVariables
 ```
 
-`TimelineContext` (Timeline/TimelineContext.cs) is the execution state bag created fresh per run:
+`TimelineContext` (src/Timeline/TimelineContext.cs) is the execution state bag created fresh per run:
 
 | Member | Purpose |
 |--------|---------|

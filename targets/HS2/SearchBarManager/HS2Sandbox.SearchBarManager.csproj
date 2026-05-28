@@ -6,9 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\Shared\**\*.cs" />
-    <Compile Include="..\..\SearchBarManager\MultiPathSearchBarManager.cs" />
-    <Compile Include="SearchBarManagerModulePlugin.cs" />
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)SearchBarManager\**\*.cs" />
+    <Compile Include="Plugin.cs" />
   </ItemGroup>
 </Project>
-

@@ -6,15 +6,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\Shared\**\*.cs" />
-    <Compile Include="..\..\Notebook\**\*.cs" />
-    <Compile Include="NotebookModulePlugin.cs" />
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)Notebook\**\*.cs" />
+    <Compile Include="Plugin.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\notes-icon.png" CopyToOutputDirectory="Always" />
-    <EmbeddedResource Include="..\..\notes-icon.png">
+    <Content Include="$(AssetsRoot)notes-icon.png" CopyToOutputDirectory="Always" Link="notes-icon.png" />
+    <EmbeddedResource Include="$(AssetsRoot)notes-icon.png">
       <LogicalName>$(AssemblyName).notes-icon.png</LogicalName>
+      <Link>notes-icon.png</Link>
     </EmbeddedResource>
   </ItemGroup>
 </Project>

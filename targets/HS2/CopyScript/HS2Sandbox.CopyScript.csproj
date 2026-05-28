@@ -6,14 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\Shared\**\*.cs" />
-    <Compile Include="..\..\CopyScript\CopyScriptApiClient.cs" />
-    <Compile Include="..\..\CopyScript\CopyScriptWindow.cs" />
-    <Compile Include="CopyScriptModulePlugin.cs" />
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)CopyScript\**\*.cs" />
+    <Compile Include="Plugin.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\copy-icon.png" CopyToOutputDirectory="Always" />
+    <Content Include="$(AssetsRoot)copy-icon.png" CopyToOutputDirectory="Always" Link="copy-icon.png" />
   </ItemGroup>
 </Project>
-

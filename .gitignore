@@ -1,7 +1,7 @@
 # MSBuild: generated from PluginVersion constants before build
 PluginVersions.generated.props
 
-# Build results
+# Build results (applies recursively to targets/HS2/*/bin etc.)
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/

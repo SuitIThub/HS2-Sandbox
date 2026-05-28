@@ -12,19 +12,17 @@ VERSION_RE = re.compile(
 
 # .csproj name without extension (MSBuildProjectName) -> C# file with PluginVersion / Version
 PROJECT_VERSION_SOURCES: dict[str, Path] = {
-    "HS2SandboxPlugin": ROOT / "HS2SandboxPlugin.cs",
-    "HS2Sandbox.CopyScript": ROOT / "Modules/CopyScript/CopyScriptModulePlugin.cs",
-    "HS2Sandbox.Timeline": ROOT / "Modules/Timeline/TimelineModulePlugin.cs",
-    "HS2Sandbox.SearchBarManager": ROOT / "Modules/SearchBarManager/SearchBarManagerModulePlugin.cs",
-    "HS2Sandbox.SonScale": ROOT / "Modules/SonScale/SonScaleModulePlugin.cs",
-    "HS2Sandbox.WorkspaceTreeLock": ROOT / "Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs",
-    "HS2Sandbox.Notebook": ROOT / "Modules/Notebook/NotebookModulePlugin.cs",
-    "HS2Sandbox.PoseBrowser": ROOT / "PoseBrowser/PoseBrowserVersionInfo.cs",
+    "HS2Sandbox.CopyScript": ROOT / "targets/HS2/CopyScript/Plugin.cs",
+    "HS2Sandbox.Timeline": ROOT / "targets/HS2/Timeline/Plugin.cs",
+    "HS2Sandbox.SearchBarManager": ROOT / "targets/HS2/SearchBarManager/Plugin.cs",
+    "HS2Sandbox.SonScale": ROOT / "targets/HS2/SonScale/Plugin.cs",
+    "HS2Sandbox.WorkspaceTreeLock": ROOT / "targets/HS2/WorkspaceTreeLock/Plugin.cs",
+    "HS2Sandbox.Notebook": ROOT / "targets/HS2/Notebook/Plugin.cs",
+    "HS2Sandbox.PoseBrowser": ROOT / "src/PoseBrowser/PoseBrowserVersionInfo.cs",
 }
 
 # versions.json / README keys -> same C# sources (for sync_versions_json.py)
 VERSION_FILES: dict[str, Path] = {
-    "allInOne": PROJECT_VERSION_SOURCES["HS2SandboxPlugin"],
     "copyScript": PROJECT_VERSION_SOURCES["HS2Sandbox.CopyScript"],
     "timeline": PROJECT_VERSION_SOURCES["HS2Sandbox.Timeline"],
     "searchBarManager": PROJECT_VERSION_SOURCES["HS2Sandbox.SearchBarManager"],

@@ -6,15 +6,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\Shared\**\*.cs" />
-    <Compile Include="..\..\SonScale\**\*.cs" />
-    <Compile Include="SonScaleModulePlugin.cs" />
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)SonScale\**\*.cs" />
+    <Compile Include="Plugin.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\sonscale-icon.png" CopyToOutputDirectory="Always" />
-    <EmbeddedResource Include="..\..\sonscale-icon.png">
+    <Content Include="$(AssetsRoot)sonscale-icon.png" CopyToOutputDirectory="Always" Link="sonscale-icon.png" />
+    <EmbeddedResource Include="$(AssetsRoot)sonscale-icon.png">
       <LogicalName>$(AssemblyName).sonscale-icon.png</LogicalName>
+      <Link>sonscale-icon.png</Link>
     </EmbeddedResource>
   </ItemGroup>
 </Project>

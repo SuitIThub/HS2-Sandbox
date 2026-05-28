@@ -1,0 +1,27 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <SrcRoot>$(MSBuildThisFileDirectory)..\..\src\</SrcRoot>
+    <AssetsRoot>$(MSBuildThisFileDirectory)..\..\assets\</AssetsRoot>
+  </PropertyGroup>
+
+  <!-- Koikatsu game-specific references (populate when porting modules) -->
+  <!--
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2017.4.16" IncludeAssets="compile" />
+    <PackageReference Include="IllusionLibs.Koikatsu.Assembly-CSharp" Version="...">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionLibs.Koikatsu.UnityEngine.UI" Version="...">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionModdingAPI.KKAPI" Version="...">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  -->
+</Project>

@@ -4,9 +4,6 @@ set -euo pipefail
 
 SELECTED=()
 
-if [[ "${RERELEASE_ALLINONE:-false}" == "true" ]]; then
-  SELECTED+=("allinone")
-fi
 if [[ "${RERELEASE_COPYSCRIPT:-false}" == "true" ]]; then
   SELECTED+=("copyscript")
 fi
