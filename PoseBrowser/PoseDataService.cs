@@ -703,6 +703,7 @@ namespace HS2SandboxPlugin
                     // ignored
                 }
 
+                AddTreeSelectedCharacters(list);
                 return list;
             }
             catch
@@ -720,6 +721,30 @@ namespace HS2SandboxPlugin
                     return;
             }
             list.Add(oci);
+        }
+
+        private static void AddTreeSelectedCharacters(List<OCIChar> list)
+        {
+            try
+            {
+                var tree = UnityEngine.Object.FindObjectOfType<TreeNodeCtrl>();
+                var selectedNodes = tree?.selectNodes;
+                if (selectedNodes == null || selectedNodes.Count() == 0)
+                    return;
+
+                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
+                {
+                    if (kvp.Value is not OCIChar oci || oci.treeNodeObject == null)
+                        continue;
+                    if (!selectedNodes.Contains(oci.treeNodeObject))
+                        continue;
+                    AddUniqueOCIChar(list, oci);
+                }
+            }
+            catch
+            {
+                // ignored
+            }
         }
 
         private static OCIChar? TryGetOCICharFromGuideObject(GuideObject guide)

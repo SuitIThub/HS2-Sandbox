@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Studio;
@@ -108,12 +109,19 @@ namespace HS2SandboxPlugin
             if (_thumbCapture.IsActive || _poseHistory.IsSuppressed)
                 return;
 
-            var chars = _dataService.GetSelectedCharacters().ToList();
-            if (chars.Count == 0)
-                return;
+            try
+            {
+                var chars = _dataService.GetSelectedCharacters().ToList();
+                if (chars.Count == 0)
+                    return;
 
-            _poseHistory.RecordBeforePoseApply(chars, item.DisplayName);
-            _poseHistory.TrimAllTimelines(HistoryMaxEntries);
+                _poseHistory.RecordBeforePoseApply(chars, item.DisplayName);
+                _poseHistory.TrimAllTimelines(HistoryMaxEntries);
+            }
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: History capture skipped before apply: {ex.Message}");
+            }
         }
 
         private void RecordPoseHistoryAfterSingleApply(PoseGridItem item)
@@ -121,13 +129,20 @@ namespace HS2SandboxPlugin
             if (_thumbCapture.IsActive || _poseHistory.IsSuppressed)
                 return;
 
-            var chars = _dataService.GetSelectedCharacters().ToList();
-            if (chars.Count == 0)
-                return;
+            try
+            {
+                var chars = _dataService.GetSelectedCharacters().ToList();
+                if (chars.Count == 0)
+                    return;
 
-            _poseHistory.RecordAfterPoseApply(chars, item.DisplayName);
-            _poseHistory.TrimAllTimelines(HistoryMaxEntries);
-            _poseHistory.SaveToDiskIfDirty();
+                _poseHistory.RecordAfterPoseApply(chars, item.DisplayName);
+                _poseHistory.TrimAllTimelines(HistoryMaxEntries);
+                _poseHistory.SaveToDiskIfDirty();
+            }
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: History capture skipped after apply: {ex.Message}");
+            }
         }
 
         private void RecordPoseHistoryBeforeMultiApply(IReadOnlyList<PoseGridItem> poses, IReadOnlyList<OCIChar> chars)
@@ -135,19 +150,26 @@ namespace HS2SandboxPlugin
             if (_thumbCapture.IsActive || _poseHistory.IsSuppressed || poses.Count == 0 || chars.Count == 0)
                 return;
 
-            var plan = PoseBrowserCharacterApply.BuildFullPlannedPoseAssignmentPlan(_characterConfig, poses, chars);
-            var assignments = new List<(OCIChar character, string toPoseLabel)>();
-            foreach (var (pose, characters) in plan)
+            try
             {
-                foreach (var c in characters)
-                    assignments.Add((c, pose.DisplayName));
+                var plan = PoseBrowserCharacterApply.BuildFullPlannedPoseAssignmentPlan(_characterConfig, poses, chars);
+                var assignments = new List<(OCIChar character, string toPoseLabel)>();
+                foreach (var (pose, characters) in plan)
+                {
+                    foreach (var c in characters)
+                        assignments.Add((c, pose.DisplayName));
+                }
+
+                if (assignments.Count == 0)
+                    return;
+
+                _poseHistory.RecordBeforePoseApplyPlan(assignments);
+                _poseHistory.TrimAllTimelines(HistoryMaxEntries);
             }
-
-            if (assignments.Count == 0)
-                return;
-
-            _poseHistory.RecordBeforePoseApplyPlan(assignments);
-            _poseHistory.TrimAllTimelines(HistoryMaxEntries);
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: History capture skipped before multi-apply: {ex.Message}");
+            }
         }
 
         private void RecordPoseHistoryAfterMultiApply(IReadOnlyList<PoseGridItem> poses, IReadOnlyList<OCIChar> chars)
@@ -155,20 +177,27 @@ namespace HS2SandboxPlugin
             if (_thumbCapture.IsActive || _poseHistory.IsSuppressed || poses.Count == 0 || chars.Count == 0)
                 return;
 
-            var plan = PoseBrowserCharacterApply.BuildFullPlannedPoseAssignmentPlan(_characterConfig, poses, chars);
-            var assignments = new List<(OCIChar character, string appliedPoseLabel)>();
-            foreach (var (pose, characters) in plan)
+            try
             {
-                foreach (var c in characters)
-                    assignments.Add((c, pose.DisplayName));
+                var plan = PoseBrowserCharacterApply.BuildFullPlannedPoseAssignmentPlan(_characterConfig, poses, chars);
+                var assignments = new List<(OCIChar character, string appliedPoseLabel)>();
+                foreach (var (pose, characters) in plan)
+                {
+                    foreach (var c in characters)
+                        assignments.Add((c, pose.DisplayName));
+                }
+
+                if (assignments.Count == 0)
+                    return;
+
+                _poseHistory.RecordAfterPoseApplyPlan(assignments);
+                _poseHistory.TrimAllTimelines(HistoryMaxEntries);
+                _poseHistory.SaveToDiskIfDirty();
             }
-
-            if (assignments.Count == 0)
-                return;
-
-            _poseHistory.RecordAfterPoseApplyPlan(assignments);
-            _poseHistory.TrimAllTimelines(HistoryMaxEntries);
-            _poseHistory.SaveToDiskIfDirty();
+            catch (Exception ex)
+            {
+                SandboxServices.Log.LogWarning($"PoseBrowser: History capture skipped after multi-apply: {ex.Message}");
+            }
         }
 
         private void DrawHistoryWindowContent(int id)
