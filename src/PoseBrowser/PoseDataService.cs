@@ -5,7 +5,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+#if !KKS
 using AIChara;
+#endif
 using Studio;
 using UnityEngine;
 

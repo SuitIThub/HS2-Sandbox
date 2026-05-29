@@ -16,6 +16,7 @@ RELEASE_DLLS: dict[str, str] = {
     "workspaceTreeLock": "HS2Sandbox.WorkspaceTreeLock.dll",
     "notebook": "HS2Sandbox.Notebook.dll",
     "poseBrowser": "HS2Sandbox.PoseBrowser.dll",
+    "poseBrowserKks": "KKSSandbox.PoseBrowser.dll",
 }
 
 

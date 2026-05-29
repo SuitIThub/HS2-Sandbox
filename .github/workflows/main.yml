@@ -51,7 +51,12 @@ on:
         default: false
         type: boolean
       rerelease_posebrowser:
-        description: "Rerelease — Pose Browser"
+        description: "Rerelease — Pose Browser (HS2)"
+        required: false
+        default: false
+        type: boolean
+      rerelease_posebrowser_kks:
+        description: "Rerelease — Pose Browser (KKS)"
         required: false
         default: false
         type: boolean
@@ -158,6 +163,7 @@ jobs:
           RERELEASE_WORKSPACETREELOCK: ${{ inputs.rerelease_workspacetreelock }}
           RERELEASE_NOTEBOOK: ${{ inputs.rerelease_notebook }}
           RERELEASE_POSEBROWSER: ${{ inputs.rerelease_posebrowser }}
+          RERELEASE_POSEBROWSER_KKS: ${{ inputs.rerelease_posebrowser_kks }}
         run: bash .github/scripts/collect_manual_rerelease_plugins.sh
 
       - name: Prepare manual rerelease plan

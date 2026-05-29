@@ -65,8 +65,21 @@ function Read-OverwriteOrDeactivate {
 }
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$deployDir = "D:\Honey Select\BepInEx\plugins\HS2-Sandbox"
-$studioExePath = "D:\Honey Select\StudioNEOV2.exe"
+
+$gameConfig = @{
+    HS2 = @{
+        DeployDir = "D:\Honey Select\BepInEx\plugins\HS2-Sandbox"
+        StudioExe = "D:\Honey Select\StudioNEOV2.exe"
+        StudioProcessNames = @("StudioNeoV2", "HoneySelect2")
+        StudioLabel = "StudioNEOV2"
+    }
+    KKS = @{
+        DeployDir = "D:\Games\Koikatsu Sunshine EX BetterRepack R12\BepInEx\plugins\KKS-Sandbox"
+        StudioExe = "D:\Games\Koikatsu Sunshine EX BetterRepack R12\CharaStudio.exe"
+        StudioProcessNames = @("CharaStudio", "KoikatsuSunshine")
+        StudioLabel = "CharaStudio"
+    }
+}
 
 function Read-MultiChoice {
     param(
@@ -123,7 +136,8 @@ function Read-MultiChoice {
 $targets = @(
     @{
         Key = "CopyScript"
-        DisplayName = "CopyScript module (HS2Sandbox.CopyScript.dll)"
+        Game = "HS2"
+        DisplayName = "[HS2] CopyScript (HS2Sandbox.CopyScript.dll)"
         BuildPath = "targets\HS2\CopyScript\HS2Sandbox.CopyScript.csproj"
         BuiltDllRelPath = "targets\HS2\CopyScript\bin\Release\HS2Sandbox.CopyScript.dll"
         DeployFileName = "HS2Sandbox.CopyScript.dll"
@@ -131,7 +145,8 @@ $targets = @(
     },
     @{
         Key = "Timeline"
-        DisplayName = "Timeline module (HS2Sandbox.Timeline.dll)"
+        Game = "HS2"
+        DisplayName = "[HS2] Timeline (HS2Sandbox.Timeline.dll)"
         BuildPath = "targets\HS2\Timeline\HS2Sandbox.Timeline.csproj"
         BuiltDllRelPath = "targets\HS2\Timeline\bin\Release\HS2Sandbox.Timeline.dll"
         DeployFileName = "HS2Sandbox.Timeline.dll"
@@ -139,7 +154,8 @@ $targets = @(
     },
     @{
         Key = "SearchBarManager"
-        DisplayName = "SearchBarManager module (HS2Sandbox.SearchBarManager.dll)"
+        Game = "HS2"
+        DisplayName = "[HS2] SearchBarManager (HS2Sandbox.SearchBarManager.dll)"
         BuildPath = "targets\HS2\SearchBarManager\HS2Sandbox.SearchBarManager.csproj"
         BuiltDllRelPath = "targets\HS2\SearchBarManager\bin\Release\HS2Sandbox.SearchBarManager.dll"
         DeployFileName = "HS2Sandbox.SearchBarManager.dll"
@@ -147,7 +163,8 @@ $targets = @(
     },
     @{
         Key = "SonScale"
-        DisplayName = "Son scale module (HS2Sandbox.SonScale.dll)"
+        Game = "HS2"
+        DisplayName = "[HS2] SonScale (HS2Sandbox.SonScale.dll)"
         BuildPath = "targets\HS2\SonScale\HS2Sandbox.SonScale.csproj"
         BuiltDllRelPath = "targets\HS2\SonScale\bin\Release\HS2Sandbox.SonScale.dll"
         DeployFileName = "HS2Sandbox.SonScale.dll"
@@ -155,7 +172,8 @@ $targets = @(
     },
     @{
         Key = "WorkspaceTreeLock"
-        DisplayName = "Workspace tree lock module (HS2Sandbox.WorkspaceTreeLock.dll)"
+        Game = "HS2"
+        DisplayName = "[HS2] WorkspaceTreeLock (HS2Sandbox.WorkspaceTreeLock.dll)"
         BuildPath = "targets\HS2\WorkspaceTreeLock\HS2Sandbox.WorkspaceTreeLock.csproj"
         BuiltDllRelPath = "targets\HS2\WorkspaceTreeLock\bin\Release\HS2Sandbox.WorkspaceTreeLock.dll"
         DeployFileName = "HS2Sandbox.WorkspaceTreeLock.dll"
@@ -163,7 +181,8 @@ $targets = @(
     },
     @{
         Key = "Notebook"
-        DisplayName = "Notebook module (HS2Sandbox.Notebook.dll)"
+        Game = "HS2"
+        DisplayName = "[HS2] Notebook (HS2Sandbox.Notebook.dll)"
         BuildPath = "targets\HS2\Notebook\HS2Sandbox.Notebook.csproj"
         BuiltDllRelPath = "targets\HS2\Notebook\bin\Release\HS2Sandbox.Notebook.dll"
         DeployFileName = "HS2Sandbox.Notebook.dll"
@@ -171,11 +190,21 @@ $targets = @(
     },
     @{
         Key = "PoseBrowser"
-        DisplayName = "PoseBrowser module (HS2Sandbox.PoseBrowser.dll)"
+        Game = "HS2"
+        DisplayName = "[HS2] PoseBrowser (HS2Sandbox.PoseBrowser.dll)"
         BuildPath = "targets\HS2\PoseBrowser\HS2Sandbox.PoseBrowser.csproj"
         BuiltDllRelPath = "targets\HS2\PoseBrowser\bin\Release\HS2Sandbox.PoseBrowser.dll"
         DeployFileName = "HS2Sandbox.PoseBrowser.dll"
         DeactivatedFileName = "HS2Sandbox.PoseBrowser.dl_"
+    },
+    @{
+        Key = "PoseBrowser-KKS"
+        Game = "KKS"
+        DisplayName = "[KKS] PoseBrowser (KKSSandbox.PoseBrowser.dll)"
+        BuildPath = "targets\KKS\PoseBrowser\KKSSandbox.PoseBrowser.csproj"
+        BuiltDllRelPath = "targets\KKS\PoseBrowser\bin\Release\KKSSandbox.PoseBrowser.dll"
+        DeployFileName = "KKSSandbox.PoseBrowser.dll"
+        DeactivatedFileName = "KKSSandbox.PoseBrowser.dl_"
     }
 )
 
@@ -209,13 +238,16 @@ try {
     Write-Host "All $($selectedTargets.Count) module(s) built successfully." -ForegroundColor Green
 
     # --- Deployment ---
-    $copyConfirmed = Read-YesNo "Deploy $($selectedTargets.Count) DLL(s) to $deployDir ?"
+    $involvedGames = @($selectedTargets | ForEach-Object { $_.Game } | Select-Object -Unique)
+    $deployDirs = ($involvedGames | ForEach-Object { $gameConfig[$_].DeployDir }) -join ", "
+    $copyConfirmed = Read-YesNo "Deploy $($selectedTargets.Count) DLL(s) to $deployDirs ?"
     if (-not $copyConfirmed) {
         Stop-BuildFlow "Build flow stopped before deployment."
     }
 
+    $processNames = @($involvedGames | ForEach-Object { $gameConfig[$_].StudioProcessNames } | ForEach-Object { $_ })
     $runningProcesses = @(
-        @("StudioNeoV2", "HoneySelect2") |
+        $processNames |
             ForEach-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue } |
             Where-Object { $null -ne $_ }
     )
@@ -231,10 +263,13 @@ try {
         Write-Host "Stopped: $processList" -ForegroundColor Yellow
     }
 
-    New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
+    foreach ($game in $involvedGames) {
+        New-Item -ItemType Directory -Path $gameConfig[$game].DeployDir -Force | Out-Null
+    }
 
     $existingAction = $null
     foreach ($target in $selectedTargets) {
+        $deployDir = $gameConfig[$target.Game].DeployDir
         $builtDllPath = Join-Path $repoRoot $target.BuiltDllRelPath
         $deployDllPath = Join-Path $deployDir $target.DeployFileName
         $deactivatedDllPath = Join-Path $deployDir $target.DeactivatedFileName
@@ -253,20 +288,23 @@ try {
         }
 
         Copy-Item $builtDllPath $deployDllPath -Force
-        Write-Host "  Deployed: $($target.DeployFileName)" -ForegroundColor Green
+        Write-Host "  Deployed: $($target.DeployFileName) -> $deployDir" -ForegroundColor Green
     }
 
     Write-Host ""
     Write-Host "Deployment completed ($($selectedTargets.Count) module(s))." -ForegroundColor Green
 
-    $launchStudioConfirmed = Read-YesNo "Open StudioNeoV2 now?"
-    if ($launchStudioConfirmed) {
-        if (-not (Test-Path $studioExePath)) {
-            throw "StudioNeoV2 executable was not found at $studioExePath."
+    foreach ($game in $involvedGames) {
+        $cfg = $gameConfig[$game]
+        $launchConfirmed = Read-YesNo "Open $($cfg.StudioLabel) now?"
+        if ($launchConfirmed) {
+            if (-not (Test-Path $cfg.StudioExe)) {
+                Write-Host "$($cfg.StudioLabel) not found at $($cfg.StudioExe)" -ForegroundColor Red
+            } else {
+                Start-Process -FilePath $cfg.StudioExe
+                Write-Host "Launched: $($cfg.StudioExe)" -ForegroundColor Yellow
+            }
         }
-
-        Start-Process -FilePath $studioExePath
-        Write-Host "Launched: $studioExePath" -ForegroundColor Yellow
     }
 
 }

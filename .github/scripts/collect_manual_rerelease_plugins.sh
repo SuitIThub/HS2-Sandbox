@@ -25,6 +25,9 @@ fi
 if [[ "${RERELEASE_POSEBROWSER:-false}" == "true" ]]; then
   SELECTED+=("posebrowser")
 fi
+if [[ "${RERELEASE_POSEBROWSER_KKS:-false}" == "true" ]]; then
+  SELECTED+=("posebrowserkks")
+fi
 
 if [[ ${#SELECTED[@]} -eq 0 ]]; then
   echo "::error::Manual rerelease enabled but no plugin was selected. Check one or more plugin boxes, then run."

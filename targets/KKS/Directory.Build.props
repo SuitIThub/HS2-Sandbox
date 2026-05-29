@@ -1,0 +1,26 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <SrcRoot>$(MSBuildThisFileDirectory)..\..\src\</SrcRoot>
+    <AssetsRoot>$(MSBuildThisFileDirectory)..\..\assets\</AssetsRoot>
+    <DefineConstants>$(DefineConstants);KKS</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Koikatsu Sunshine game-specific references -->
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2019.4.9" IncludeAssets="compile" />
+    <PackageReference Include="IllusionLibs.KoikatsuSunshine.Assembly-CSharp" Version="2021.9.17">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionLibs.KoikatsuSunshine.UnityEngine.UI" Version="2019.4.9">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionModdingAPI.KKSAPI" Version="1.46.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

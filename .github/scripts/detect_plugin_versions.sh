@@ -12,7 +12,8 @@ SELECTED="${4:-}"
 extract_version() {
   local ref="$1"
   local path="$2"
-  git show "${ref}:${path}" 2>/dev/null | grep -oP '(?:PluginVersion|const string Version)\s*=\s*"\K[^"]+' | head -n1 || true
+  local n="${3:-1}"
+  git show "${ref}:${path}" 2>/dev/null | grep -oP '(?:PluginVersion|const string Version)\s*=\s*"\K[^"]+' | sed -n "${n}p" || true
 }
 
 declare -A FILES=(
@@ -23,6 +24,7 @@ declare -A FILES=(
   [workspacetreelock]="targets/HS2/WorkspaceTreeLock/Plugin.cs"
   [notebook]="targets/HS2/Notebook/Plugin.cs"
   [posebrowser]="src/PoseBrowser/PoseBrowserVersionInfo.cs"
+  [posebrowserkks]="src/PoseBrowser/PoseBrowserVersionInfo.cs"
 )
 
 declare -A DLLS=(
@@ -33,6 +35,14 @@ declare -A DLLS=(
   [workspacetreelock]="targets/HS2/WorkspaceTreeLock/bin/Release/HS2Sandbox.WorkspaceTreeLock.dll"
   [notebook]="targets/HS2/Notebook/bin/Release/HS2Sandbox.Notebook.dll"
   [posebrowser]="targets/HS2/PoseBrowser/bin/Release/HS2Sandbox.PoseBrowser.dll"
+  [posebrowserkks]="targets/KKS/PoseBrowser/bin/Release/KKSSandbox.PoseBrowser.dll"
+)
+
+# Match index for files with multiple Version constants (1-based).
+# PoseBrowserVersionInfo.cs: 1st match = KKS (#if KKS block), 2nd match = HS2 (#else block).
+declare -A MATCH_NUM=(
+  [posebrowser]=2
+  [posebrowserkks]=1
 )
 
 CHANGED=()
@@ -40,10 +50,11 @@ NOTES=()
 CHANGELOG=()
 VERSIONS_CHANGED="false"
 
-for key in copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser; do
+for key in copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser posebrowserkks; do
   f="${FILES[$key]}"
-  old_v="$(extract_version "$BEFORE" "$f")"
-  new_v="$(extract_version "$AFTER" "$f")"
+  n="${MATCH_NUM[$key]:-1}"
+  old_v="$(extract_version "$BEFORE" "$f" "$n")"
+  new_v="$(extract_version "$AFTER" "$f" "$n")"
   if [[ -z "$new_v" ]]; then
     echo "::warning::Could not read PluginVersion from $f at $AFTER"
     continue
@@ -98,7 +109,8 @@ if [[ -n "$SELECTED" ]]; then
       exit 1
     fi
     CHANGED+=("$key")
-    v="$(extract_version "$AFTER" "${FILES[$key]}")"
+    n="${MATCH_NUM[$key]:-1}"
+    v="$(extract_version "$AFTER" "${FILES[$key]}" "$n")"
     [[ -z "$v" ]] && v="unknown"
     NOTES+=("- **${key}**: \`${v}\` (manual rerelease)")
   done
@@ -109,10 +121,10 @@ if [[ -n "$SELECTED" ]]; then
   SHOULD_RELEASE="true"
   NOTES+=("- **trigger**: manual rerelease via workflow_dispatch")
 elif [[ "$FORCE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
-  CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
+  CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser posebrowserkks)
   NOTES+=("- **manual force**: including all module DLLs")
 elif [[ "$INITIAL_RELEASE" == "true" && ${#CHANGED[@]} -eq 0 ]]; then
-  CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
+  CHANGED=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser posebrowserkks)
   NOTES+=("- **initial GitHub release**: repository had no prior releases; publishing all module DLLs")
 fi
 
@@ -175,7 +187,7 @@ if [[ ${#CHANGED[@]} -gt 0 ]]; then
     RELEASE_KEYS+=("$key")
   done
 else
-  RELEASE_KEYS=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser)
+  RELEASE_KEYS=(copyscript timeline searchbarmanager sonscale workspacetreelock notebook posebrowser posebrowserkks)
 fi
 IFS=$'\n' RELEASE_KEYS=($(printf '%s\n' "${RELEASE_KEYS[@]}" | sort -u))
 unset IFS
@@ -185,7 +197,8 @@ PLUGIN_SLUG="$(IFS=+; echo "${RELEASE_KEYS[*]}")"
 
 RELEASE_VERSIONS=()
 for key in "${RELEASE_KEYS[@]}"; do
-  v="$(extract_version "$AFTER" "${FILES[$key]}")"
+  n="${MATCH_NUM[$key]:-1}"
+  v="$(extract_version "$AFTER" "${FILES[$key]}" "$n")"
   [[ -z "$v" ]] && v="unknown"
   RELEASE_VERSIONS+=("$v")
 done

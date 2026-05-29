@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KKSSandbox.PoseBrowser</AssemblyName>
+    <RootNamespace>HS2SandboxPlugin</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)PoseBrowser\**\*.cs" />
+    <Compile Include="Plugin.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(AssetsRoot)pose-icon.png" CopyToOutputDirectory="Always" Link="pose-icon.png" />
+    <EmbeddedResource Include="$(AssetsRoot)pose-icon.png">
+      <LogicalName>$(AssemblyName).pose-icon.png</LogicalName>
+      <Link>pose-icon.png</Link>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>
