@@ -2,6 +2,8 @@
 """
 Resolve newest GitHub Release asset URL per DLL (grouped releases may omit unchanged modules),
 then ensure README.md has one \"Download …\" markdown link per module/all-in-one section.
+
+Section list comes from .github/plugins.manifest.json.
 """
 from __future__ import annotations
 
@@ -10,57 +12,18 @@ import re
 import sys
 
 from github_release_assets import fetch_latest_urls_per_dll
-
-
-SECTIONS: list[tuple[str, str, str]] = [
-    (
-        "### HS2 Sandbox — CopyScript (`HS2Sandbox.CopyScript.dll`)",
-        "HS2Sandbox.CopyScript.dll",
-        "CopyScript",
-    ),
-    (
-        "### HS2 Sandbox — Timeline (`HS2Sandbox.Timeline.dll`)",
-        "HS2Sandbox.Timeline.dll",
-        "Timeline",
-    ),
-    (
-        "### HS2 Sandbox — SearchBarManager (`HS2Sandbox.SearchBarManager.dll`)",
-        "HS2Sandbox.SearchBarManager.dll",
-        "SearchBarManager",
-    ),
-    (
-        "### HS2 Sandbox — Son scale (`HS2Sandbox.SonScale.dll`)",
-        "HS2Sandbox.SonScale.dll",
-        "Son scale",
-    ),
-    (
-        "### HS2 Sandbox — Workspace tree lock (`HS2Sandbox.WorkspaceTreeLock.dll`)",
-        "HS2Sandbox.WorkspaceTreeLock.dll",
-        "Workspace tree lock",
-    ),
-    (
-        "### HS2 Sandbox — Notebook (`HS2Sandbox.Notebook.dll`)",
-        "HS2Sandbox.Notebook.dll",
-        "Notebook",
-    ),
-    (
-        "### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)",
-        "HS2Sandbox.PoseBrowser.dll",
-        "Pose Browser",
-    ),
-    (
-        "### KKS Sandbox — Pose Browser (`KKSSandbox.PoseBrowser.dll`)",
-        "KKSSandbox.PoseBrowser.dll",
-        "Pose Browser (KKS)",
-    ),
-    ("## All-in-one build", "HS2SandboxPlugin.dll", "All-in-one"),
-]
+from plugin_manifest import readme_entries
 
 
 def patch_readme(text: str, dll_urls: dict[str, str]) -> tuple[str, bool]:
     out = text
     changed = False
-    for heading_line, dll_name, label in SECTIONS:
+    for entry in readme_entries():
+        dll_name = entry.release_dll_file_name
+        label = entry.readme_download_label
+        heading_line = entry.readme_heading
+        assert dll_name and label and heading_line
+
         url = dll_urls.get(dll_name)
         if not url:
             print(f"::warning::No release asset yet for {dll_name}; skipping README link for \"{label}\".")

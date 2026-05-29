@@ -4,7 +4,7 @@
 Run only after a release is published (see update-readme job in main.yml) so version
 strings and *Download URLs stay aligned. Missing assets get an empty download URL.
 
-Keys include HS2 modules plus KKS Pose Browser (poseBrowserKks / poseBrowserKksDownload).
+Plugin keys and paths come from .github/plugins.manifest.json.
 """
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import os
 import sys
 from pathlib import Path
 
-from github_release_assets import RELEASE_DLLS, fetch_latest_urls_per_dll
-from plugin_version_sources import VERSION_FILES, read_plugin_version
+from github_release_assets import fetch_latest_urls_per_dll
+from plugin_manifest import read_plugin_version, versions_json_entries
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -26,9 +26,11 @@ def main() -> None:
     dll_urls = fetch_latest_urls_per_dll(repo, token)
 
     doc: dict[str, object] = {"schemaVersion": 2}
-    for key, cs_path in VERSION_FILES.items():
-        doc[key] = read_plugin_version(cs_path)
-        dll = RELEASE_DLLS.get(key)
+    for entry in versions_json_entries():
+        key = entry.versions_json_key
+        assert key is not None
+        doc[key] = read_plugin_version((entry.version_file, entry.version_match_index))
+        dll = entry.release_dll_file_name
         download_key = f"{key}Download"
         if dll and dll in dll_urls:
             doc[download_key] = dll_urls[dll]

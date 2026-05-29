@@ -6,18 +6,10 @@ import sys
 import urllib.error
 import urllib.request
 
-# (versions.json version key suffix -> DLL basename on release assets)
-RELEASE_DLLS: dict[str, str] = {
-    "allInOne": "HS2SandboxPlugin.dll",
-    "copyScript": "HS2Sandbox.CopyScript.dll",
-    "timeline": "HS2Sandbox.Timeline.dll",
-    "searchBarManager": "HS2Sandbox.SearchBarManager.dll",
-    "sonScale": "HS2Sandbox.SonScale.dll",
-    "workspaceTreeLock": "HS2Sandbox.WorkspaceTreeLock.dll",
-    "notebook": "HS2Sandbox.Notebook.dll",
-    "poseBrowser": "HS2Sandbox.PoseBrowser.dll",
-    "poseBrowserKks": "KKSSandbox.PoseBrowser.dll",
-}
+from plugin_manifest import release_dlls_by_json_key
+
+# versions.json version key -> DLL basename on release assets (from plugins.manifest.json)
+RELEASE_DLLS: dict[str, str] = release_dlls_by_json_key()
 
 
 def http_json(url: str, token: str) -> object:

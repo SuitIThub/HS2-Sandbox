@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "documentation": "CI plugin registry. After adding a releaseDetect plugin: run python .github/scripts/sync_workflow_rerelease_inputs.py. Manual workflow UI: run_mode dropdown + generated rerelease_* checkboxes. See .github/WORKFLOW.md.",
+  "entries": [
+    {
+      "key": "copyscript",
+      "displayName": "Copy Script",
+      "projectName": "HS2Sandbox.CopyScript",
+      "versionFile": "targets/HS2/CopyScript/Plugin.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/HS2/CopyScript/bin/Release/HS2Sandbox.CopyScript.dll",
+      "releaseDllFileName": "HS2Sandbox.CopyScript.dll",
+      "versionsJsonKey": "copyScript",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — CopyScript (`HS2Sandbox.CopyScript.dll`)",
+        "downloadLabel": "CopyScript"
+      }
+    },
+    {
+      "key": "timeline",
+      "displayName": "Timeline",
+      "projectName": "HS2Sandbox.Timeline",
+      "versionFile": "targets/HS2/Timeline/Plugin.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/HS2/Timeline/bin/Release/HS2Sandbox.Timeline.dll",
+      "releaseDllFileName": "HS2Sandbox.Timeline.dll",
+      "versionsJsonKey": "timeline",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — Timeline (`HS2Sandbox.Timeline.dll`)",
+        "downloadLabel": "Timeline"
+      }
+    },
+    {
+      "key": "searchbarmanager",
+      "displayName": "Search Bar Manager",
+      "projectName": "HS2Sandbox.SearchBarManager",
+      "versionFile": "targets/HS2/SearchBarManager/Plugin.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/HS2/SearchBarManager/bin/Release/HS2Sandbox.SearchBarManager.dll",
+      "releaseDllFileName": "HS2Sandbox.SearchBarManager.dll",
+      "versionsJsonKey": "searchBarManager",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — SearchBarManager (`HS2Sandbox.SearchBarManager.dll`)",
+        "downloadLabel": "SearchBarManager"
+      }
+    },
+    {
+      "key": "sonscale",
+      "displayName": "Son Scale",
+      "projectName": "HS2Sandbox.SonScale",
+      "versionFile": "targets/HS2/SonScale/Plugin.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/HS2/SonScale/bin/Release/HS2Sandbox.SonScale.dll",
+      "releaseDllFileName": "HS2Sandbox.SonScale.dll",
+      "versionsJsonKey": "sonScale",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — Son scale (`HS2Sandbox.SonScale.dll`)",
+        "downloadLabel": "Son scale"
+      }
+    },
+    {
+      "key": "workspacetreelock",
+      "displayName": "Workspace Tree Lock",
+      "projectName": "HS2Sandbox.WorkspaceTreeLock",
+      "versionFile": "targets/HS2/WorkspaceTreeLock/Plugin.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/HS2/WorkspaceTreeLock/bin/Release/HS2Sandbox.WorkspaceTreeLock.dll",
+      "releaseDllFileName": "HS2Sandbox.WorkspaceTreeLock.dll",
+      "versionsJsonKey": "workspaceTreeLock",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — Workspace tree lock (`HS2Sandbox.WorkspaceTreeLock.dll`)",
+        "downloadLabel": "Workspace tree lock"
+      }
+    },
+    {
+      "key": "notebook",
+      "displayName": "Notebook",
+      "projectName": "HS2Sandbox.Notebook",
+      "versionFile": "targets/HS2/Notebook/Plugin.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/HS2/Notebook/bin/Release/HS2Sandbox.Notebook.dll",
+      "releaseDllFileName": "HS2Sandbox.Notebook.dll",
+      "versionsJsonKey": "notebook",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — Notebook (`HS2Sandbox.Notebook.dll`)",
+        "downloadLabel": "Notebook"
+      }
+    },
+    {
+      "key": "posebrowser",
+      "displayName": "Pose Browser (HS2)",
+      "projectName": "HS2Sandbox.PoseBrowser",
+      "versionFile": "src/PoseBrowser/PoseBrowserVersionInfo.cs",
+      "versionMatchIndex": 1,
+      "releaseArtifactPath": "targets/HS2/PoseBrowser/bin/Release/HS2Sandbox.PoseBrowser.dll",
+      "releaseDllFileName": "HS2Sandbox.PoseBrowser.dll",
+      "versionsJsonKey": "poseBrowser",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)",
+        "downloadLabel": "Pose Browser"
+      }
+    },
+    {
+      "key": "posebrowserkks",
+      "displayName": "Pose Browser (KKS)",
+      "projectName": "KKSSandbox.PoseBrowser",
+      "versionFile": "src/PoseBrowser/PoseBrowserVersionInfo.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/KKS/PoseBrowser/bin/Release/KKSSandbox.PoseBrowser.dll",
+      "releaseDllFileName": "KKSSandbox.PoseBrowser.dll",
+      "versionsJsonKey": "poseBrowserKks",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### KKS Sandbox — Pose Browser (`KKSSandbox.PoseBrowser.dll`)",
+        "downloadLabel": "Pose Browser (KKS)"
+      }
+    },
+    {
+      "key": "allinone",
+      "displayName": "All-in-one",
+      "versionFile": "_deprecated/HS2SandboxPlugin.cs",
+      "versionMatchIndex": 0,
+      "releaseDllFileName": "HS2SandboxPlugin.dll",
+      "versionsJsonKey": "allInOne",
+      "releaseDetect": false,
+      "readme": {
+        "heading": "## All-in-one build",
+        "downloadLabel": "All-in-one"
+      }
+    }
+  ]
+}

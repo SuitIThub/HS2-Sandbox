@@ -1,9 +1,10 @@
 # Single entry point for main-branch automation:
 #   - build and publish GitHub releases when PluginVersion constants bump (or on first release / manual force)
-#   - workflow_dispatch "Manual rerelease": check plugins to publish, run workflow (15s wait, then release)
+#   - workflow_dispatch run_mode: detect | manual_rerelease (checkboxes) | force_release | update_readme_only
 #   - workflow_dispatch "Refresh README + versions.json only": update-readme job only (no detect/release)
-#   - after a successful release, refresh README download links and versions.json (badges + in-app update URLs; HS2 + KKS Pose Browser keys)
+#   - after a successful release, refresh README download links and versions.json (badges + in-app update URLs)
 #
+# Adding a plugin: edit plugins.manifest.json, then run sync_workflow_rerelease_inputs.py.
 # Bot-only commits (versions.json / README.md) do not re-trigger this workflow.
 
 name: Main
@@ -16,11 +17,17 @@ on:
       - "README.md"
   workflow_dispatch:
     inputs:
-      manual_rerelease:
-        description: "Manual rerelease — check plugins below, wait, then publish selected DLLs"
-        required: false
-        default: false
-        type: boolean
+      run_mode:
+        description: "What to run (push to main always auto-detects version bumps)"
+        required: true
+        default: detect
+        type: choice
+        options:
+          - detect
+          - manual_rerelease
+          - force_release
+          - update_readme_only
+      # >> rerelease-inputs:start (generated — run sync_workflow_rerelease_inputs.py)
       rerelease_copyscript:
         description: "Rerelease — Copy Script"
         required: false
@@ -56,21 +63,13 @@ on:
         required: false
         default: false
         type: boolean
-      rerelease_posebrowser_kks:
+      rerelease_posebrowserkks:
         description: "Rerelease — Pose Browser (KKS)"
         required: false
         default: false
         type: boolean
-      force_release:
-        description: "Create a release even if no PluginVersion was bumped"
-        required: false
-        default: false
-        type: boolean
-      update_readme:
-        description: "Refresh README + versions.json only (leave Manual rerelease and Force release unchecked)"
-        required: false
-        default: false
-        type: boolean
+# >> rerelease-inputs:end
+
 
 permissions:
   contents: write
@@ -85,10 +84,9 @@ jobs:
       github.event_name == 'push' ||
       (
         github.event_name == 'workflow_dispatch' &&
-        inputs.manual_rerelease != true &&
         (
-          inputs.force_release == true ||
-          inputs.update_readme != true
+          inputs.run_mode == 'detect' ||
+          inputs.run_mode == 'force_release'
         )
       )
     runs-on: ubuntu-latest
@@ -131,7 +129,7 @@ jobs:
           set -euo pipefail
           FORCE="false"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && \
-             [[ "${{ github.event.inputs.force_release }}" == "true" ]]; then
+             [[ "${{ github.event.inputs.run_mode }}" == "force_release" ]]; then
             FORCE="true"
           fi
           bash .github/scripts/detect_plugin_versions.sh \
@@ -140,7 +138,7 @@ jobs:
             "$FORCE"
 
   manual-rerelease:
-    if: github.event_name == 'workflow_dispatch' && inputs.manual_rerelease == true
+    if: github.event_name == 'workflow_dispatch' && inputs.run_mode == 'manual_rerelease'
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.detect.outputs.should_release }}
@@ -157,22 +155,15 @@ jobs:
       - name: Wait for plugin selections to register
         run: |
           set -euo pipefail
-          echo "Manual rerelease: enable the plugins you want, then run this workflow."
+          echo "Manual rerelease: check the plugin boxes above, then run this workflow."
           echo "Waiting 15 seconds before starting the rerelease..."
           sleep 15
 
       - name: Collect selected plugins
         id: plugins
         env:
-          RERELEASE_COPYSCRIPT: ${{ inputs.rerelease_copyscript }}
-          RERELEASE_TIMELINE: ${{ inputs.rerelease_timeline }}
-          RERELEASE_SEARCHBARMANAGER: ${{ inputs.rerelease_searchbarmanager }}
-          RERELEASE_SONSCALE: ${{ inputs.rerelease_sonscale }}
-          RERELEASE_WORKSPACETREELOCK: ${{ inputs.rerelease_workspacetreelock }}
-          RERELEASE_NOTEBOOK: ${{ inputs.rerelease_notebook }}
-          RERELEASE_POSEBROWSER: ${{ inputs.rerelease_posebrowser }}
-          RERELEASE_POSEBROWSER_KKS: ${{ inputs.rerelease_posebrowser_kks }}
-        run: bash .github/scripts/collect_manual_rerelease_plugins.sh
+          GITHUB_EVENT_JSON: ${{ toJSON(github.event) }}
+        run: python3 .github/scripts/collect_rerelease_plugins.py
 
       - name: Prepare manual rerelease plan
         id: detect
@@ -293,7 +284,7 @@ jobs:
       !cancelled() &&
       (
         (needs.release.result == 'success' && needs.release.outputs.released == 'true') ||
-        (github.event_name == 'workflow_dispatch' && inputs.update_readme == true)
+        (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'update_readme_only')
       )
     runs-on: ubuntu-latest
     steps:
