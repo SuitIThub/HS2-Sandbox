@@ -4,10 +4,10 @@ namespace HS2SandboxPlugin
     public static class PoseBrowserVersionInfo
     {
 #if KKS
-        public const string Version = "1.0.0";
+        public const string Version = "1.0.1";
         public const string StandaloneDllAssetName = "KKSSandbox.PoseBrowser.dll";
 #else
-        public const string Version = "4.3.2";
+        public const string Version = "4.3.3";
         public const string StandaloneDllAssetName = "HS2Sandbox.PoseBrowser.dll";
 #endif
 

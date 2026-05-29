@@ -89,6 +89,12 @@ namespace HS2SandboxPlugin
         private bool _applyGroupRelativeHeights;
         private Vector2 _compactListScroll;
         private bool _compactListShowTree = true;
+        private const string CompactHoverTooltipPrefix = "\x01pb:";
+        private float _compactHoverThumbnailWidth = 200f;
+        private int _compactHoverIndex = -1;
+        private int _compactHoverTexIndex = -1;
+        private Texture2D? _compactHoverTex;
+        private float _compactHoverRowScreenY;
 
         // Per–layout-tier main window rect (persisted so switching modes restores size/position).
         private float _savedFullW = 900f, _savedFullH = 620f, _savedFullX = 200f, _savedFullY = 80f;
@@ -523,6 +529,8 @@ namespace HS2SandboxPlugin
                 if (_showCharacterConfigPane)
                     DrawCharacterConfigDockedPane();
             }
+
+            DrawCompactHoverThumbnail();
         }
 
         private void SyncCompactListDockedPanes()
@@ -1030,6 +1038,9 @@ namespace HS2SandboxPlugin
 
         private void FinishMainWindowChrome()
         {
+            if (_layoutTier == PoseBrowserLayoutTier.CompactList && Event.current.type == EventType.Repaint)
+                TryCaptureCompactHoverFromTooltip();
+
             if (Event.current.type == EventType.Repaint && !string.IsNullOrEmpty(GUI.tooltip))
                 DrawPoseBrowserTooltip(GUI.tooltip, windowRect);
 
@@ -1520,6 +1531,22 @@ namespace HS2SandboxPlugin
             GUILayout.EndVertical();
         }
 
+        private void TryCaptureCompactHoverFromTooltip()
+        {
+            _compactHoverIndex = -1;
+            string tip = GUI.tooltip;
+            if (string.IsNullOrEmpty(tip) || !tip.StartsWith(CompactHoverTooltipPrefix, StringComparison.Ordinal))
+                return;
+
+            string indexText = tip.Substring(CompactHoverTooltipPrefix.Length);
+            if (!int.TryParse(indexText, out int index) || index < 0 || index >= _displayEntries.Count)
+                return;
+
+            _compactHoverIndex = index;
+            _compactHoverRowScreenY = GUIUtility.GUIToScreenPoint(new Vector2(0f, Event.current.mousePosition.y)).y;
+            GUI.tooltip = string.Empty;
+        }
+
         private void DrawCompactPoseRow(int index)
         {
             var entry = _displayEntries[index];
@@ -1527,14 +1554,82 @@ namespace HS2SandboxPlugin
             bool rowOn = string.IsNullOrEmpty(_compactSelectedGroupId) && index == _compactPoseIndex;
             var rowStyle = rowOn ? _treeNodeSelectedStyle! : _treeNodeStyle!;
             string label = (item.IsFavorite ? "★ " : "") + item.DisplayName;
+            string hoverTip = CompactHoverTooltipPrefix + index;
             Color prev = GUI.color;
             if (entry.IsDimmed) GUI.color = new Color(0.6f, 0.6f, 0.6f, 1f);
-            if (GUILayout.Button(label, rowStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
+            if (GUILayout.Button(new GUIContent(label, hoverTip), rowStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
             {
                 SelectCompactPose(index);
                 ApplyPoseToSelectedWithUsage(item);
             }
             GUI.color = prev;
+        }
+
+        private void DrawCompactHoverThumbnail()
+        {
+            if (Event.current.type != EventType.Repaint)
+                return;
+
+            if (_layoutTier != PoseBrowserLayoutTier.CompactList)
+            {
+                _compactHoverIndex = -1;
+                return;
+            }
+
+            if (_compactHoverIndex < 0 || _compactHoverIndex >= _displayEntries.Count)
+                return;
+
+            Texture2D? tex = ResolveCompactHoverTexture(_compactHoverIndex);
+            if (tex == null)
+                return;
+
+            float thumbW = _compactHoverThumbnailWidth;
+            float aspect = tex.width > 0 ? (float)tex.height / tex.width : 1f;
+            float thumbH = thumbW * aspect;
+
+            float x = windowRect.xMax + DockedPaneGap;
+            float y = _compactHoverRowScreenY;
+
+            if (x + thumbW > Screen.width - 4f)
+                x = windowRect.x - thumbW - DockedPaneGap;
+            if (x < 4f) x = 4f;
+
+            if (y + thumbH > Screen.height - 4f)
+                y = Screen.height - 4f - thumbH;
+            if (y < 4f) y = 4f;
+
+            Matrix4x4 prevMatrix = GUI.matrix;
+            Color prevGui = GUI.color;
+            GUI.matrix = Matrix4x4.identity;
+            GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(x, y, thumbW, thumbH), tex, ScaleMode.ScaleToFit, false);
+            GUI.color = prevGui;
+            GUI.matrix = prevMatrix;
+        }
+
+        private Texture2D? ResolveCompactHoverTexture(int index)
+        {
+            var item = _displayEntries[index].Item;
+
+            if (_compactHoverTexIndex != index)
+            {
+                _compactHoverTexIndex = index;
+                _compactHoverTex = null;
+            }
+
+            if (_compactHoverTex != null)
+                return _compactHoverTex;
+
+            Texture2D? tex = item.Thumbnail;
+            if (tex == null && item.IsPng)
+            {
+                tex = _dataService.LoadThumbnailTexture(item);
+                if (tex != null)
+                    item.Thumbnail = tex;
+            }
+
+            _compactHoverTex = tex ?? _placeholderTex;
+            return _compactHoverTex;
         }
 
         private void DrawCompactMiniWindowBody()
@@ -5133,6 +5228,18 @@ namespace HS2SandboxPlugin
             if (newApplyHeights != _applyGroupRelativeHeights)
                 _applyGroupRelativeHeights = newApplyHeights;
 
+            GUILayout.Space(10f);
+            GUILayout.Label("Compact list: hover thumbnail preview width (px). Config: Compact hover thumbnail width.", wrap);
+            float newHoverW = GUILayout.HorizontalSlider(_compactHoverThumbnailWidth, 80f, 600f);
+            if (Mathf.Abs(newHoverW - _compactHoverThumbnailWidth) > 0.5f)
+            {
+                _compactHoverThumbnailWidth = Mathf.Round(newHoverW);
+                PoseBrowserConfig.Register(SandboxServices.Config);
+                PoseBrowserConfig.CompactHoverThumbnailWidth!.Value = _compactHoverThumbnailWidth;
+                SavePersistedOptions();
+            }
+            GUILayout.Label($"{Mathf.Round(_compactHoverThumbnailWidth)} px");
+
             GUILayout.Space(14f);
             DrawHotkeyOptionsSection(wrap);
 
@@ -5340,6 +5447,9 @@ namespace HS2SandboxPlugin
                 if (data.optionsVersion >= 12)
                     _applyGroupRelativeHeights = data.applyGroupRelativeHeights;
 
+                if (data.optionsVersion >= 13)
+                    _compactHoverThumbnailWidth = Mathf.Clamp(data.compactHoverThumbnailWidth, 80f, 600f);
+
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
                 SyncWindowTitleForLayoutTier();
@@ -5387,7 +5497,8 @@ namespace HS2SandboxPlugin
                     tagFilterGroupsMode = (int)_tagFilterGroupsMode,
                     tagFilterThumbnailMode = (int)_tagFilterThumbnailMode,
                     applyGroupRelativePositions = _applyGroupRelativePositions,
-                    applyGroupRelativeHeights = _applyGroupRelativeHeights
+                    applyGroupRelativeHeights = _applyGroupRelativeHeights,
+                    compactHoverThumbnailWidth = _compactHoverThumbnailWidth
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -5407,6 +5518,8 @@ namespace HS2SandboxPlugin
                 _cardCellSize = Mathf.Clamp(PoseBrowserConfig.CardColumnWidth.Value, MinCardSize, MaxCardSize);
                 _itemsPerPage = Mathf.Max(0, PoseBrowserConfig.ItemsPerPage!.Value);
                 _itemsPerPageEdit = _itemsPerPage.ToString();
+                if (PoseBrowserConfig.CompactHoverThumbnailWidth != null)
+                    _compactHoverThumbnailWidth = Mathf.Clamp(PoseBrowserConfig.CompactHoverThumbnailWidth.Value, 80f, 600f);
                 ClampCurrentPage();
             }
             catch (Exception ex)
@@ -5422,6 +5535,8 @@ namespace HS2SandboxPlugin
                 if (PoseBrowserConfig.CardColumnWidth == null) return;
                 PoseBrowserConfig.CardColumnWidth.Value = Mathf.Clamp(_cardCellSize, MinCardSize, MaxCardSize);
                 PoseBrowserConfig.ItemsPerPage!.Value = Mathf.Max(0, _itemsPerPage);
+                if (PoseBrowserConfig.CompactHoverThumbnailWidth != null)
+                    PoseBrowserConfig.CompactHoverThumbnailWidth.Value = _compactHoverThumbnailWidth;
                 SandboxServices.Config.Save();
             }
             catch (Exception ex)
@@ -5712,5 +5827,6 @@ namespace HS2SandboxPlugin
         public bool tagFilterExcludeNoThumbnail;
         public bool applyGroupRelativePositions = true;
         public bool applyGroupRelativeHeights;
+        public float compactHoverThumbnailWidth = 200f;
     }
 }
