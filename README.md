@@ -93,13 +93,14 @@ A simple **in-game notepad** for ideas, shot lists, and reminders—opened from 
 **Typical use:** keep the window open while you work; edits are debounced to disk (~0.5s) and flushed when you close the window or exit the game.
 
 ### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)
-[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-copyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B4.3.2%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.PoseBrowser.dll)
+[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-29-posebrowser%2Bposebrowserkks-2-4.3.3%2B1.0.1/HS2Sandbox.PoseBrowser.dll)
 
 Browse, tag, favorite, save, and apply poses from your **`UserData/studio/pose`** folder. Folder tree, thumbnails, search, and file operations (move, copy, delete with backup) from one window.
 
 **Typical use:** open from the sidebar, pick a folder, filter or tag poses, apply to selected characters. Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** adds extra help on **F3** when installed. More detail: [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md).
 
 ### KKS Sandbox — Pose Browser (`KKSSandbox.PoseBrowser.dll`)
+[Download Pose Browser (KKS)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-29-posebrowser%2Bposebrowserkks-2-4.3.3%2B1.0.1/KKSSandbox.PoseBrowser.dll)
 
 Same pose library browser for **Koikatsu Sunshine** **Chara Studio**. Uses your game’s **`UserData/studio/pose`** folder, with the same tagging, favorites, compact layouts, and file tools as the HS2 build.
 
