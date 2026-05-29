@@ -1,7 +1,8 @@
 # Single entry point for main-branch automation:
 #   - build and publish GitHub releases when PluginVersion constants bump (or on first release / manual force)
 #   - workflow_dispatch "Manual rerelease": check plugins to publish, run workflow (15s wait, then release)
-#   - after a successful release, refresh README download links and versions.json (badges + in-app update URLs)
+#   - workflow_dispatch "Refresh README + versions.json only": update-readme job only (no detect/release)
+#   - after a successful release, refresh README download links and versions.json (badges + in-app update URLs; HS2 + KKS Pose Browser keys)
 #
 # Bot-only commits (versions.json / README.md) do not re-trigger this workflow.
 
@@ -66,7 +67,7 @@ on:
         default: false
         type: boolean
       update_readme:
-        description: "Refresh README download links (without releasing)"
+        description: "Refresh README + versions.json only (leave Manual rerelease and Force release unchecked)"
         required: false
         default: false
         type: boolean
@@ -82,7 +83,14 @@ jobs:
   detect:
     if: >-
       github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.manual_rerelease != true)
+      (
+        github.event_name == 'workflow_dispatch' &&
+        inputs.manual_rerelease != true &&
+        (
+          inputs.force_release == true ||
+          inputs.update_readme != true
+        )
+      )
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.detect.outputs.should_release }}

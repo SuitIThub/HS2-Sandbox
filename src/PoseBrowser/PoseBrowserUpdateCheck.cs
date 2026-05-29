@@ -22,13 +22,11 @@ namespace HS2SandboxPlugin
         public string? RemoteVersion { get; private set; }
         public string? DownloadUrl { get; private set; }
 
-        private static readonly Regex PoseBrowserVersionRegex = new Regex(
-            @"""poseBrowser""\s*:\s*""([^""]+)""",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex PoseBrowserVersionRegex = VersionsJsonStringRegex(
+            PoseBrowserVersionInfo.VersionsJsonVersionKey);
 
-        private static readonly Regex PoseBrowserDownloadRegex = new Regex(
-            @"""poseBrowserDownload""\s*:\s*""(https://[^""]+)""",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex PoseBrowserDownloadRegex = VersionsJsonUrlRegex(
+            PoseBrowserVersionInfo.VersionsJsonDownloadKey);
 
         private static readonly Regex AllInOneDownloadRegex = new Regex(
             @"""allInOneDownload""\s*:\s*""(https://[^""]+)""",
@@ -127,7 +125,7 @@ namespace HS2SandboxPlugin
             {
                 req.timeout = 15;
                 req.SetRequestHeader("Accept", "application/vnd.github+json");
-                req.SetRequestHeader("User-Agent", "HS2Sandbox-PoseBrowser-UpdateCheck");
+                req.SetRequestHeader("User-Agent", PoseBrowserVersionInfo.UpdateCheckUserAgent);
                 yield return req.SendWebRequest();
 
                 if (req.isNetworkError || req.isHttpError)
@@ -161,6 +159,16 @@ namespace HS2SandboxPlugin
 
             return match.Success ? match.Groups["url"].Value : null;
         }
+
+        private static Regex VersionsJsonStringRegex(string key) =>
+            new Regex(
+                "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"([^\"]+)\"",
+                RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        private static Regex VersionsJsonUrlRegex(string key) =>
+            new Regex(
+                "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"(https://[^\"]+)\"",
+                RegexOptions.Compiled | RegexOptions.CultureInvariant);
     }
 
     internal static class PoseBrowserSemver

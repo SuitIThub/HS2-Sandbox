@@ -3,6 +3,8 @@
 
 Run only after a release is published (see update-readme job in main.yml) so version
 strings and *Download URLs stay aligned. Missing assets get an empty download URL.
+
+Keys include HS2 modules plus KKS Pose Browser (poseBrowserKks / poseBrowserKksDownload).
 """
 from __future__ import annotations
 

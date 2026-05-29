@@ -46,7 +46,7 @@ SECTIONS: list[tuple[str, str, str]] = [
     (
         "### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)",
         "HS2Sandbox.PoseBrowser.dll",
-        "Pose Browser (HS2)",
+        "Pose Browser",
     ),
     (
         "### KKS Sandbox — Pose Browser (`KKSSandbox.PoseBrowser.dll`)",

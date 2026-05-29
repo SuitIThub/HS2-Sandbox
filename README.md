@@ -10,9 +10,10 @@
 [![Son scale](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Son+scale&query=%24.sonScale&style=flat-square&color=6e40c9)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/SonScale/SonScaleModulePlugin.cs)
 [![Workspace tree lock](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Workspace+tree+lock&query=%24.workspaceTreeLock&style=flat-square&color=1f6feb)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/WorkspaceTreeLock/WorkspaceTreeLockModulePlugin.cs)
 [![Notebook](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Notebook&query=%24.notebook&style=flat-square&color=8b5cf6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Notebook/NotebookModulePlugin.cs)
-[![Pose Browser](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser&query=%24.poseBrowser&style=flat-square&color=0d9488)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/PoseBrowser/PoseBrowserModulePlugin.cs)
+[![Pose Browser (HS2)](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser+(HS2)&query=%24.poseBrowser&style=flat-square&color=0d9488)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/PoseBrowser/PoseBrowserModulePlugin.cs)
+[![Pose Browser (KKS)](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser+(KKS)&query=%24.poseBrowserKks&style=flat-square&color=14b8a6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/targets/KKS/PoseBrowser/Plugin.cs)
 
-BepInEx plugins for **Honey Select 2** that add quality-of-life tools to **StudioNeoV2**: automation helpers, a pose library, notes, search bars on long lists, and finer control over character scaling.
+BepInEx plugins for **Honey Select 2** and **Koikatsu Sunshine** that add quality-of-life tools to **StudioNeoV2** / **Chara Studio**: automation helpers, a pose library, notes, search bars on long lists, and finer control over character scaling.
 
 ---
 
@@ -25,7 +26,8 @@ BepInEx plugins for **Honey Select 2** that add quality-of-life tools to **Studi
   - [Son scale](#hs2-sandbox--son-scale-hs2sandboxsonscaledll)
   - [Workspace tree lock](#hs2-sandbox--workspace-tree-lock-hs2sandboxworkspacetreelockdll)
   - [Notebook](#hs2-sandbox--notebook-hs2sandboxnotebookdll)
-  - [Pose Browser](#hs2-sandbox--pose-browser-hs2sandboxposebrowserdll)
+  - [Pose Browser (HS2)](#hs2-sandbox--pose-browser-hs2sandboxposebrowserdll)
+  - [Pose Browser (KKS)](#kks-sandbox--pose-browser-kkssandboxposebrowserdll)
 - [All-in-one build](#all-in-one-build)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -97,6 +99,12 @@ Browse, tag, favorite, save, and apply poses from your **`UserData/studio/pose`*
 
 **Typical use:** open from the sidebar, pick a folder, filter or tag poses, apply to selected characters. Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** adds extra help on **F3** when installed. More detail: [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md).
 
+### KKS Sandbox — Pose Browser (`KKSSandbox.PoseBrowser.dll`)
+
+Same pose library browser for **Koikatsu Sunshine** **Chara Studio**. Uses your game’s **`UserData/studio/pose`** folder, with the same tagging, favorites, compact layouts, and file tools as the HS2 build.
+
+**Typical use:** install **`KKSSandbox.PoseBrowser.dll`** (and `pose-icon.png` beside it) under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.PoseBrowser.dll`**—they are separate game builds. The in-game update check reads **`poseBrowserKks`** / **`poseBrowserKksDownload`** from [`versions.json`](versions.json).
+
 ---
 
 ## All-in-one build
@@ -140,7 +148,7 @@ Choose this if you want the full set without managing several DLLs. See [Install
 
 ## For developers
 
-Version badges read [`versions.json`](versions.json). CI updates that file **once**, after each successful GitHub release, so version strings and `*Download` URLs always refer to the same published assets. Badges may lag briefly until the release finishes. Release **download** links in [What you get](#what-you-get) are refreshed in the same post-release step.
+Version badges read [`versions.json`](versions.json). CI updates that file **once**, after each successful GitHub release, so version strings and `*Download` URLs always refer to the same published assets (including **`poseBrowser`** / **`poseBrowserKks`** and their `*Download` keys). Badges may lag briefly until the release finishes. Release **download** links in [What you get](#what-you-get) are refreshed in the same post-release step.
 
 ### What ships in this repo
 
@@ -153,9 +161,10 @@ Version badges read [`versions.json`](versions.json). CI updates that file **onc
 | `HS2Sandbox.SonScale.dll` | `Modules/SonScale` | Son scale UI + applier + optional BP hooks only. |
 | `HS2Sandbox.WorkspaceTreeLock.dll` | `Modules/WorkspaceTreeLock` | Middle-click pins in the Studio workspace tree. |
 | `HS2Sandbox.Notebook.dll` | `Modules/Notebook` | Notebook window and sidebar toggle only. |
-| `HS2Sandbox.PoseBrowser.dll` | `Modules/PoseBrowser` | Pose library browser and sidebar toggle only. |
+| `HS2Sandbox.PoseBrowser.dll` | `targets/HS2/PoseBrowser` | Pose library browser for HS2 StudioNeoV2. |
+| `KKSSandbox.PoseBrowser.dll` | `targets/KKS/PoseBrowser` | Pose library browser for KKS Chara Studio (shared `src/PoseBrowser/`). |
 
-Shared code lives under `Shared/`, `CopyScript/`, `Timeline/`, `SearchBarManager/`, `SonScale/`, `WorkspaceTreeLock/`, `Notebook/`, and `PoseBrowser/`. The all-in-one project compiles a superset via `HS2SandboxPlugin.csproj`.
+Shared code lives under `src/` (`Core/`, `PoseBrowser/`, …) and HS2 modules under `targets/HS2/`. The all-in-one project compiles a superset via `HS2SandboxPlugin.csproj` (HS2 only).
 
 ### Plugin reference
 
@@ -170,7 +179,8 @@ Each split module is its own BepInEx plugin (`BepInPlugin`) with a stable GUID.
 | Son scale | `com.hs2.sandbox.sonscale` | Soft: Studio Better Penetration | Harmony on BP `DanAgent.SetDanTarget` when present. |
 | Workspace tree lock | `com.hs2.sandbox.workspacetreelock` | None | Harmony on `Studio.TreeNodeObject` visibility helpers. |
 | Notebook | `com.hs2.sandbox.notebook` | None | Do not load with all-in-one. |
-| Pose Browser | `com.hs2.sandbox.posebrowser` | None | ZIP exchange format: [`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`](Modules/PoseBrowser/POSE_ZIP_FORMAT.md). |
+| Pose Browser (HS2) | `com.hs2.sandbox.posebrowser` | None | ZIP exchange format: [`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`](Modules/PoseBrowser/POSE_ZIP_FORMAT.md). |
+| Pose Browser (KKS) | `com.kks.sandbox.posebrowser` | None | Same shared code; built with `KKS` define from `targets/KKS/PoseBrowser`. |
 
 ### Building from source
 
@@ -185,7 +195,8 @@ Each split module is its own BepInEx plugin (`BepInPlugin`) with a stable GUID.
 
 4. Outputs:
    - All-in-one: `bin/Release/HS2SandboxPlugin.dll`
-   - Modules: `Modules/<Name>/bin/Release/HS2Sandbox.<Name>.dll`
+   - HS2 modules: `targets/HS2/<Name>/bin/Release/HS2Sandbox.<Name>.dll`
+   - KKS Pose Browser: `targets/KKS/PoseBrowser/bin/Release/KKSSandbox.PoseBrowser.dll`
 
 Restore may show **NU1603** warnings; builds usually still succeed.
 
