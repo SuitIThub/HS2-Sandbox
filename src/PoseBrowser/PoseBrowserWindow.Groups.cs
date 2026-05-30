@@ -129,6 +129,7 @@ namespace HS2SandboxPlugin
             DrawClearGroupRelativePositionsButton(group, barBtnH, barBtnMinW, wrap);
             DrawApplyGroupRelativePositionsToggle(group, barBtnH, wrap);
             DrawApplyGroupRelativeHeightsToggle(group, barBtnH, wrap);
+            DrawApplyGroupRelativeObjectScaleToggle(group, barBtnH, wrap);
             wrap.End();
         }
 
@@ -137,6 +138,9 @@ namespace HS2SandboxPlugin
 
         private static bool GroupHasStoredBodyHeights(PoseGroup group) =>
             group.MemberBodyHeights.Count > 0;
+
+        private static bool GroupHasStoredObjectScales(PoseGroup group) =>
+            group.MemberObjectScales.Count > 0;
 
         private void DrawApplyGroupRelativePositionsToggle(
             PoseGroup group,
@@ -159,7 +163,10 @@ namespace HS2SandboxPlugin
                 {
                     _applyGroupRelativePositions = nv;
                     if (!nv)
+                    {
                         _applyGroupRelativeHeights = false;
+                        _applyGroupRelativeObjectScales = false;
+                    }
                     SavePersistedOptions();
                 }
             });
@@ -187,6 +194,33 @@ namespace HS2SandboxPlugin
                 if (nv != _applyGroupRelativeHeights)
                 {
                     _applyGroupRelativeHeights = nv;
+                    SavePersistedOptions();
+                }
+            });
+        }
+
+        private void DrawApplyGroupRelativeObjectScaleToggle(
+            PoseGroup group,
+            float barBtnH,
+            ActionBarWrapLayout wrap)
+        {
+            if (!GroupHasStoredObjectScales(group) || !GroupHasStoredRelativePositions(group))
+                return;
+
+            string label = "Adjust for object scale";
+            float toggleW = wrap.MeasureLabel(label, 150f) + 22f;
+            wrap.Add(toggleW, () =>
+            {
+                GUI.enabled = _applyGroupRelativePositions;
+                bool nv = GUILayout.Toggle(
+                    _applyGroupRelativeObjectScales,
+                    new GUIContent(label, "Applies the full saved relative position (first pose = anchor), then scales saved offset X/Y/Z by current vs saved Studio object-scale ratios (same spread logic as body height). Relative rotation is unchanged."),
+                    GUILayout.Height(barBtnH),
+                    GUILayout.Width(toggleW));
+                GUI.enabled = true;
+                if (nv != _applyGroupRelativeObjectScales)
+                {
+                    _applyGroupRelativeObjectScales = nv;
                     SavePersistedOptions();
                 }
             });
@@ -220,7 +254,8 @@ namespace HS2SandboxPlugin
 
         private void ClearGroupRelativePositions(PoseGroup group)
         {
-            if (!GroupHasStoredRelativePositions(group) && !GroupHasStoredBodyHeights(group))
+            if (!GroupHasStoredRelativePositions(group) && !GroupHasStoredBodyHeights(group) &&
+                !GroupHasStoredObjectScales(group))
                 return;
             _groupDb.ClearMemberRelativeOffsets(group.Id);
             SandboxServices.Log.LogMessage($"PoseBrowser: Cleared relative positions for group \"{group.Name}\".");
@@ -332,11 +367,15 @@ namespace HS2SandboxPlugin
 
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var scales = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var rotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             string anchorRel = assignments[0].pose.RelativePath(_dataService.PoseRootPath);
             if (!string.IsNullOrEmpty(anchorRel) &&
                 PoseDataService.TryGetCharacterBodyHeight(assignments[0].character, out float anchorH))
                 heights[anchorRel] = anchorH;
+            if (!string.IsNullOrEmpty(anchorRel) &&
+                PoseDataService.TryGetCharacterObjectScale(assignments[0].character, out Vector3 anchorScale))
+                scales[anchorRel] = anchorScale;
 
             for (int i = 1; i < assignments.Count; i++)
             {
@@ -363,11 +402,13 @@ namespace HS2SandboxPlugin
                     rotations[rel] = relativeRot;
                 if (PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float h))
                     heights[rel] = h;
+                if (PoseDataService.TryGetCharacterObjectScale(assignments[i].character, out Vector3 s))
+                    scales[rel] = s;
             }
 
-            _groupDb.SetMemberRelativeLayout(group.Id, offsets, heights, rotations);
+            _groupDb.SetMemberRelativeLayout(group.Id, offsets, heights, rotations, scales);
             SandboxServices.Log.LogMessage(
-                $"PoseBrowser: Saved relative layout for group \"{group.Name}\" ({offsets.Count} offset(s), {rotations.Count} rotation(s), {heights.Count} height(s); anchor: {Path.GetFileName(anchorRel)}).");
+                $"PoseBrowser: Saved relative layout for group \"{group.Name}\" ({offsets.Count} offset(s), {rotations.Count} rotation(s), {heights.Count} height(s), {scales.Count} scale(s); anchor: {Path.GetFileName(anchorRel)}).");
         }
 
         private void RecordGroupMultiApply(string groupId)
@@ -1171,7 +1212,8 @@ namespace HS2SandboxPlugin
                     members = members.ToArray(),
                     memberRelativeOffsets = BuildExportGroupMemberOffsets(g),
                     memberBodyHeights = BuildExportGroupMemberBodyHeights(g),
-                    memberRelativeRotations = BuildExportGroupMemberRotations(g)
+                    memberRelativeRotations = BuildExportGroupMemberRotations(g),
+                    memberObjectScales = BuildExportGroupMemberObjectScales(g)
                 });
             }
 
@@ -1192,6 +1234,30 @@ namespace HS2SandboxPlugin
                 {
                     rows[i] = h;
                     any = true;
+                }
+            }
+
+            return any ? rows : null;
+        }
+
+        private static float[][]? BuildExportGroupMemberObjectScales(PoseGroup group)
+        {
+            if (group.MemberRelativePaths.Count == 0 || group.MemberObjectScales.Count == 0)
+                return null;
+
+            bool any = false;
+            var rows = new float[group.MemberRelativePaths.Count][];
+            for (int i = 0; i < group.MemberRelativePaths.Count; i++)
+            {
+                string rel = group.MemberRelativePaths[i];
+                if (group.MemberObjectScales.TryGetValue(rel, out Vector3 scale))
+                {
+                    rows[i] = new float[] { scale.x, scale.y, scale.z };
+                    any = true;
+                }
+                else
+                {
+                    rows[i] = new float[] { 1f, 1f, 1f };
                 }
             }
 
@@ -1292,7 +1358,7 @@ namespace HS2SandboxPlugin
                     Name = pg.Name,
                     Tags = new HashSet<string>(pg.Tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
                 };
-                _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets, pg.MemberBodyHeights, pg.MemberRelativeRotations);
+                _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets, pg.MemberBodyHeights, pg.MemberRelativeRotations, pg.MemberObjectScales);
             }
         }
 
@@ -1337,12 +1403,14 @@ namespace HS2SandboxPlugin
         {
             if ((sourceGroup.MemberRelativeOffsets.Count == 0 &&
                  sourceGroup.MemberBodyHeights.Count == 0 &&
+                 sourceGroup.MemberObjectScales.Count == 0 &&
                  sourceGroup.MemberRelativeRotations.Count == 0) ||
                 sourceMembers.Count != copyMembers.Count)
                 return;
 
             var offsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var scales = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var rotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < copyMembers.Count; i++)
             {
@@ -1359,10 +1427,13 @@ namespace HS2SandboxPlugin
 
                 if (sourceGroup.MemberBodyHeights.TryGetValue(oldRel, out float h))
                     heights[newRel] = h;
+
+                if (sourceGroup.MemberObjectScales.TryGetValue(oldRel, out Vector3 scale))
+                    scales[newRel] = scale;
             }
 
-            if (offsets.Count > 0 || heights.Count > 0 || rotations.Count > 0)
-                _groupDb.SetMemberRelativeLayout(destGroup.Id, offsets, heights, rotations);
+            if (offsets.Count > 0 || heights.Count > 0 || scales.Count > 0 || rotations.Count > 0)
+                _groupDb.SetMemberRelativeLayout(destGroup.Id, offsets, heights, rotations, scales);
         }
 
         private void ApplyTagToGroups(IReadOnlyList<PoseGroup> groups, string tag, bool add)

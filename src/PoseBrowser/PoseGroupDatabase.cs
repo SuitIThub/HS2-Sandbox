@@ -11,8 +11,8 @@ namespace HS2SandboxPlugin
 {
     public sealed class PoseGroupDatabase
     {
-        private const int FileVersion = 4;
-        private const string TsvHeader = "HS2SANDBOX_POSE_GROUPS\t4";
+        private const int FileVersion = 5;
+        private const string TsvHeader = "HS2SANDBOX_POSE_GROUPS\t5";
         private const char TagDelimiter = '\x1e';
         private const char MemberDelimiter = '\x1f';
         private const char OffsetDelimiter = '\x1f';
@@ -177,6 +177,12 @@ namespace HS2SandboxPlugin
                     group.MemberBodyHeights[newK] = height;
                 }
 
+                if (group.MemberObjectScales.TryGetValue(oldK, out var objectScale))
+                {
+                    group.MemberObjectScales.Remove(oldK);
+                    group.MemberObjectScales[newK] = objectScale;
+                }
+
                 if (group.MemberRelativeRotations.TryGetValue(oldK, out var rotation))
                 {
                     group.MemberRelativeRotations.Remove(oldK);
@@ -212,7 +218,8 @@ namespace HS2SandboxPlugin
             string groupId,
             IReadOnlyDictionary<string, Vector3> offsetsByMemberPath,
             IReadOnlyDictionary<string, float>? bodyHeightsByMemberPath,
-            IReadOnlyDictionary<string, Quaternion>? rotationsByMemberPath = null)
+            IReadOnlyDictionary<string, Quaternion>? rotationsByMemberPath = null,
+            IReadOnlyDictionary<string, Vector3>? objectScalesByMemberPath = null)
         {
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
             group.MemberRelativeOffsets.Clear();
@@ -248,6 +255,18 @@ namespace HS2SandboxPlugin
                 }
             }
 
+            if (objectScalesByMemberPath != null)
+            {
+                group.MemberObjectScales.Clear();
+                foreach (var kvp in objectScalesByMemberPath)
+                {
+                    string key = NormalizeStorageKey(kvp.Key);
+                    if (string.IsNullOrEmpty(key))
+                        continue;
+                    group.MemberObjectScales[key] = kvp.Value;
+                }
+            }
+
             PruneLayoutToMembers(group);
             MarkDirty();
         }
@@ -257,10 +276,12 @@ namespace HS2SandboxPlugin
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
             if (group.MemberRelativeOffsets.Count == 0 &&
                 group.MemberBodyHeights.Count == 0 &&
+                group.MemberObjectScales.Count == 0 &&
                 group.MemberRelativeRotations.Count == 0)
                 return;
             group.MemberRelativeOffsets.Clear();
             group.MemberBodyHeights.Clear();
+            group.MemberObjectScales.Clear();
             group.MemberRelativeRotations.Clear();
             MarkDirty();
         }
@@ -271,6 +292,7 @@ namespace HS2SandboxPlugin
         {
             if (group.MemberRelativeOffsets.Count == 0 &&
                 group.MemberBodyHeights.Count == 0 &&
+                group.MemberObjectScales.Count == 0 &&
                 group.MemberRelativeRotations.Count == 0)
                 return;
 
@@ -286,6 +308,12 @@ namespace HS2SandboxPlugin
                 .ToList();
             foreach (var k in staleHeights)
                 group.MemberBodyHeights.Remove(k);
+
+            var staleScales = group.MemberObjectScales.Keys
+                .Where(k => !memberSet.Contains(k))
+                .ToList();
+            foreach (var k in staleScales)
+                group.MemberObjectScales.Remove(k);
 
             var staleRotations = group.MemberRelativeRotations.Keys
                 .Where(k => !memberSet.Contains(k))
@@ -320,7 +348,8 @@ namespace HS2SandboxPlugin
             IReadOnlyDictionary<string, string> oldMemberRelToNewRel,
             Vector3[]? memberRelativeOffsets = null,
             float[]? memberBodyHeights = null,
-            Quaternion[]? memberRelativeRotations = null)
+            Quaternion[]? memberRelativeRotations = null,
+            Vector3[]? memberObjectScales = null)
         {
             var newMembers = new List<string>();
             var oldMembersOrdered = new List<string>();
@@ -335,6 +364,7 @@ namespace HS2SandboxPlugin
 
             var importedOffsets = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var importedHeights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var importedScales = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var importedRotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             if (memberRelativeOffsets != null && memberRelativeOffsets.Length > 0)
             {
@@ -377,6 +407,23 @@ namespace HS2SandboxPlugin
                 }
             }
 
+            if (memberObjectScales != null && memberObjectScales.Length > 0)
+            {
+                for (int i = 0; i < newMembers.Count && i < memberObjectScales.Length; i++)
+                    importedScales[newMembers[i]] = memberObjectScales[i];
+            }
+            else
+            {
+                foreach (var kvp in group.MemberObjectScales)
+                {
+                    string oldKey = NormalizeStorageKey(kvp.Key);
+                    int idx = oldMembersOrdered.FindIndex(p =>
+                        string.Equals(p, oldKey, StringComparison.OrdinalIgnoreCase));
+                    if (idx >= 0 && idx < newMembers.Count)
+                        importedScales[newMembers[idx]] = kvp.Value;
+                }
+            }
+
             if (memberRelativeRotations != null && memberRelativeRotations.Length > 0)
             {
                 for (int i = 0; i < newMembers.Count && i < memberRelativeRotations.Length; i++)
@@ -409,6 +456,7 @@ namespace HS2SandboxPlugin
                 MemberRelativePaths = newMembers,
                 MemberRelativeOffsets = importedOffsets,
                 MemberBodyHeights = importedHeights,
+                MemberObjectScales = importedScales,
                 MemberRelativeRotations = importedRotations
             };
 
@@ -515,6 +563,9 @@ namespace HS2SandboxPlugin
                     var rotations = parts.Length >= 8
                         ? ParseMemberRelativeRotationsColumn(parts[7], memberPaths)
                         : new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
+                    var scales = parts.Length >= 9
+                        ? ParseMemberObjectScalesColumn(parts[8], memberPaths)
+                        : new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
 
                     var group = new PoseGroup
                     {
@@ -524,6 +575,7 @@ namespace HS2SandboxPlugin
                         MemberRelativePaths = memberPaths,
                         MemberRelativeOffsets = offsets,
                         MemberBodyHeights = heights,
+                        MemberObjectScales = scales,
                         MemberRelativeRotations = rotations
                     };
 
@@ -647,6 +699,50 @@ namespace HS2SandboxPlugin
                 }
 
                 parts.Add(h.ToString("R", inv));
+            }
+
+            return string.Join(OffsetDelimiter.ToString(), parts);
+        }
+
+        private static Dictionary<string, Vector3> ParseMemberObjectScalesColumn(
+            string? col,
+            IReadOnlyList<string> memberPaths)
+        {
+            var result = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
+                return result;
+
+            var tokens = col.Split(OffsetDelimiter);
+            for (int i = 0; i < memberPaths.Count && i < tokens.Length; i++)
+            {
+                string token = tokens[i].Trim();
+                if (token.Length == 0)
+                    continue;
+                if (!TryParseOffsetTriple(token, out var scale))
+                    continue;
+                result[memberPaths[i]] = scale;
+            }
+
+            return result;
+        }
+
+        private static string FormatMemberObjectScalesColumn(PoseGroup group)
+        {
+            if (group.MemberRelativePaths.Count == 0 || group.MemberObjectScales.Count == 0)
+                return "";
+
+            var parts = new List<string>(group.MemberRelativePaths.Count);
+            var inv = CultureInfo.InvariantCulture;
+            for (int i = 0; i < group.MemberRelativePaths.Count; i++)
+            {
+                string rel = group.MemberRelativePaths[i];
+                if (!group.MemberObjectScales.TryGetValue(rel, out Vector3 scale))
+                {
+                    parts.Add("");
+                    continue;
+                }
+
+                parts.Add(string.Join(",", scale.x.ToString("R", inv), scale.y.ToString("R", inv), scale.z.ToString("R", inv)));
             }
 
             return string.Join(OffsetDelimiter.ToString(), parts);
@@ -834,7 +930,8 @@ namespace HS2SandboxPlugin
                         string offsetsCol = FormatMemberOffsetsColumn(group);
                         string heightsCol = FormatMemberBodyHeightsColumn(group);
                         string rotationsCol = FormatMemberRelativeRotationsColumn(group);
-                        sw.WriteLine($"group\t{group.Id}\t{group.Name}\t{tagsCol}\t{membersCol}\t{offsetsCol}\t{heightsCol}\t{rotationsCol}");
+                        string scalesCol = FormatMemberObjectScalesColumn(group);
+                        sw.WriteLine($"group\t{group.Id}\t{group.Name}\t{tagsCol}\t{membersCol}\t{offsetsCol}\t{heightsCol}\t{rotationsCol}\t{scalesCol}");
                     }
                 }
 

@@ -10,9 +10,9 @@ namespace HS2SandboxPlugin
     /// <summary>
     /// Pose ZIP exchange: original <c>.png</c>/<c>.dat</c> files under <c>poses/</c>, plus <c>manifest.json</c> (schema + kind)
     /// and <c>metadata.json</c> (tags, favorites, paths; v3+ optional <c>groups</c>; v4 adds <c>memberRelativeOffsets</c>; v5 adds
-    /// <c>memberBodyHeights</c>; v6 adds <c>memberRelativeRotations</c>). Import parses <c>metadata.json</c> with a small JSON reader — not
-    /// <see cref="JsonUtility"/> — so <c>items</c> arrays round-trip with export. Exports use manifest <see cref="ManifestVersion"/> (6);
-    /// imports accept 2–6.
+    /// <c>memberBodyHeights</c>; v6 adds <c>memberRelativeRotations</c>; v7 adds <c>memberObjectScales</c>). Import parses <c>metadata.json</c> with a small JSON reader — not
+    /// <see cref="JsonUtility"/> — so <c>items</c> arrays round-trip with export. Exports use manifest <see cref="ManifestVersion"/> (7);
+    /// imports accept 2–7.
     /// Flat <c>poses</c> export uses only <c>poses/&lt;filename&gt;</c>
     /// (no subfolders; collisions get <c>-01</c> suffixes). <c>treeBranch</c> keeps structure under <c>poses/&lt;branchRoot&gt;/…</c>.
     /// Legacy blob packs (v1) still import.
@@ -29,7 +29,7 @@ namespace HS2SandboxPlugin
 
         public const string SchemaId = "HS2Sandbox.poseZip";
         /// <summary>Manifest <c>version</c> written on export (current format).</summary>
-        public const int ManifestVersion = 6;
+        public const int ManifestVersion = 7;
         /// <summary>Oldest manifest <c>version</c> still accepted on import (v2 packs without <c>groups</c>).</summary>
         public const int MinImportManifestVersion = 2;
 
@@ -87,6 +87,8 @@ namespace HS2SandboxPlugin
             /// later entries are Euler angles of <c>Inverse(anchorRot) * memberRot</c> when layout was saved.
             /// </summary>
             public float[][]? memberRelativeRotations;
+            /// <summary>Studio object scale parallel to <see cref="members"/> (v7).</summary>
+            public float[][]? memberObjectScales;
         }
 
         public sealed class PosePackReadGroup
@@ -98,6 +100,7 @@ namespace HS2SandboxPlugin
             public Vector3[]? MemberRelativeOffsets { get; }
             public float[]? MemberBodyHeights { get; }
             public Quaternion[]? MemberRelativeRotations { get; }
+            public Vector3[]? MemberObjectScales { get; }
 
             public PosePackReadGroup(
                 string id,
@@ -106,7 +109,8 @@ namespace HS2SandboxPlugin
                 string[] memberZipPaths,
                 Vector3[]? memberRelativeOffsets = null,
                 float[]? memberBodyHeights = null,
-                Quaternion[]? memberRelativeRotations = null)
+                Quaternion[]? memberRelativeRotations = null,
+                Vector3[]? memberObjectScales = null)
             {
                 Id = id;
                 Name = name;
@@ -115,6 +119,7 @@ namespace HS2SandboxPlugin
                 MemberRelativeOffsets = memberRelativeOffsets;
                 MemberBodyHeights = memberBodyHeights;
                 MemberRelativeRotations = memberRelativeRotations;
+                MemberObjectScales = memberObjectScales;
             }
         }
 
@@ -557,7 +562,8 @@ namespace HS2SandboxPlugin
                 g.members ?? Array.Empty<string>(),
                 ConvertGroupMemberOffsets(g),
                 ConvertGroupMemberBodyHeights(g),
-                ConvertGroupMemberRotations(g))).ToList();
+                ConvertGroupMemberRotations(g),
+                ConvertGroupMemberObjectScales(g))).ToList();
             result = new PosePackReadResult(isTree, branchRoot, manifest.exportedUtc ?? "", list, packGroups);
             return true;
         }
@@ -793,6 +799,18 @@ namespace HS2SandboxPlugin
                 sb.Append(']');
             }
 
+            if (g.memberObjectScales != null && g.memberObjectScales.Length > 0)
+            {
+                sb.Append(",\"memberObjectScales\":[");
+                for (int s = 0; s < g.memberObjectScales.Length; s++)
+                {
+                    if (s > 0) sb.Append(',');
+                    AppendMetadataVec3Json(sb, g.memberObjectScales[s]);
+                }
+
+                sb.Append(']');
+            }
+
             sb.Append('}');
         }
 
@@ -837,6 +855,24 @@ namespace HS2SandboxPlugin
             if (g.memberBodyHeights == null || g.memberBodyHeights.Length == 0)
                 return null;
             return (float[])g.memberBodyHeights.Clone();
+        }
+
+        private static Vector3[]? ConvertGroupMemberObjectScales(PoseZipGroupJson g)
+        {
+            if (g.memberObjectScales == null || g.memberObjectScales.Length == 0)
+                return null;
+
+            var arr = new Vector3[g.memberObjectScales.Length];
+            for (int i = 0; i < g.memberObjectScales.Length; i++)
+            {
+                float[]? xyz = g.memberObjectScales[i];
+                if (xyz != null && xyz.Length >= 3)
+                    arr[i] = new Vector3(xyz[0], xyz[1], xyz[2]);
+                else
+                    arr[i] = Vector3.one;
+            }
+
+            return arr;
         }
 
         private static Quaternion[]? ConvertGroupMemberRotations(PoseZipGroupJson g)
@@ -1398,6 +1434,7 @@ namespace HS2SandboxPlugin
             List<float[]>? offsetsList = null;
             List<float>? heightsList = null;
             List<float[]>? rotationsList = null;
+            List<float[]>? scalesList = null;
             MetadataJson_SkipWs(json, ref i);
             if (i >= json.Length || json[i] != '{')
             {
@@ -1422,6 +1459,9 @@ namespace HS2SandboxPlugin
                         : null;
                     group.memberRelativeRotations = rotationsList != null && rotationsList.Count > 0
                         ? rotationsList.ToArray()
+                        : null;
+                    group.memberObjectScales = scalesList != null && scalesList.Count > 0
+                        ? scalesList.ToArray()
                         : null;
                     return true;
                 }
@@ -1477,6 +1517,12 @@ namespace HS2SandboxPlugin
                     if (!MetadataJson_TryReadVec3ArrayArray(json, ref i, rotationsList, out error))
                         return false;
                 }
+                else if (string.Equals(key, "memberObjectScales", StringComparison.Ordinal))
+                {
+                    scalesList ??= new List<float[]>();
+                    if (!MetadataJson_TryReadVec3ArrayArray(json, ref i, scalesList, out error))
+                        return false;
+                }
                 else
                 {
                     if (!MetadataJson_TrySkipValue(json, ref i, out error))
@@ -1504,6 +1550,9 @@ namespace HS2SandboxPlugin
                         : null;
                     group.memberRelativeRotations = rotationsList != null && rotationsList.Count > 0
                         ? rotationsList.ToArray()
+                        : null;
+                    group.memberObjectScales = scalesList != null && scalesList.Count > 0
+                        ? scalesList.ToArray()
                         : null;
                     return true;
                 }

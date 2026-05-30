@@ -87,6 +87,7 @@ namespace HS2SandboxPlugin
         private bool _anyPoseAppliedSinceLastGroupApply;
         private bool _applyGroupRelativePositions = true;
         private bool _applyGroupRelativeHeights;
+        private bool _applyGroupRelativeObjectScales;
         private Vector2 _compactListScroll;
         private bool _compactListShowTree = true;
         private const string CompactHoverTooltipPrefix = "\x01pb:";
@@ -4952,7 +4953,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
             GUILayout.Label("<b>Group relative positions</b>", rich);
             GUILayout.Label(
-                "Save character spacing and facing for a group and re-apply it with the group. The <b>first pose</b> in grid display order is the <b>anchor</b> (position and rotation reference). Every other pose stores a <b>local position offset</b> (in the anchor's frame), <b>relative rotation</b> (vs anchor), and <b>maker body height</b> on that pose path. Persisted in <b>pose_groups.tsv</b> and v6 ZIP (<b>memberRelativeOffsets</b>, <b>memberRelativeRotations</b>, <b>memberBodyHeights</b>).\n\n" +
+                "Save character spacing and facing for a group and re-apply it with the group. The <b>first pose</b> in grid display order is the <b>anchor</b> (position and rotation reference). Every other pose stores a <b>local position offset</b> (in the anchor's frame), <b>relative rotation</b> (vs anchor), <b>maker body height</b>, and <b>Studio object scale</b> on that pose path. Persisted in <b>pose_groups.tsv</b> and v7 ZIP (<b>memberRelativeOffsets</b>, <b>memberRelativeRotations</b>, <b>memberBodyHeights</b>, <b>memberObjectScales</b>).\n\n" +
                 "<b>To save positions</b> (<b>Save positions…</b> on the group bar):\n" +
                 "1. Set up <b>Chars</b> and pose <b>Male</b> / <b>Female</b> tags if needed.\n" +
                 "2. Select <b>exactly as many characters as poses</b> in Studio.\n" +
@@ -4961,7 +4962,8 @@ namespace HS2SandboxPlugin
                 "<b>To apply saved positions</b> — same apply path (same pose order and <b>Chars</b> priority). After poses are applied:\n" +
                 "• <b>Apply relative positions</b> (global; group bar or <b>Options</b>) — each non-anchor character moves to <b>anchor position + anchor rotation × saved offset</b> (orbits with the anchor) and rotates to <b>anchor rotation × saved relative rotation</b>. The anchor character is not moved.\n" +
                 "• <b>Adjust for body height</b> (needs relative positions on) — still applies the full offset, but <b>offset.y</b> is scaled from saved vs current body-height ratios on each pose path (spread ratio when heights differed at save; otherwise anchor or averaged scale). No fixed meter constant.\n" +
-                "• <b>Clear positions</b> — removes stored offsets and heights for that group.",
+                "• <b>Adjust for object scale</b> (needs relative positions on) — scales saved offset <b>X/Y/Z</b> from saved vs current Studio object-scale ratios (same spread logic as body height). Relative rotation is unchanged.\n" +
+                "• <b>Clear positions</b> — removes stored offsets, heights, scales, and rotations for that group.",
                 rich);
 
             GUILayout.Space(6f);
@@ -5002,10 +5004,10 @@ namespace HS2SandboxPlugin
                 rich);
 
             GUILayout.Space(8f);
-            GUILayout.Label("<b>Import / export (ZIP v6)</b>", rich);
+            GUILayout.Label("<b>Import / export (ZIP v7)</b>", rich);
             GUILayout.Label(
                 "• After <b>Import…</b>, the grid shows a preview: thumbnail click toggles inclusion (checkbox + Ctrl/Shift work). Use <b>Cancel import</b> in the bottom bar or <b>Cancel</b> in the folder footer to abort. <b>Tree branch</b> packs create a named subfolder under the destination you pick. v2–v5 packs still import.\n" +
-                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v6 <b>.zip</b> (tags/favorites; pose groups with offsets/rotations/heights when fully selected).\n" +
+                "• <b>Export…</b> in the <b>selection bar</b> saves checked library poses to a v7 <b>.zip</b> (tags/favorites; pose groups with offsets/rotations/heights/scales when fully selected).\n" +
                 "• External tools must build <b>stored</b> (uncompressed) ZIP entries — see <b>Modules/PoseBrowser/POSE_ZIP_FORMAT.md</b> in the repo.",
                 rich);
 
@@ -5217,7 +5219,10 @@ namespace HS2SandboxPlugin
             {
                 _applyGroupRelativePositions = newApplyLayout;
                 if (!newApplyLayout)
+                {
                     _applyGroupRelativeHeights = false;
+                    _applyGroupRelativeObjectScales = false;
+                }
             }
 
             GUI.enabled = _applyGroupRelativePositions;
@@ -5227,6 +5232,14 @@ namespace HS2SandboxPlugin
             GUI.enabled = true;
             if (newApplyHeights != _applyGroupRelativeHeights)
                 _applyGroupRelativeHeights = newApplyHeights;
+
+            GUI.enabled = _applyGroupRelativePositions;
+            bool newApplyScales = DrawOptionsToggle(
+                _applyGroupRelativeObjectScales,
+                "Adjust relative layout for object scale (saved per pose)");
+            GUI.enabled = true;
+            if (newApplyScales != _applyGroupRelativeObjectScales)
+                _applyGroupRelativeObjectScales = newApplyScales;
 
             GUILayout.Space(10f);
             GUILayout.Label("Compact list: hover thumbnail preview width (px). Config: Compact hover thumbnail width.", wrap);
@@ -5447,6 +5460,9 @@ namespace HS2SandboxPlugin
                 if (data.optionsVersion >= 12)
                     _applyGroupRelativeHeights = data.applyGroupRelativeHeights;
 
+                if (data.optionsVersion >= 14)
+                    _applyGroupRelativeObjectScales = data.applyGroupRelativeObjectScales;
+
                 if (data.optionsVersion >= 13)
                     _compactHoverThumbnailWidth = Mathf.Clamp(data.compactHoverThumbnailWidth, 80f, 600f);
 
@@ -5498,6 +5514,7 @@ namespace HS2SandboxPlugin
                     tagFilterThumbnailMode = (int)_tagFilterThumbnailMode,
                     applyGroupRelativePositions = _applyGroupRelativePositions,
                     applyGroupRelativeHeights = _applyGroupRelativeHeights,
+                    applyGroupRelativeObjectScales = _applyGroupRelativeObjectScales,
                     compactHoverThumbnailWidth = _compactHoverThumbnailWidth
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -5827,6 +5844,7 @@ namespace HS2SandboxPlugin
         public bool tagFilterExcludeNoThumbnail;
         public bool applyGroupRelativePositions = true;
         public bool applyGroupRelativeHeights;
+        public bool applyGroupRelativeObjectScales;
         public float compactHoverThumbnailWidth = 200f;
     }
 }

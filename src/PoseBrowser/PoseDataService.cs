@@ -874,6 +874,32 @@ namespace HS2SandboxPlugin
             return false;
         }
 
+        /// <summary>Studio object scale from the character guide (<see cref="ChangeAmount.scale"/>).</summary>
+        public static bool TryGetCharacterObjectScale(OCIChar oci, out Vector3 scale)
+        {
+            scale = Vector3.one;
+            try
+            {
+                if (oci?.guideObject?.changeAmount != null)
+                {
+                    scale = oci.guideObject.changeAmount.scale;
+                    return true;
+                }
+
+                if (oci?.guideObject?.transformTarget != null)
+                {
+                    scale = oci.guideObject.transformTarget.localScale;
+                    return true;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return false;
+        }
+
         public static bool TryGetCharacterWorldPosition(OCIChar oci, out Vector3 position)
         {
             position = Vector3.zero;

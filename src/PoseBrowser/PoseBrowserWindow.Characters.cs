@@ -216,6 +216,7 @@ namespace HS2SandboxPlugin
 
             int layoutMoved = 0;
             bool heightAdjust = _applyGroupRelativeHeights && _applyGroupRelativePositions;
+            bool scaleAdjust = _applyGroupRelativeObjectScales && _applyGroupRelativePositions;
             if (_applyGroupRelativePositions &&
                 layoutGroup != null &&
                 (layoutGroup.MemberRelativeOffsets.Count > 0 || layoutGroup.MemberRelativeRotations.Count > 0))
@@ -226,7 +227,8 @@ namespace HS2SandboxPlugin
                     poses,
                     chars,
                     _dataService.PoseRootPath,
-                    heightAdjust);
+                    heightAdjust,
+                    scaleAdjust);
             }
 
             RecordPoseHistoryAfterMultiApply(poses, chars);
@@ -239,9 +241,15 @@ namespace HS2SandboxPlugin
 
             if (layoutMoved > 0)
             {
-                string heightNote = heightAdjust ? " (body-height Y adjustment on)" : "";
+                string adjustNote = "";
+                if (heightAdjust && scaleAdjust)
+                    adjustNote = " (body-height Y + object-scale XYZ adjustment on)";
+                else if (heightAdjust)
+                    adjustNote = " (body-height Y adjustment on)";
+                else if (scaleAdjust)
+                    adjustNote = " (object-scale XYZ adjustment on)";
                 SandboxServices.Log.LogMessage(
-                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} character(s) and {layoutMoved} relative layout change(s) from group \"{layoutGroup!.Name}\"{heightNote}.");
+                    $"PoseBrowser: Applied {applied} pose(s) to {chars.Count} character(s) and {layoutMoved} relative layout change(s) from group \"{layoutGroup!.Name}\"{adjustNote}.");
             }
             else if (layoutGroup != null &&
                      (layoutGroup.MemberRelativeOffsets.Count > 0 || layoutGroup.MemberRelativeRotations.Count > 0))

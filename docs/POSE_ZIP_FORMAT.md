@@ -114,7 +114,7 @@ Every `file` listed in `items` **must** exist as a **stored** ZIP entry with **e
 
 ### `groups` (v3+, optional)
 
-From manifest **version 3**, `metadata.json` may include a **`groups`** array. Each element describes a Pose Browser pose group. Manifest **version 4** adds optional per-member layout offsets; **version 5** adds per-member body heights; **version 6** adds per-member relative rotations.
+From manifest **version 3**, `metadata.json` may include a **`groups`** array. Each element describes a Pose Browser pose group. Manifest **version 4** adds optional per-member layout offsets; **version 5** adds per-member body heights; **version 6** adds per-member relative rotations; **version 7** adds per-member Studio object scales.
 
 ```json
 {
@@ -140,8 +140,9 @@ From manifest **version 3**, `metadata.json` may include a **`groups`** array. E
 | `memberRelativeOffsets` | number[][] | Optional (v4+). Parallel to `members`. Index `0` is the anchor `[0,0,0]`; later entries are position offsets in the anchor's local frame when the layout was saved (applied as `anchorPos + anchorRot * offset`). |
 | `memberBodyHeights` | number[] | Optional (v5). Parallel to `members`. Maker body-height slider per pose (including anchor at index `0`) when layout was saved. |
 | `memberRelativeRotations` | number[][] | Optional (v6). Parallel to `members`. Index `0` is anchor identity `[0,0,0,1]`; later entries are quaternion `[x,y,z,w]` for rotation relative to the anchor (`Inverse(anchorRot) * memberRot`). Legacy 3-value rows are Euler degrees. |
+| `memberObjectScales` | number[][] | Optional (v7). Parallel to `members`. Studio guide object scale `[x,y,z]` per pose (including anchor at index `0`) when layout was saved. |
 
-Omit `groups` or use manifest **version 2** for packs without grouping. v2–v5 packs import unchanged. Groups without layout fields behave as before.
+Omit `groups` or use manifest **version 2** for packs without grouping. v2–v6 packs import unchanged. Groups without layout fields behave as before.
 
 ## Pose files under `poses/`
 
@@ -191,9 +192,9 @@ You can also export a small pack from the game once and **replace** the contents
 
 ## Legacy v1 packs (still imported)
 
-Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility. **New** exports use manifest **version 6**; older v2–v5 packs still import.
+Older Pose Browser builds used a different manifest (`HS2Sandbox.PosePack` / `HS2Sandbox.PoseTreePack`) and opaque blobs under **`files/0000`**, **`files/0001`**, …. The current importer still **reads** those for backward compatibility. **New** exports use manifest **version 7**; older v2–v6 packs still import.
 
-For new tooling, **target version 6**.
+For new tooling, **target version 7**.
 
 ## Reference implementation in this repository
 

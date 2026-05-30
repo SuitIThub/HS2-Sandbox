@@ -8,8 +8,8 @@ namespace HS2SandboxPlugin
 {
     internal static class PoseBrowserCharacterApply
     {
-        /// <summary>Min |H_member − H_anchor| at save to use spread ratio for Y scaling (else anchor-only / averaged).</summary>
-        private const float BodyHeightSpreadEpsilon = 0.001f;
+        /// <summary>Min |member − anchor| at save to use spread ratio for layout scaling (else anchor-only / averaged).</summary>
+        private const float LayoutSpreadEpsilon = 0.001f;
 
         private enum PoseGenderTag
         {
@@ -278,7 +278,8 @@ namespace HS2SandboxPlugin
             IReadOnlyList<PoseGridItem> poses,
             IReadOnlyList<OCIChar> studioSelection,
             string poseRootPath,
-            bool adjustForBodyHeight = false)
+            bool adjustForBodyHeight = false,
+            bool adjustForObjectScale = false)
         {
             if ((group.MemberRelativeOffsets.Count == 0 && group.MemberRelativeRotations.Count == 0) ||
                 poses.Count == 0)
@@ -300,6 +301,14 @@ namespace HS2SandboxPlugin
                               !string.IsNullOrEmpty(anchorRel) &&
                               group.MemberBodyHeights.TryGetValue(anchorRel, out savedAnchorH) &&
                               PoseDataService.TryGetCharacterBodyHeight(anchorChar, out currentAnchorH);
+
+            Vector3 savedAnchorScale = Vector3.one;
+            Vector3 currentAnchorScale = Vector3.one;
+            bool useObjectScales = adjustForObjectScale &&
+                                   group.MemberObjectScales.Count > 0 &&
+                                   !string.IsNullOrEmpty(anchorRel) &&
+                                   group.MemberObjectScales.TryGetValue(anchorRel, out savedAnchorScale) &&
+                                   PoseDataService.TryGetCharacterObjectScale(anchorChar, out currentAnchorScale);
 
             int moved = 0;
             for (int pi = 1; pi < plan.Count; pi++)
@@ -323,11 +332,23 @@ namespace HS2SandboxPlugin
                     if (haveAnchorPos && hasOffset)
                     {
                         Vector3 offset = localOffset;
+                        if (useObjectScales &&
+                            group.MemberObjectScales.TryGetValue(rel, out Vector3 savedMemberScale) &&
+                            PoseDataService.TryGetCharacterObjectScale(character, out Vector3 currentMemberScale))
+                        {
+                            offset = ScaleRelativeOffset(
+                                offset,
+                                savedAnchorScale,
+                                savedMemberScale,
+                                currentAnchorScale,
+                                currentMemberScale);
+                        }
+
                         if (useHeights &&
                             group.MemberBodyHeights.TryGetValue(rel, out float savedMemberH) &&
                             PoseDataService.TryGetCharacterBodyHeight(character, out float currentMemberH))
                         {
-                            offset.y = ScaleRelativeOffsetY(
+                            offset.y = ScaleRelativeOffsetComponent(
                                 offset.y, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
                         }
 
@@ -442,34 +463,57 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>
-        /// Scales the saved relative Y offset from maker body-height ratios (no fixed world multiplier).
-        /// Uses spread ratio when save had distinct anchor/member heights; otherwise anchor scale or average.
+        /// Scales one saved relative offset component from saved vs current layout ratios (no fixed world multiplier).
+        /// Uses spread ratio when save had distinct anchor/member values; otherwise anchor ratio or average.
         /// </summary>
+        internal static float ScaleRelativeOffsetComponent(
+            float savedComponent,
+            float savedAnchor,
+            float savedMember,
+            float currentAnchor,
+            float currentMember)
+        {
+            float savedSpread = savedMember - savedAnchor;
+            if (Mathf.Abs(savedSpread) >= LayoutSpreadEpsilon)
+            {
+                float currentSpread = currentMember - currentAnchor;
+                return savedComponent * (currentSpread / savedSpread);
+            }
+
+            if (Mathf.Abs(savedAnchor) >= LayoutSpreadEpsilon)
+                return savedComponent * (currentAnchor / savedAnchor);
+
+            float scaleAnchor = Mathf.Abs(savedAnchor) >= LayoutSpreadEpsilon
+                ? currentAnchor / savedAnchor
+                : 1f;
+            float scaleMember = Mathf.Abs(savedMember) >= LayoutSpreadEpsilon
+                ? currentMember / savedMember
+                : 1f;
+            return savedComponent * 0.5f * (scaleAnchor + scaleMember);
+        }
+
         internal static float ScaleRelativeOffsetY(
             float rySaved,
             float savedAnchorH,
             float savedMemberH,
             float currentAnchorH,
-            float currentMemberH)
-        {
-            float savedSpread = savedMemberH - savedAnchorH;
-            if (Mathf.Abs(savedSpread) >= BodyHeightSpreadEpsilon)
-            {
-                float currentSpread = currentMemberH - currentAnchorH;
-                return rySaved * (currentSpread / savedSpread);
-            }
+            float currentMemberH) =>
+            ScaleRelativeOffsetComponent(rySaved, savedAnchorH, savedMemberH, currentAnchorH, currentMemberH);
 
-            if (Mathf.Abs(savedAnchorH) >= BodyHeightSpreadEpsilon)
-                return rySaved * (currentAnchorH / savedAnchorH);
-
-            float scaleAnchor = Mathf.Abs(savedAnchorH) >= BodyHeightSpreadEpsilon
-                ? currentAnchorH / savedAnchorH
-                : 1f;
-            float scaleMember = Mathf.Abs(savedMemberH) >= BodyHeightSpreadEpsilon
-                ? currentMemberH / savedMemberH
-                : 1f;
-            return rySaved * 0.5f * (scaleAnchor + scaleMember);
-        }
+        /// <summary>Scales saved anchor-local offset XYZ from Studio object-scale ratios (same rules as body-height Y).</summary>
+        internal static Vector3 ScaleRelativeOffset(
+            Vector3 savedOffset,
+            Vector3 savedAnchorScale,
+            Vector3 savedMemberScale,
+            Vector3 currentAnchorScale,
+            Vector3 currentMemberScale) =>
+            new Vector3(
+                ScaleRelativeOffsetComponent(
+                    savedOffset.x, savedAnchorScale.x, savedMemberScale.x, currentAnchorScale.x, currentMemberScale.x),
+                ScaleRelativeOffsetComponent(
+                    savedOffset.y, savedAnchorScale.y, savedMemberScale.y, currentAnchorScale.y, currentMemberScale.y),
+                ScaleRelativeOffsetComponent(
+                    savedOffset.z, savedAnchorScale.z, savedMemberScale.z, currentAnchorScale.z, currentMemberScale.z));
 
         /// <summary>
         /// Next eligible character in pool order, skipping anyone already posed in this apply batch.

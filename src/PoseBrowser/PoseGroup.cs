@@ -24,6 +24,12 @@ namespace HS2SandboxPlugin
         public Dictionary<string, float> MemberBodyHeights { get; set; } =
             new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         /// <summary>
+        /// Studio guide object scale per member (including anchor), keyed by member relative path.
+        /// Used with <see cref="MemberRelativeOffsets"/> to scale saved anchor-local offsets on apply when object scale differs.
+        /// </summary>
+        public Dictionary<string, Vector3> MemberObjectScales { get; set; } =
+            new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
         /// Rotation relative to the anchor (first member), keyed by member relative path.
         /// <c>Quaternion.Inverse(anchorRot) * memberRot</c>; anchor is not stored here.
         /// </summary>
