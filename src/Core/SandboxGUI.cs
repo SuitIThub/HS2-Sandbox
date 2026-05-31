@@ -36,9 +36,7 @@ namespace HS2SandboxPlugin
                 if (!_windows.TryGetValue(kvp.Key, out var window))
                     continue;
 
-                bool shouldDraw = kvp.Value;
-                if (!shouldDraw && window is PoseBrowserWindow poseBrowser && poseBrowser.HasIndependentUndockedStash)
-                    shouldDraw = true;
+                bool shouldDraw = kvp.Value || window.ShouldDrawWhileHidden;
 
                 if (shouldDraw)
                     window.DrawWindow();

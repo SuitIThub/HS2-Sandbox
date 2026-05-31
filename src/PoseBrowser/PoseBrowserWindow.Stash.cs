@@ -35,6 +35,8 @@ namespace HS2SandboxPlugin
         /// <summary>Undocked stash draws even when the main Pose Browser window is closed.</summary>
         public bool HasIndependentUndockedStash => _showUndockedStash;
 
+        public override bool ShouldDrawWhileHidden => HasIndependentUndockedStash;
+
         private bool IsStashDockedVisible => _showDockedStash && isVisible;
         private bool IsStashUndockedVisible => _showUndockedStash;
         private bool IsAnyStashVisible => _showDockedStash || _showUndockedStash;

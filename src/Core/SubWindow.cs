@@ -26,6 +26,9 @@ namespace HS2SandboxPlugin
             // Override in derived classes if needed
         }
 
+        /// <summary>When true, <see cref="SandboxGUI"/> still calls <see cref="DrawWindow"/> even if the toolbar window is hidden.</summary>
+        public virtual bool ShouldDrawWhileHidden => false;
+
         public virtual void DrawWindow()
         {
             if (isVisible)
