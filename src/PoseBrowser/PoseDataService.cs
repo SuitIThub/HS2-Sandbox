@@ -916,6 +916,10 @@ namespace HS2SandboxPlugin
             position = Vector3.zero;
             try
             {
+#if KKS
+                if (TryGetCharacterGuideWorldPositionFromChangeAmount(oci, out position))
+                    return true;
+#endif
                 if (oci?.guideObject?.transformTarget != null)
                 {
                     position = oci.guideObject.transformTarget.position;
@@ -940,6 +944,11 @@ namespace HS2SandboxPlugin
         {
             if (oci?.guideObject == null)
                 return false;
+
+#if KKS
+            if (TrySetCharacterGuideWorldPositionFromChangeAmount(oci, worldPosition))
+                return true;
+#endif
             if (!TryGetCharacterWorldPosition(oci, out Vector3 current))
                 return false;
 
@@ -966,6 +975,72 @@ namespace HS2SandboxPlugin
                 return false;
             }
         }
+
+#if KKS
+        /// <summary>
+        /// KKS character guides often disagree with <see cref="GuideObject.transformTarget"/>; use Studio changeAmount space.
+        /// </summary>
+        private static bool TryGetCharacterGuideWorldPositionFromChangeAmount(OCIChar oci, out Vector3 position)
+        {
+            position = Vector3.zero;
+            try
+            {
+                GuideObject? guide = oci?.guideObject;
+                ChangeAmount? ca = guide?.changeAmount;
+                if (ca == null)
+                    return false;
+
+                Transform? parent = guide!.parent;
+                position = parent != null ? parent.TransformPoint(ca.pos) : ca.pos;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TrySetCharacterGuideWorldPositionFromChangeAmount(OCIChar oci, Vector3 worldPosition)
+        {
+            try
+            {
+                GuideObject? guide = oci?.guideObject;
+                ChangeAmount? ca = guide?.changeAmount;
+                if (ca == null)
+                    return false;
+
+                Transform? parent = guide!.parent;
+                Vector3 local = parent != null ? parent.InverseTransformPoint(worldPosition) : worldPosition;
+                if ((ca.pos - local).sqrMagnitude < 1e-12f)
+                    return true;
+
+                ca.pos = local;
+                try
+                {
+                    ca.OnChange();
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                try
+                {
+                    guide.CalcPosition();
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+#endif
 
         /// <summary>World rotation from the guide target (falls back to <see cref="ChangeAmount.rot"/>).</summary>
         public static bool TryGetCharacterWorldRotation(OCIChar oci, out Quaternion rotation)
@@ -1054,6 +1129,7 @@ namespace HS2SandboxPlugin
         {
             try
             {
+                // Empty instance: ctor(ociChar) copies IK/FK into dicts and Load() throws duplicate-key (HS2/KKS).
                 var fileInfo = new PauseCtrl.FileInfo(null);
                 using var fs = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 fs.Seek(item.DataPosition, SeekOrigin.Begin);
@@ -1069,7 +1145,14 @@ namespace HS2SandboxPlugin
 
                 _setExHookValue?.Invoke(item.FilePath, ociChar);
                 fileInfo.Load(br, version);
+#if KKS
+                bool hadGuidePos = TryGetCharacterWorldPosition(ociChar, out Vector3 guidePosBefore);
+#endif
                 fileInfo.Apply(ociChar);
+#if KKS
+                if (hadGuidePos)
+                    RestoreCharacterGuideWorldPositionAfterPoseApply(ociChar, guidePosBefore);
+#endif
                 MaybeFreezeAnimationSpeedAfterApply(ociChar);
                 return true;
             }
@@ -1079,6 +1162,23 @@ namespace HS2SandboxPlugin
                 return false;
             }
         }
+
+#if KKS
+        /// <summary>
+        /// Pose IK/FK apply can shift the character guide on KKS; keep the pre-apply studio layout position.
+        /// </summary>
+        private static void RestoreCharacterGuideWorldPositionAfterPoseApply(OCIChar oci, Vector3 worldPositionBefore)
+        {
+            if (!TryGetCharacterWorldPosition(oci, out Vector3 current))
+            {
+                TrySetCharacterWorldPosition(oci, worldPositionBefore);
+                return;
+            }
+
+            if ((current - worldPositionBefore).sqrMagnitude > 1e-6f)
+                TrySetCharacterWorldPosition(oci, worldPositionBefore);
+        }
+#endif
 
         /// <summary>Sets <see cref="ObjectCtrlInfo.animeSpeed"/> to 0 when the option is enabled in config.</summary>
         internal static void MaybeFreezeAnimationSpeedAfterApply(OCIChar? oci)
@@ -1435,7 +1535,14 @@ namespace HS2SandboxPlugin
                     using var br = new BinaryReader(ms);
                     var fileInfo = new PauseCtrl.FileInfo(null);
                     fileInfo.Load(br, PoseVersion);
+#if KKS
+                    bool hadGuidePos = TryGetCharacterWorldPosition(oci, out Vector3 guidePosBefore);
+#endif
                     fileInfo.Apply(oci);
+#if KKS
+                    if (hadGuidePos)
+                        RestoreCharacterGuideWorldPositionAfterPoseApply(oci, guidePosBefore);
+#endif
                 }
                 catch (Exception ex)
                 {

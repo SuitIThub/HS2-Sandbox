@@ -38,6 +38,7 @@ namespace HS2SandboxPlugin
 
         private int _itemRenameIndex = -1;
         private string _itemRenameText = "";
+        private Action? _itemPaneDeferredGuiAction;
 
         private GUIStyle? _itemPaneWarnLabelStyle;
         private GUIStyle? _itemPaneSectionLabelStyle;
@@ -84,6 +85,7 @@ namespace HS2SandboxPlugin
             _itemPaneCachedStudioItems.Clear();
             _itemPaneCachedRecords = Array.Empty<PoseAssociatedItemRecord>();
             _itemRenameIndex = -1;
+            _itemPaneDeferredGuiAction = null;
         }
 
         private void CachePoseFileInfoForItemPane(PoseGridItem pose)
@@ -179,9 +181,26 @@ namespace HS2SandboxPlugin
                 ItemAssociationPaneDefaultWidth);
         }
 
+        private void RunDeferredItemPaneGuiActions()
+        {
+            if (_itemPaneDeferredGuiAction == null)
+                return;
+
+            Action action = _itemPaneDeferredGuiAction;
+            _itemPaneDeferredGuiAction = null;
+            action();
+        }
+
+        private void ScheduleItemPaneGuiAction(Action action) =>
+            _itemPaneDeferredGuiAction = action;
+
         private void DrawItemAssociationWindowContent(int winId)
         {
             InitItemPaneStyles();
+            RunDeferredItemPaneGuiActions();
+
+            if (Event.current.type == EventType.Layout)
+                RefreshItemAssociationLiveState(force: false);
 
             if (_itemAssociationPose == null)
             {
@@ -190,8 +209,6 @@ namespace HS2SandboxPlugin
                     CloseItemAssociationPane();
                 return;
             }
-
-            RefreshItemAssociationLiveState(force: false);
 
             GUILayout.BeginVertical();
             DrawItemAssociationPoseWarning(_itemPaneCachedPoseMismatch);
@@ -261,7 +278,11 @@ namespace HS2SandboxPlugin
             bool canAdd = _itemAssociationPose != null && chars.Count == 1 && studioItems.Count > 0;
             GUI.enabled = canAdd;
             if (GUILayout.Button("Add selected item(s)", GUILayout.Height(26f)) && canAdd)
-                AddSelectedWorkspaceItemsToPose(chars[0], studioItems);
+            {
+                OCIChar anchor = chars[0];
+                var itemsCopy = studioItems.ToList();
+                ScheduleItemPaneGuiAction(() => AddSelectedWorkspaceItemsToPose(anchor, itemsCopy));
+            }
             GUI.enabled = true;
             GUILayout.Space(4f);
         }
@@ -310,13 +331,21 @@ namespace HS2SandboxPlugin
                 ? _itemPaneStoredNameSelectedButtonStyle!
                 : _itemPaneStoredNameButtonStyle!;
             if (GUILayout.Button(displayName, nameStyle, GUILayout.MinWidth(60f), GUILayout.ExpandWidth(true)))
-                LoadAssociatedItems(_itemAssociationPose!, new[] { index }, ignoreCheckboxes: true);
+            {
+                int loadIndex = index;
+                ScheduleItemPaneGuiAction(() =>
+                    LoadAssociatedItems(_itemAssociationPose!, new[] { loadIndex }, ignoreCheckboxes: true));
+            }
 
-            if (_itemAssociationRowWarnings.TryGetValue(index, out string? warn) && !string.IsNullOrEmpty(warn))
+            _itemAssociationRowWarnings.TryGetValue(index, out string? warn);
+            bool showWarn = !string.IsNullOrEmpty(warn);
             {
                 var prev = GUI.color;
-                GUI.color = new Color(1f, 0.55f, 0.1f);
-                GUILayout.Label(new GUIContent("⚠", warn), GUILayout.Width(16f));
+                if (showWarn)
+                    GUI.color = new Color(1f, 0.55f, 0.1f);
+                GUILayout.Label(
+                    showWarn ? new GUIContent("⚠", warn) : GUIContent.none,
+                    GUILayout.Width(16f));
                 GUI.color = prev;
             }
 
@@ -326,8 +355,13 @@ namespace HS2SandboxPlugin
                     GUILayout.Width(ItemPaneIconButtonWidth),
                     GUILayout.Height(20f)))
             {
-                _itemRenameIndex = index;
-                _itemRenameText = displayName;
+                int renameIndex = index;
+                string renameText = displayName;
+                ScheduleItemPaneGuiAction(() =>
+                {
+                    _itemRenameIndex = renameIndex;
+                    _itemRenameText = renameText;
+                });
             }
 
             if (GUILayout.Button(
@@ -336,13 +370,8 @@ namespace HS2SandboxPlugin
                     GUILayout.Width(ItemPaneIconButtonWidth),
                     GUILayout.Height(20f)))
             {
-                _itemDb.RemoveItemAt(_itemAssociationPose!, index);
-                if (_itemRenameIndex == index)
-                    _itemRenameIndex = -1;
-                else if (_itemRenameIndex > index)
-                    _itemRenameIndex--;
-                RefreshItemAssociationRowChecks();
-                RefreshItemAssociationLiveState(force: true);
+                int removeIndex = index;
+                ScheduleItemPaneGuiAction(() => RemoveStoredItemAt(removeIndex));
             }
 
             GUILayout.EndHorizontal();
@@ -359,14 +388,10 @@ namespace HS2SandboxPlugin
             _itemRenameText = GUILayout.TextField(_itemRenameText);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("OK", GUILayout.Height(22f)))
-            {
-                if (_itemDb.TrySetItemDisplayNameAt(_itemAssociationPose, _itemRenameIndex, _itemRenameText))
-                    RefreshItemAssociationLiveState(force: true);
-                _itemRenameIndex = -1;
-            }
+                ScheduleItemPaneGuiAction(CommitItemRename);
 
             if (GUILayout.Button("Cancel", GUILayout.Height(22f)))
-                _itemRenameIndex = -1;
+                ScheduleItemPaneGuiAction(() => _itemRenameIndex = -1);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
         }
@@ -419,20 +444,53 @@ namespace HS2SandboxPlugin
                         indices.Add(i);
                 }
 
-                LoadAssociatedItems(_itemAssociationPose!, indices, ignoreCheckboxes: false);
+                var copy = indices;
+                ScheduleItemPaneGuiAction(() =>
+                    LoadAssociatedItems(_itemAssociationPose!, copy, ignoreCheckboxes: false));
             }
 
             if (GUILayout.Button("Load All", GUILayout.Height(26f)) && canLoad)
             {
-                var all = Enumerable.Range(0, records.Count).ToList();
-                LoadAssociatedItems(_itemAssociationPose!, all, ignoreCheckboxes: true);
+                int count = records.Count;
+                ScheduleItemPaneGuiAction(() =>
+                    LoadAssociatedItems(
+                        _itemAssociationPose!,
+                        Enumerable.Range(0, count).ToList(),
+                        ignoreCheckboxes: true));
             }
 
             GUILayout.EndHorizontal();
             GUI.enabled = true;
 
-            if (!canLoad)
-                GUILayout.Label("Select exactly one character in Studio to load items.");
+            GUILayout.Label(
+                canLoad
+                    ? GUIContent.none
+                    : new GUIContent("Select exactly one character in Studio to load items."),
+                GUILayout.MinHeight(canLoad ? 0f : 20f));
+        }
+
+        private void CommitItemRename()
+        {
+            if (_itemRenameIndex < 0 || _itemAssociationPose == null)
+                return;
+
+            if (_itemDb.TrySetItemDisplayNameAt(_itemAssociationPose, _itemRenameIndex, _itemRenameText))
+                RefreshItemAssociationLiveState(force: true);
+            _itemRenameIndex = -1;
+        }
+
+        private void RemoveStoredItemAt(int index)
+        {
+            if (_itemAssociationPose == null)
+                return;
+
+            _itemDb.RemoveItemAt(_itemAssociationPose, index);
+            if (_itemRenameIndex == index)
+                _itemRenameIndex = -1;
+            else if (_itemRenameIndex > index)
+                _itemRenameIndex--;
+            RefreshItemAssociationRowChecks();
+            RefreshItemAssociationLiveState(force: true);
         }
 
         private void LoadAssociatedItems(
