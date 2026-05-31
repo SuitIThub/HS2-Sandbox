@@ -33,10 +33,15 @@ namespace HS2SandboxPlugin
             // Draw subwindows based on their states
             foreach (var kvp in _windowStates)
             {
-                if (kvp.Value && _windows.ContainsKey(kvp.Key))
-                {
-                    _windows[kvp.Key].DrawWindow();
-                }
+                if (!_windows.TryGetValue(kvp.Key, out var window))
+                    continue;
+
+                bool shouldDraw = kvp.Value;
+                if (!shouldDraw && window is PoseBrowserWindow poseBrowser && poseBrowser.HasIndependentUndockedStash)
+                    shouldDraw = true;
+
+                if (shouldDraw)
+                    window.DrawWindow();
             }
 
             // Draw timeline mouse-position crosses on top when enabled

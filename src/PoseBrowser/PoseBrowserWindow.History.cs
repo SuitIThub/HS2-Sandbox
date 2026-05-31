@@ -62,6 +62,7 @@ namespace HS2SandboxPlugin
         {
             DrawHistoryUndoRedoButtons();
             DrawHistoryPaneToggleButton();
+            DrawStashTopBarButton();
         }
 
         private void DrawHistoryCompactListHeaderButtons()

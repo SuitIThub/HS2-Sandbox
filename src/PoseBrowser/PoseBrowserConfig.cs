@@ -6,7 +6,7 @@ namespace HS2SandboxPlugin
     /// <summary>BepInEx ConfigurationManager entries for Pose Browser (mirrored in the in-game Options panel).</summary>
     internal static class PoseBrowserConfig
     {
-        public const int OptionsJsonVersion = 14;
+        public const int OptionsJsonVersion = 16;
 
         /// <summary>Config section used for <see cref="KeyboardShortcut"/> entries (ConfigurationManager key picker).</summary>
         public const string KeyboardSection = "Pose Browser · Keyboard shortcuts";
@@ -25,6 +25,7 @@ namespace HS2SandboxPlugin
         public static ConfigEntry<float>? CompactHoverThumbnailWidth;
         public static ConfigEntry<KeyboardShortcut>? HotkeyUndo;
         public static ConfigEntry<KeyboardShortcut>? HotkeyRedo;
+        public static ConfigEntry<KeyboardShortcut>? HotkeyToggleUndockedStash;
 
         public static void Register(ConfigFile cfg)
         {
@@ -137,6 +138,13 @@ namespace HS2SandboxPlugin
                 new KeyboardShortcut(KeyCode.None),
                 new ConfigDescription(
                     "Redo pose history for Studio-selected characters. " + hk));
+
+            HotkeyToggleUndockedStash = cfg.Bind(
+                KeyboardSection,
+                "Toggle undocked pose stash",
+                new KeyboardShortcut(KeyCode.None),
+                new ConfigDescription(
+                    "Open or close the floating pose stash window (undocked). " + windowHk));
         }
     }
 }

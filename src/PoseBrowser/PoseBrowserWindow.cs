@@ -368,6 +368,7 @@ namespace HS2SandboxPlugin
             LoadPersistedOptions();
             LoadFilterPresets();
             InitPoseHistory();
+            InitPoseStash();
             ApplyPoseBrowserConfigToUi();
             SyncWindowTitleForLayoutTier();
             _poseBrowserUpdateCheckCoroutine = StartCoroutine(_poseBrowserUpdateCheck.RunCheck());
@@ -404,6 +405,7 @@ namespace HS2SandboxPlugin
             _groupDb?.ForceSave();
             _itemDb?.ForceSave();
             SavePoseHistory();
+            SavePoseStash();
             SavePersistedOptions();
             if (_libraryCacheCoroutine != null)
             {
@@ -439,7 +441,10 @@ namespace HS2SandboxPlugin
         protected override void OnVisibilityChanged(bool visible)
         {
             if (!visible)
+            {
                 _isMinimized = false;
+                OnMainPoseBrowserHidden();
+            }
             if (visible && _folderTree.RootNodes.Count == 0)
                 _folderTree.Refresh();
             if (visible && !_didAutoLoadBrowse)
@@ -451,7 +456,11 @@ namespace HS2SandboxPlugin
 
         public override void DrawWindow()
         {
-            if (!isVisible) return;
+            if (_showUndockedStash)
+                DrawUndockedStashWindow();
+
+            if (!isVisible)
+                return;
 
             if (_thumbCapture.IsActive)
                 _thumbCapture.DrawOverlay();
@@ -495,7 +504,7 @@ namespace HS2SandboxPlugin
 
             if (_layoutTier == PoseBrowserLayoutTier.Normal)
             {
-                bool anyDockedPane = _showOptionsPane || _showHelpPane || _showHistoryPane ||
+                bool anyDockedPane = _showOptionsPane || _showHelpPane || _showHistoryPane || IsStashDockedVisible ||
                     _tagWindowPurpose != TagWindowPurpose.None || _showCharacterConfigPane || _showSortPane ||
                     _showItemAssociationPane;
                 bool layoutPass = Event.current.type == EventType.Layout;
@@ -510,6 +519,9 @@ namespace HS2SandboxPlugin
 
                 if (_showHistoryPane)
                     DrawDockedPaneWindow(HistoryWindowId, ref _historyWindowRect, DrawHistoryWindowContent, "Pose Browser · History", HistoryPaneDefaultWidth);
+
+                if (IsStashDockedVisible)
+                    DrawDockedPaneWindow(StashWindowId, ref _stashWindowRect, DrawStashWindowContent, "Pose Browser · Stash", StashPaneDefaultWidth);
 
                 if (_tagWindowPurpose != TagWindowPurpose.None)
                 {
@@ -532,12 +544,15 @@ namespace HS2SandboxPlugin
                 if (_showItemAssociationPane)
                     DrawItemAssociationDockedPane();
             }
-            else if (_layoutTier == PoseBrowserLayoutTier.CompactList &&
-                     (_showCharacterConfigPane || _showHistoryPane))
+            else if ((_layoutTier == PoseBrowserLayoutTier.CompactList ||
+                      _layoutTier == PoseBrowserLayoutTier.CompactMini) &&
+                     (_showCharacterConfigPane || _showHistoryPane || IsStashDockedVisible))
             {
                 SyncCompactListDockedPanes();
                 if (_showHistoryPane)
                     DrawDockedPaneWindow(HistoryWindowId, ref _historyWindowRect, DrawHistoryWindowContent, "Pose Browser · History", HistoryPaneDefaultWidth);
+                if (IsStashDockedVisible)
+                    DrawDockedPaneWindow(StashWindowId, ref _stashWindowRect, DrawStashWindowContent, "Pose Browser · Stash", StashPaneDefaultWidth);
                 if (_showCharacterConfigPane)
                     DrawCharacterConfigDockedPane();
             }
@@ -550,6 +565,8 @@ namespace HS2SandboxPlugin
             float x = windowRect.xMax + DockedPaneGap;
             if (_showHistoryPane)
                 x = PlaceDockedPane(ref _historyWindowRect, x, HistoryPaneDefaultWidth);
+            if (IsStashDockedVisible)
+                x = PlaceDockedPane(ref _stashWindowRect, x, StashPaneDefaultWidth);
             if (_showCharacterConfigPane)
                 PlaceDockedPane(ref _characterConfigWindowRect, x, CharacterPaneDefaultWidth);
             ShiftOpenDockedPanesLeftToFitScreen();
@@ -586,6 +603,8 @@ namespace HS2SandboxPlugin
                 x = PlaceDockedPane(ref _helpWindowRect, x, HelpPaneDefaultWidth);
             if (_showHistoryPane)
                 x = PlaceDockedPane(ref _historyWindowRect, x, HistoryPaneDefaultWidth);
+            if (IsStashDockedVisible)
+                x = PlaceDockedPane(ref _stashWindowRect, x, StashPaneDefaultWidth);
             if (_tagWindowPurpose != TagWindowPurpose.None)
                 x = PlaceDockedPane(ref _tagWindowRect, x, TagPaneDefaultWidth);
             if (_showCharacterConfigPane)
@@ -621,6 +640,8 @@ namespace HS2SandboxPlugin
                 ShiftPaneX(ref _helpWindowRect, -overflow);
             if (_showHistoryPane)
                 ShiftPaneX(ref _historyWindowRect, -overflow);
+            if (IsStashDockedVisible)
+                ShiftPaneX(ref _stashWindowRect, -overflow);
             if (_tagWindowPurpose != TagWindowPurpose.None)
                 ShiftPaneX(ref _tagWindowRect, -overflow);
             if (_showCharacterConfigPane)
@@ -656,6 +677,13 @@ namespace HS2SandboxPlugin
                 any = true;
                 minX = Mathf.Min(minX, _historyWindowRect.x);
                 maxX = Mathf.Max(maxX, _historyWindowRect.xMax);
+            }
+
+            if (IsStashDockedVisible)
+            {
+                any = true;
+                minX = Mathf.Min(minX, _stashWindowRect.x);
+                maxX = Mathf.Max(maxX, _stashWindowRect.xMax);
             }
 
             if (_tagWindowPurpose != TagWindowPurpose.None)
@@ -1929,6 +1957,9 @@ namespace HS2SandboxPlugin
                     style,
                     labelOpts);
             }
+
+            if (compact)
+                DrawStashPaneToggleButton(controlHeight, 52f);
 
             if (!compact)
                 DrawPoseBrowserUpdateNotice(controlHeight);
@@ -5539,6 +5570,22 @@ namespace HS2SandboxPlugin
                 if (data.optionsVersion >= 13)
                     _compactHoverThumbnailWidth = Mathf.Clamp(data.compactHoverThumbnailWidth, 80f, 600f);
 
+                if (data.optionsVersion >= 15)
+                {
+                    if (data.stashFloatingW > 10f)
+                    {
+                        _savedStashFloatingW = data.stashFloatingW;
+                        _savedStashFloatingH = data.stashFloatingH;
+                        _savedStashFloatingX = data.stashFloatingX;
+                        _savedStashFloatingY = data.stashFloatingY;
+                    }
+
+                    RestoreStashFloatingRectFromSaved();
+                }
+
+                if (data.optionsVersion >= 16)
+                    _stashPreferUndocked = data.stashPreferUndocked;
+
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
                 SyncWindowTitleForLayoutTier();
@@ -5554,6 +5601,8 @@ namespace HS2SandboxPlugin
             try
             {
                 CaptureWindowRectForCurrentTier();
+                if (IsStashUndockedVisible)
+                    CaptureStashFloatingRect();
                 string path = PersistedOptionsPath;
                 string? dir = Path.GetDirectoryName(path);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -5588,7 +5637,12 @@ namespace HS2SandboxPlugin
                     applyGroupRelativePositions = _applyGroupRelativePositions,
                     applyGroupRelativeHeights = _applyGroupRelativeHeights,
                     applyGroupRelativeObjectScales = _applyGroupRelativeObjectScales,
-                    compactHoverThumbnailWidth = _compactHoverThumbnailWidth
+                    compactHoverThumbnailWidth = _compactHoverThumbnailWidth,
+                    stashFloatingW = _savedStashFloatingW,
+                    stashFloatingH = _savedStashFloatingH,
+                    stashFloatingX = _savedStashFloatingX,
+                    stashFloatingY = _savedStashFloatingY,
+                    stashPreferUndocked = _stashPreferUndocked
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
@@ -5648,10 +5702,19 @@ namespace HS2SandboxPlugin
                 return;
             }
 
+            if (PoseBrowserConfig.HotkeyToggleUndockedStash!.Value.IsDown())
+            {
+                ToggleUndockedStashViaHotkey();
+                return;
+            }
+
             if (!isVisible) return;
 
             if (PoseBrowserConfig.HotkeyToggleMinimize!.Value.IsDown())
+            {
                 TogglePoseBrowserMinimize();
+                return;
+            }
         }
 
         private void TogglePoseBrowserVisible()
@@ -5844,6 +5907,7 @@ namespace HS2SandboxPlugin
             DrawHotkeyReadonlyRow("Toggle minimize (PB chip)", PoseBrowserConfig.HotkeyToggleMinimize);
             DrawHotkeyReadonlyRow("Undo pose change", PoseBrowserConfig.HotkeyUndo);
             DrawHotkeyReadonlyRow("Redo pose change", PoseBrowserConfig.HotkeyRedo);
+            DrawHotkeyReadonlyRow("Toggle undocked pose stash", PoseBrowserConfig.HotkeyToggleUndockedStash);
             GUILayout.EndVertical();
         }
 
@@ -5919,5 +5983,10 @@ namespace HS2SandboxPlugin
         public bool applyGroupRelativeHeights;
         public bool applyGroupRelativeObjectScales;
         public float compactHoverThumbnailWidth = 200f;
+        public float stashFloatingW;
+        public float stashFloatingH;
+        public float stashFloatingX;
+        public float stashFloatingY;
+        public bool stashPreferUndocked;
     }
 }
