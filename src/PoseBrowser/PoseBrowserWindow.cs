@@ -5022,7 +5022,8 @@ namespace HS2SandboxPlugin
                 "• <b>Update v…</b> — appears when a newer Pose Browser release is available.\n" +
                 "• <b>Save Pose</b> — save current character pose into the active folder (selected folder, pose root in <b>All poses</b> or <b>Favorites</b> view).\n" +
                 "• <b>Import…</b> — open a pose pack <b>.zip</b> (manifest v2–v4; preview in the grid, then pick a destination folder and <b>Apply</b> in the folder footer).\n" +
-                "• <b>Undo</b> / <b>Redo</b> / <b>History</b> — pose history for Studio-selected characters.",
+                "• <b>Undo</b> / <b>Redo</b> / <b>History</b> — pose history for Studio-selected characters.\n" +
+                "• <b>Stash</b> — quick pose clipboard (see <b>Pose stash</b> below). In compact views, <b>Stash</b> is on the character row.",
                 rich);
 
             GUILayout.Space(4f);
@@ -5076,11 +5077,26 @@ namespace HS2SandboxPlugin
                 "• Click a history line to jump to that snapshot; checkboxes choose pose / position / rotation. Data: <b>pose_browser_history.json</b>. Max entries per character: <b>Options</b> and BepInEx config.",
                 rich);
 
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Pose stash</b>", rich);
+            GUILayout.Label(
+                "A temporary pose clipboard (FK/IK only — not saved to the library). Distinct from <b>History</b> (automatic undo timeline).\n\n" +
+                "<b>Stash</b> (top bar, or character row in <b>List</b> / <b>Mini</b>) — toggles the stash panel open or closed. If already open (docked or floating), it closes. If closed, it reopens in the last mode you used (<b>docked</b> beside the browser or <b>floating</b>).\n\n" +
+                "<b>Stash selected character</b> — capture from <b>exactly one</b> Studio-selected character. Each entry is labeled with character name and timestamp.\n" +
+                "<b>Click an entry</b> — apply that stashed pose to <b>all</b> currently selected characters (one or many).\n" +
+                "<b>x</b> on a row — delete that entry (<b>Yes</b> / <b>No</b> confirm). <b>Clear entire stash</b> at the bottom (confirm required).\n" +
+                "<b>Auto-delete after apply</b> — remove an entry once applied.\n\n" +
+                "<b>Docked pane</b> — side panel like <b>History</b>; closes when the main Pose Browser closes. <b>Float</b> undocks to a free window (drag title bar, resize ◢).\n" +
+                "<b>Floating window</b> — <b>Dock</b> re-attaches beside the browser (or closes if the browser is hidden); <b>×</b> closes only the stash. Stays open when you close the main browser.\n\n" +
+                "Hotkey <b>Toggle undocked pose stash</b> — open/close the <b>floating</b> stash only (Configuration Manager → <b>Pose Browser · Keyboard shortcuts</b>).\n" +
+                "Data: <b>pose_stash.json</b>. Floating window size/position and dock vs float preference: <b>pose_browser_options.json</b>.",
+                rich);
+
             GUILayout.Space(8f);
             GUILayout.Label("<b>Compact views</b>", rich);
             GUILayout.Label(
                 "<b>View (…)</b> in the top bar (Window section) cycles <b>Full → List → Mini → Full</b>; choice is saved. Each mode remembers its own window size, position, and resize (stored in <b>pose_browser_options.json</b>).\n" +
-                "• <b>List</b> — optional folder tree (<b>Tree</b> toggle; separate saved window width with tree shown vs hidden, same position). Character row (<b>Chars</b> + Studio selection), scrollable list of <b>filtered</b> poses. <b>Prev / Next</b> applies in list order and wraps. Click a row for one pose; click a <b>▦ group</b> header for multi-character group apply.\n" +
+                "• <b>List</b> — optional folder tree (<b>Tree</b> toggle; separate saved window width with tree shown vs hidden, same position). Character row (<b>Chars</b>, Studio selection label, <b>Stash</b>). Scrollable list of <b>filtered</b> poses. <b>Prev / Next</b> applies in list order and wraps. Click a row for one pose; click a <b>▦ group</b> header for multi-character group apply.\n" +
                 "• <b>Mini</b> — <b>Folder</b> arrows walk <b>Root only</b>, every subfolder in depth-first order, <b>All poses</b>, then <b>Favorites</b>, wrapping; the <b>first filtered pose</b> in the new scope is applied immediately. <b>Pose</b> arrows walk the filtered list, apply each step, and wrap. <b>Reapply</b> repeats the current pose.",
                 rich);
 
@@ -5136,7 +5152,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Options panel</b>", rich);
             GUILayout.Label(
-                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target — same cycle as Mini <b>Folder</b> arrows; only while this window is focused and no text field has keyboard focus).\n" +
+                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash; only while this window is focused and no text field has keyboard focus).\n" +
                 "Card width and page cap are mirrored in BepInEx under <b>Pose Browser</b>. Window positions, layout tier (<b>Full</b>/<b>List</b>/<b>Mini</b>), sort mode, and the group layout toggle live in <b>pose_browser_options.json</b> next to the other Sandbox config files.",
                 rich);
 

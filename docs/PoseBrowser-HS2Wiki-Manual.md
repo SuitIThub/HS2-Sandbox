@@ -24,6 +24,7 @@ The Pose Browser is a Studio utility that:
 - In **3.1.0**: **Auto-capture** for batch thumbnails (configurable pause in Options / BepInEx), grid layout and window-resize fixes, multi-group action bar improvements.
 - In **3.2.0+**: **Group relative positions** — save offsets from an anchor pose (first in display order) plus **maker body height** per pose; re-apply with the group; stored in **pose_groups.tsv** and v5 ZIP; global **Apply relative positions** and **Adjust for body height** toggles (group bar + Options).
 - In **5.0.0+**: **Pose items** — register Studio **workspace items** per pose; docked **Items** pane with add/load, optional body-part attach, load toggles (position / rotation / scale / free placement), character scale and body-height adjustment on load; **pose_items.tsv** (v5).
+- **Pose stash** — temporary FK/IK clipboard: stash from one character, apply to any selection; docked side pane or independent floating window (persists when the main browser closes); **pose_stash.json**; hotkey for floating window.
 
 ### 1.1 Version note
 
@@ -37,15 +38,16 @@ It is opened from the Sandbox **left toolbar** (pose icon) when using the full H
 
 | Area | Role |
 |------|------|
-| **Top bar (Poses)** | Search, regex, favorites-only, **Tags** (dock **Tag filter**: include/exclude per tag, AND/OR inside pane), **Sort**, **Save Pose**, **Import…** |
-| **Character row** | Studio selection summary; **Chars** (priority lists); **Apply to characters…** when 2+ poses or one group entity is selected |
+| **Top bar (Poses)** | Search, regex, favorites-only, **Tags** (dock **Tag filter**: include/exclude per tag, AND/OR inside pane), **Sort**, **Save Pose**, **Import…**, **Undo** / **Redo** / **History**, **Stash** |
+| **Character row** | Studio selection summary; **Chars** (priority lists); **Stash** (compact List/Mini); **Apply to characters…** when 2+ poses or one group entity is selected |
 | **Folders (left)** | Tree under `studio/pose`, **All poses** / **★ Favorites** / **Root only**, refresh, folder footer actions |
 | **Grid** | Thumbnail cards, selection, pagination (if enabled in Options); **import preview** replaces the grid while a ZIP is open |
 | **Bottom bar** | Pose actions, **Items** (one pose), **Grouping** (Group… / Ungroup), or **group entity** bar; import preview hints |
 | **Items pane** | Docked when **Items** is open: register workspace items for the selected pose, load options, stored list |
+| **Stash pane** | Docked when **Stash** is open (or floating via **Float** / hotkey): temporary pose clipboard |
 | **Window** | **View (Full/List/Mini)** — cycles compact layout modes; **Help** — compact manual; **Options** — card width, pagination, bulk select, hotkey listing |
 
-The main window can be **resized** from the bottom-right grip. In **Full** layout, **Help**, **Options**, **Tag filter**, **Chars**, and **Sort** open as docked IMGUI panes to the right of the main window (laid out in a single chain so they do not overlap). Compact **List** and **Mini** modes hide those side panels and remember their own **position and size** in **`pose_browser_options.json`**. **List** keeps the folder tree with a text list of filtered poses (no thumbnails). **Mini** is a minimal strip with **Folder** / **Pose** navigation arrows and **Reapply**—see the in-game **Help** panel for the exact stepping order.
+The main window can be **resized** from the bottom-right grip. In **Full** layout, **Help**, **Options**, **Tag filter**, **Chars**, **Sort**, **History**, and **Stash** open as docked IMGUI panes to the right of the main window (laid out in a single chain so they do not overlap). Compact **List** and **Mini** modes hide those side panels and remember their own **position and size** in **`pose_browser_options.json`**. **List** keeps the folder tree with a text list of filtered poses (no thumbnails). **Mini** is a minimal strip with **Folder** / **Pose** navigation arrows and **Reapply**—see the in-game **Help** panel for the exact stepping order. The **floating stash** window is independent: it can stay open when the main browser is closed.
 
 ---
 
@@ -60,6 +62,8 @@ The main window can be **resized** from the bottom-right grip. In **Full** layou
   - `pose_groups.tsv` — pose groups (membership, names, group tags, relative offsets, body heights).
   - `pose_items.tsv` — workspace items linked to each pose (catalog paths, layout, attach data; v5).
   - `pose_browser_character_config.json` — male/female priority lists for multi-character apply.
+  - `pose_stash.json` — pose stash entries (FK/IK snapshots, auto-delete preference).
+  - `pose_browser_history.json` — per-character pose history (undo/redo).
 
 ### 3.2 Tree modes
 
@@ -298,6 +302,44 @@ Poses are processed in **list order** (grid **display order** for a group). **Ea
 
 ---
 
+## 6.3 Pose stash
+
+The **pose stash** is a **temporary clipboard** for character FK/IK poses. It does **not** create library files under `UserData/studio/pose` and is separate from **History** (automatic undo timeline per character).
+
+### Opening and closing
+
+| Control | Behavior |
+|---------|----------|
+| **Stash** (top bar in Full; character row in List/Mini) | Toggles stash UI. If open (docked or floating), closes. If closed, opens in the **last mode** used (docked or floating). |
+| **Docked pane** | Side panel like **History**; closes when the main Pose Browser window closes. |
+| **Float** (in docked stash) | Undocks to an independent window. |
+| **Dock** (floating stash) | Re-attaches beside the browser; if the browser is hidden, closes the float. |
+| **×** (floating stash) | Closes only the floating window. |
+| Hotkey **Toggle undocked pose stash** | Opens/closes the **floating** stash (Configuration Manager → **Pose Browser · Keyboard shortcuts**). Works while Pose Browser is loaded even if the main window is closed. |
+
+The floating window can be **moved** (title bar) and **resized** (bottom-right ◢). Size, position, and docked-vs-float preference are saved in **`pose_browser_options.json`**.
+
+### Capture and apply
+
+1. Select **exactly one** character in Studio → **Stash selected character**.
+2. Entries appear as **`Character name  yyyy-MM-dd HH:mm:ss`** (newest first). Only **FK/IK pose data** is stored (not world position/rotation).
+3. Select one or more characters → **click an entry** to apply that pose to **all** of them.
+4. Optional **Auto-delete after apply** removes the entry after a successful apply.
+
+### Delete
+
+- **x** on a row → **Yes** / **No** confirmation.
+- **Clear entire stash** at the bottom → confirm required.
+
+### Persistence
+
+| File | Contents |
+|------|----------|
+| **`pose_stash.json`** | Stash entries (base64 pose blobs), auto-delete flag |
+| **`pose_browser_options.json`** | Floating stash rect, **stashPreferUndocked** preference |
+
+---
+
 ## 7. Selection bar (bottom)
 
 ### 7.1 Library selection actions
@@ -426,6 +468,8 @@ Select library poses, then **Export…** to write a **flat** v5 pack (group meta
 | **`pose_items.tsv`** | Per-pose workspace item list: catalog paths, transforms, attach paths, attach offsets (v5 TSV) |
 | **`pose_browser_options.json`** | Global **applyGroupRelativePositions** and **applyGroupRelativeHeights** toggles (options v12+) |
 | **`pose_browser_character_config.json`** | Male/female priority slot lists (`dicKey`, display name) |
+| **`pose_stash.json`** | Pose stash entries and auto-delete-after-apply flag |
+| **`pose_browser_history.json`** | Per-character pose history snapshots |
 
 All live under `BepInEx/config/com.hs2.sandbox/`. Keys use **stable relative paths** into the pose library so renames/moves can update metadata via the browser.
 
@@ -461,7 +505,7 @@ If capture is cancelled, files stay unchanged.
 | **Items per page** | **0** = no pagination; **> 0** = cap and use page buttons. |
 | **Apply stored relative positions when applying a group** | Global toggle: when on, group apply restores saved character spacing (anchor + offset) after poses (see **§5.4**). Does not delete saved layout when off. |
 | **Adjust relative layout for body height (saved per pose)** | Scales saved **offset.y** from body-height ratios; requires relative positions on. |
-| **Keyboard shortcuts** | Read-only list; assign **Next/Previous pose** and **Next/Previous browse target** in Configuration Manager → **Pose Browser · Keyboard shortcuts** (active while Pose Browser is open **unless** an IMGUI text field has keyboard focus). |
+| **Keyboard shortcuts** | Read-only list; assign **Next/Previous pose**, **Next/Previous browse target**, **Undo/Redo**, **Toggle undocked pose stash**, etc. in Configuration Manager → **Pose Browser · Keyboard shortcuts** (active while Pose Browser is open unless an IMGUI text field has keyboard focus). |
 | **Select all filtered** | Select every item in the **current filtered** list. |
 | **Deselect all** | Clear selection in that list. |
 | **Close panel** | Closes Options; changes save through the same persistence path as sliders / Apply. |
@@ -475,7 +519,7 @@ If capture is cancelled, files stay unchanged.
 3. Press **F3** (or your configured wiki key).
 4. Open category **HS2 Sandbox → Pose Browser**:
    - **Overview** — navigation hub; click the **pose icon** to open **`OpenImage`** viewer if `pose-icon.png` sits beside the DLL.
-   - Thematic pages: **Folders & library**, **Search & filters**, **Grid & selection**, **Pose groups**, **Multi-character apply**, **Pose files & actions**, **Pose items**, **Import & export (ZIP)**, **Thumbnails**, **Options & data files**.
+   - Thematic pages: **Folders & library**, **Search & filters**, **Grid & selection**, **Pose groups**, **Multi-character apply**, **Pose stash**, **Pose files & actions**, **Pose items**, **Import & export (ZIP)**, **Thumbnails**, **Options & data files**.
    - **Advanced → Tag storage & migration** — TSV vs JSON.
 
 Wiki pages use **IMGUI** and support **rich text**, **buttons** (`OpenPage` navigation), and **`OpenImage`** as in the upstream README.
@@ -512,6 +556,7 @@ To add a new wiki page:
 | Wiki pages missing | HS2Wiki installed? Log line *“Registered Pose Browser pages with HS2Wiki”* on startup? Restart after installing HS2Wiki. |
 | Items load wrong / spheres | Re-save items after an update so **pose_items.tsv** v5 has bundle paths and attach data; apply the pose on the target character first when possible. |
 | Item position off after scale change | Load uses current character object scale and body height; re-save on the reference character if the pose or scale changed a lot. |
+| Stash closes when browser closes | Only the **docked** stash closes with the browser; use **Float** or the undocked hotkey for a persistent floating window. |
 | Image button does nothing | `pose-icon.png` must be next to the **same** DLL you run (or embedded — wiki **OpenImage** needs a **file path**, so the loose PNG next to the DLL is preferred). |
 
 ---

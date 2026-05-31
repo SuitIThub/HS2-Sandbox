@@ -26,6 +26,7 @@ namespace HS2SandboxPlugin
         public const string PageThumbnails = "Thumbnails";
         public const string PagePoseGroups = "Pose groups";
         public const string PageMultiCharacterApply = "Multi-character apply";
+        public const string PagePoseStash = "Pose stash";
         public const string PageOptionsData = "Options & data files";
 
         public const string WikiDownloadUrl = "https://github.com/SuIT-pub/HS2Wiki";
@@ -72,6 +73,7 @@ namespace HS2SandboxPlugin
                 InvokeRegister(WikiCategoryRoot, PageThumbnails, DrawWikiThumbnails);
                 InvokeRegister(WikiCategoryRoot, PagePoseGroups, DrawWikiPoseGroups);
                 InvokeRegister(WikiCategoryRoot, PageMultiCharacterApply, DrawWikiMultiCharacterApply);
+                InvokeRegister(WikiCategoryRoot, PagePoseStash, DrawWikiPoseStash);
                 InvokeRegister(WikiCategoryAdvanced, "Tag storage & migration", DrawWikiTagStorage);
                 InvokeRegister(WikiCategoryRoot, PageOptionsData, DrawWikiOptionsData);
 
@@ -146,6 +148,8 @@ namespace HS2SandboxPlugin
                 TryOpenWikiPage(WikiCategoryRoot, PagePoseGroups);
             if (GUILayout.Button("Wiki: Multi-character apply", GUILayout.Height(24f)))
                 TryOpenWikiPage(WikiCategoryRoot, PageMultiCharacterApply);
+            if (GUILayout.Button("Wiki: Pose stash", GUILayout.Height(24f)))
+                TryOpenWikiPage(WikiCategoryRoot, PagePoseStash);
             if (GUILayout.Button("Wiki: Pose items", GUILayout.Height(24f)))
                 TryOpenWikiPage(WikiCategoryRoot, PagePoseItems);
         }
@@ -250,7 +254,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<i>Browse, tag, and manage Studio pose files under UserData/studio/pose.</i>");
             GUILayout.Space(6f);
             GUILayout.Label(
-                "<b>Recent releases:</b> <b>Pose Browser 5.0.0</b> adds <b>Pose items</b> — register workspace props per pose, load with position/rotation/scale toggles and optional free placement (<b>pose_items.tsv</b> v5). " +
+                "<b>Recent releases:</b> <b>Pose stash</b> — temporary FK/IK clipboard with docked or floating window. <b>Pose Browser 5.0.0</b> adds <b>Pose items</b> — register workspace props per pose, load with position/rotation/scale toggles and optional free placement (<b>pose_items.tsv</b> v5). " +
                 "<b>3.2+</b> — group relative positions and object-scale layout. <b>3.0.0</b> — pose groups, tag include/exclude, multi-character apply. <b>2.0.0</b> — Full/List/Mini layouts, Sort, ★ Favorites, keyboard shortcuts. v2+ ZIP import/export — see pages below.");
 
             GUILayout.Space(8f);
@@ -269,6 +273,7 @@ namespace HS2SandboxPlugin
             NavButton("→ Grid & selection", WikiCategoryRoot, PageGridSelection);
             NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
             NavButton("→ Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
+            NavButton("→ Pose stash", WikiCategoryRoot, PagePoseStash);
             NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
             NavButton("→ Pose items", WikiCategoryRoot, PagePoseItems);
             NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
@@ -536,6 +541,54 @@ namespace HS2SandboxPlugin
             NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
         }
 
+        private static void DrawWikiPoseStash()
+        {
+            GUILayout.Label("<size=17><b>Pose stash</b></size>");
+            GUILayout.Label(
+                "The <b>pose stash</b> is a temporary clipboard for character FK/IK poses. It does <b>not</b> write to <b>UserData/studio/pose</b> and is separate from <b>History</b> (automatic undo snapshots per character).");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Opening and closing</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Stash</b> (top bar in <b>Full</b> layout; character row in <b>List</b> / <b>Mini</b>) — toggles the stash UI. If open (docked or floating), closes it. If closed, opens in the last mode you used.");
+            GUILayout.Label("<b>Docked</b> — side pane beside the browser (like <b>History</b>). Closes when the main Pose Browser window closes.");
+            GUILayout.Label("<b>Floating</b> — use <b>Float</b> in the docked pane, or the hotkey <b>Toggle undocked pose stash</b>. Independent window: drag the title bar, resize with ◢. Stays open when the main browser is closed.");
+            GUILayout.Label("<b>Dock</b> on the floating window re-attaches the pane (closes the float if the browser is hidden). <b>×</b> closes only the floating stash.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Capture and apply</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Stash selected character</b> — requires <b>exactly one</b> character selected in Studio. Stores FK/IK pose data only (not world position/rotation).");
+            GUILayout.Label("Each entry shows <b>character name</b> and <b>timestamp</b> (newest first).");
+            GUILayout.Label("<b>Click an entry</b> — applies that pose to <b>every</b> character currently selected in Studio (one or many).");
+            GUILayout.Label("<b>Auto-delete after apply</b> — optional toggle; removes the entry after a successful apply.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Delete</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>x</b> on a row — confirm with <b>Yes</b> / <b>No</b>.");
+            GUILayout.Label("<b>Clear entire stash</b> — bottom of the window; confirm required.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Keyboard shortcut</b>");
+            GUILayout.Label(
+                "Assign <b>Toggle undocked pose stash</b> in Configuration Manager → <b>Pose Browser · Keyboard shortcuts</b>. Opens or closes the <b>floating</b> stash only (works while Pose Browser is loaded, even if the main window is closed).");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Data files</b>");
+            GUILayout.Label(
+                "• <b>pose_stash.json</b> — stashed poses (base64 FK/IK blobs), auto-delete preference.\n" +
+                "• <b>pose_browser_options.json</b> — floating window rect and <b>docked vs float</b> preference.");
+
+            GUILayout.Space(8f);
+            NavButton("← Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
+            NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
+            NavButton("↑ Overview", WikiCategoryRoot, PageOverview);
+        }
+
         private static void DrawWikiMultiCharacterApply()
         {
             GUILayout.Label("<size=17><b>Multi-character apply</b></size>");
@@ -600,6 +653,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Pose groups", WikiCategoryRoot, PagePoseGroups);
+            NavButton("→ Pose stash", WikiCategoryRoot, PagePoseStash);
             NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
             NavButton("↑ Overview", WikiCategoryRoot, PageOverview);
         }
@@ -661,13 +715,15 @@ namespace HS2SandboxPlugin
             GUILayout.Label("• <b>Apply stored relative positions when applying a group</b> — global layout toggle (see <b>Pose groups</b>).");
             GUILayout.Label("• <b>Adjust relative layout for body height (saved per pose)</b> — scales saved <b>offset.y</b> from body-height ratios; requires relative positions.");
             GUILayout.Label("• <b>Select all filtered / Deselect all</b> — bulk selection in the current filtered list.");
-            GUILayout.Label("• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target matching Mini/List folder stepping). Active while the browser is focused unless a text field holds keyboard focus.");
+            GUILayout.Label("• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash). Active while the browser is focused unless a text field holds keyboard focus.");
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
             string cfg = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox");
             GUILayout.Label($"<b>Config folder</b> <color=#cccc66>{cfg}</color>");
-            GUILayout.Label("• <b>pose_browser_options.json</b> — layout tier (Full/List/Mini) with remembered window rects per mode, sort mode + direction, card width, items per page.");
+            GUILayout.Label("• <b>pose_browser_options.json</b> — layout tier (Full/List/Mini) with remembered window rects per mode, sort mode + direction, card width, items per page, floating stash window rect, docked-vs-float stash preference.");
+            GUILayout.Label("• <b>pose_stash.json</b> — pose stash entries (FK/IK snapshots) and auto-delete-after-apply flag.");
+            GUILayout.Label("• <b>pose_browser_history.json</b> — per-character pose history (undo/redo snapshots).");
             GUILayout.Label("• <b>pose_tags.tsv</b> — per-pose tags and favorites (atomic save).");
             GUILayout.Label("• <b>pose_groups.tsv</b> — group membership, tags, relative offsets, body heights per pose (v3 TSV).");
             GUILayout.Label("• <b>pose_items.tsv</b> — workspace items registered per pose (catalog paths, layout, attach data; v5 TSV).");
@@ -676,6 +732,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Thumbnails", WikiCategoryRoot, PageThumbnails);
+            NavButton("→ Pose stash", WikiCategoryRoot, PagePoseStash);
             NavButton("→ Tag storage (advanced)", WikiCategoryAdvanced, "Tag storage & migration");
         }
 
