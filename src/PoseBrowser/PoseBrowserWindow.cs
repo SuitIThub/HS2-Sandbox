@@ -5086,9 +5086,20 @@ namespace HS2SandboxPlugin
                 rich);
 
             GUILayout.Space(8f);
+            GUILayout.Label("<b>Pose items (Items pane)</b>", rich);
+            GUILayout.Label(
+                "Select <b>exactly one</b> library pose, then <b>Items</b> in the bottom bar. The docked pane links Studio <b>workspace items</b> (props, accessories, etc.) to that pose.\n\n" +
+                "<b>Add</b> — select <b>one character</b> in Studio and one or more <b>workspace items</b> (tree or guide). The label above <b>Add selected item(s)</b> lists what will be registered. Layout is saved relative to that character (anchor position/rotation, object scale, body height).\n\n" +
+                "<b>Stored items</b> — each row: <b>☑</b> include in bulk load, <b>name button</b> loads that entry, <b>✎</b> rename label, <b>X</b> remove from the pose. Names in <b>bold</b> match an item currently selected in Studio (still a button).\n\n" +
+                "<b>Load options</b> — toggle <b>Position</b>, <b>Rotation</b>, <b>Scale</b> independently. <b>Load as free</b> spawns without workspace tree parenting even when the item was saved on a body part (same world layout, scaled with the character).\n\n" +
+                "<b>Load Selection</b> / <b>Load All</b> — need one Studio character; unchecked rows are skipped. Items respawn from the catalog (bundle paths in <b>pose_items.tsv</b> v5). Attached items restore workspace tree parenting when not loading as free.\n\n" +
+                "⚠ Yellow banner if the selected character does not have this pose applied (save/load still allowed). Orange ⚠ on a row = warning from the last load (e.g. body part missing). Data: <b>pose_items.tsv</b> in Sandbox config.",
+                rich);
+
+            GUILayout.Space(6f);
             GUILayout.Label("<b>Selection bar (bottom)</b>", rich);
             GUILayout.Label(
-                "Shown when something is selected: <b>Items</b> (one pose — register Studio props; load toggles for position/rotation/scale and free placement; stored list with ✎/X), <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v4 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
+                "Shown when something is selected: <b>Items</b> (one pose), <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v5 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
                 rich);
 
             GUILayout.Space(8f);

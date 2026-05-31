@@ -23,6 +23,7 @@ The Pose Browser is a Studio utility that:
 - **Multi-character apply** — **Chars** priority lists (male/female), **Apply to characters…** for multiple poses or a whole group, driven by **Male** / **Female** pose tags and list order.
 - In **3.1.0**: **Auto-capture** for batch thumbnails (configurable pause in Options / BepInEx), grid layout and window-resize fixes, multi-group action bar improvements.
 - In **3.2.0+**: **Group relative positions** — save offsets from an anchor pose (first in display order) plus **maker body height** per pose; re-apply with the group; stored in **pose_groups.tsv** and v5 ZIP; global **Apply relative positions** and **Adjust for body height** toggles (group bar + Options).
+- In **5.0.0+**: **Pose items** — register Studio **workspace items** per pose; docked **Items** pane with add/load, optional body-part attach, load toggles (position / rotation / scale / free placement), character scale and body-height adjustment on load; **pose_items.tsv** (v5).
 
 ### 1.1 Version note
 
@@ -40,7 +41,8 @@ It is opened from the Sandbox **left toolbar** (pose icon) when using the full H
 | **Character row** | Studio selection summary; **Chars** (priority lists); **Apply to characters…** when 2+ poses or one group entity is selected |
 | **Folders (left)** | Tree under `studio/pose`, **All poses** / **★ Favorites** / **Root only**, refresh, folder footer actions |
 | **Grid** | Thumbnail cards, selection, pagination (if enabled in Options); **import preview** replaces the grid while a ZIP is open |
-| **Bottom bar** | Pose actions, **Grouping** (Group… / Ungroup), or **group entity** bar (rename, group tags, export group); import preview hints |
+| **Bottom bar** | Pose actions, **Items** (one pose), **Grouping** (Group… / Ungroup), or **group entity** bar; import preview hints |
+| **Items pane** | Docked when **Items** is open: register workspace items for the selected pose, load options, stored list |
 | **Window** | **View (Full/List/Mini)** — cycles compact layout modes; **Help** — compact manual; **Options** — card width, pagination, bulk select, hotkey listing |
 
 The main window can be **resized** from the bottom-right grip. In **Full** layout, **Help**, **Options**, **Tag filter**, **Chars**, and **Sort** open as docked IMGUI panes to the right of the main window (laid out in a single chain so they do not overlap). Compact **List** and **Mini** modes hide those side panels and remember their own **position and size** in **`pose_browser_options.json`**. **List** keeps the folder tree with a text list of filtered poses (no thumbnails). **Mini** is a minimal strip with **Folder** / **Pose** navigation arrows and **Reapply**—see the in-game **Help** panel for the exact stepping order.
@@ -56,6 +58,7 @@ The main window can be **resized** from the bottom-right grip. In **Full** layou
   - `pose_browser_options.json` — card width, items per page, **layout tier** (Full/List/Mini) with separate saved window rects, **sort mode** and direction.
   - `pose_tags.tsv` — per-pose tags and favorites (see §10).
   - `pose_groups.tsv` — pose groups (membership, names, group tags, relative offsets, body heights).
+  - `pose_items.tsv` — workspace items linked to each pose (catalog paths, layout, attach data; v5).
   - `pose_browser_character_config.json` — male/female priority lists for multi-character apply.
 
 ### 3.2 Tree modes
@@ -304,6 +307,7 @@ Visible when **at least one** selected card refers to an **on-disk** pose in you
 | Control | Purpose |
 |---------|---------|
 | **Selection: n** | Count of selected items |
+| **Items** | Exactly **one** pose: open docked **Items** pane (workspace item registration — see **§7.3**) |
 | **Update Pose** | One item only: overwrite file from scene; optional thumbnail refresh |
 | **Rename…** | One item: display name; optional rename file to safe name |
 | **Group…** / **Ungroup** | Create a group from 2+ ungrouped poses, or remove membership |
@@ -318,6 +322,59 @@ Visible when **at least one** selected card refers to an **on-disk** pose in you
 ### 7.2 Import preview mode
 
 After **Import…**, the bar shows import-specific text and **Cancel import**. Choose poses in the grid, pick **Root only** or a folder in **Folders**, then **Apply** / **Cancel** at the **top** of the folder footer (**§3.5**). **Tree branch** packs create one new subfolder under the destination you select.
+
+### 7.3 Pose items (Items pane)
+
+Register Studio **workspace items** (props, accessories, etc.) against **one library pose** so they can be respawned and repositioned when you use that pose again.
+
+#### Opening the pane
+
+1. Select **exactly one** on-disk pose in the grid (not during ZIP import preview).
+2. Click **Items** in the bottom selection bar.
+3. The **Items** pane docks in the same side-panel chain as Help, Options, Tags, Chars, and Sort.
+
+#### Adding entries
+
+| Requirement | Detail |
+|-------------|--------|
+| Studio character | **Exactly one** character selected |
+| Workspace items | One or more **OCIItem** selections (workspace tree and/or item guide) |
+| UI | Label **Will add: …** lists names; **Add selected item(s)** registers them |
+
+Each saved entry includes catalog slot ids, **bundle / asset / manifest** paths (so items respawn correctly after a new Studio session), display name, item scale, anchor-relative position and rotation, saved character **object scale** and **body height**, optional **body-part** tree path and name, and (v5) Studio **attach** `changeAmount` offsets when the item was parented in the workspace tree.
+
+A **yellow** banner appears if the selected character does **not** currently have this pose applied; you can still add and load items (layout is relative to the character as posed now).
+
+#### Stored list
+
+| Control | Action |
+|---------|--------|
+| **☑** | Include in **Load Selection** |
+| **Name (button)** | Load that entry immediately |
+| **✎** | Rename display label |
+| **X** | Remove from this pose |
+| **Bold name** | Same catalog item is selected in Studio (still a button) |
+
+**Load Selection** loads checked rows. **Load All** loads every row. Both need **one** Studio character selected.
+
+#### Load options
+
+| Toggle | Effect |
+|--------|--------|
+| **Position** | Apply saved layout position (off = keep spawn default) |
+| **Rotation** | Apply saved rotation |
+| **Scale** | Apply saved item scale (adjusted for current character object scale) |
+| **Load as free** | Skip workspace tree parenting even when saved on a body part; same world layout relative to the character |
+
+Position and scale on load are adjusted for the character’s current **Studio object scale** and **body height** (same ratio rules as **group relative positions**). Attached items normally reparent to the saved body-part row via the workspace tree; **Load as free** keeps world placement without that parent link.
+
+An **orange ⚠** on a row shows the last load warning (for example body part not found — item may be placed freely).
+
+#### Persistence
+
+- File: **`pose_items.tsv`** (header `HS2SANDBOX_POSE_ITEMS` tab **5**) under `BepInEx/config/com.hs2.sandbox/`.
+- Keys: pose path relative to the library root (updated when poses are moved/renamed through the browser).
+- Not embedded in pose `.png` / `.dat` files; copy/move pose files does not copy item lists unless you duplicate entries manually.
 
 ---
 
@@ -366,6 +423,7 @@ Select library poses, then **Export…** to write a **flat** v5 pack (group meta
 |------|----------|
 | **`pose_tags.tsv`** | Per-pose tags and favorites |
 | **`pose_groups.tsv`** | Group id, name, group tags, member paths, relative offsets, body heights per pose (v3 TSV) |
+| **`pose_items.tsv`** | Per-pose workspace item list: catalog paths, transforms, attach paths, attach offsets (v5 TSV) |
 | **`pose_browser_options.json`** | Global **applyGroupRelativePositions** and **applyGroupRelativeHeights** toggles (options v12+) |
 | **`pose_browser_character_config.json`** | Male/female priority slot lists (`dicKey`, display name) |
 
@@ -417,7 +475,7 @@ If capture is cancelled, files stay unchanged.
 3. Press **F3** (or your configured wiki key).
 4. Open category **HS2 Sandbox → Pose Browser**:
    - **Overview** — navigation hub; click the **pose icon** to open **`OpenImage`** viewer if `pose-icon.png` sits beside the DLL.
-   - Thematic pages: **Folders & library**, **Search & filters**, **Grid & selection**, **Pose groups**, **Multi-character apply**, **Pose files & actions**, **Import & export (ZIP)**, **Thumbnails**, **Options & data files**.
+   - Thematic pages: **Folders & library**, **Search & filters**, **Grid & selection**, **Pose groups**, **Multi-character apply**, **Pose files & actions**, **Pose items**, **Import & export (ZIP)**, **Thumbnails**, **Options & data files**.
    - **Advanced → Tag storage & migration** — TSV vs JSON.
 
 Wiki pages use **IMGUI** and support **rich text**, **buttons** (`OpenPage` navigation), and **`OpenImage`** as in the upstream README.
@@ -426,7 +484,7 @@ Wiki pages use **IMGUI** and support **rich text**, **buttons** (`OpenPage` navi
 
 ## 14. HS2Wiki integration (for maintainers)
 
-- Registration lives in **`Shared/PoseBrowserWikiRegistration.cs`**.
+- Registration lives in **`src/Core/PoseBrowserWikiRegistration.cs`**.
 - Uses reflection: `HS2Wiki.WikiPlugin, HS2Wiki` → static **`PublicAPI`** → **`RegisterPage(string, string, Action)`**, **`OpenPage`**, **`OpenImage`**.
 - No compile-time reference to HS2Wiki; safe when the assembly is missing.
 - Duplicate registration on reload is avoided with **`_registerSucceeded`**; if wiki is added mid-session, a full game restart may be needed to see pages (same as most BepInEx plugins).
@@ -452,6 +510,8 @@ To add a new wiki page:
 | Tags lost | Prefer **`pose_tags.tsv`** / **`pose_groups.tsv`** backup; avoid editing TSV while the game runs. |
 | ZIP import fails or errors | Pack must use **stored** (uncompressed) ZIP entries; verify **v2/v3** `manifest.json` per **`POSE_ZIP_FORMAT.md`**. |
 | Wiki pages missing | HS2Wiki installed? Log line *“Registered Pose Browser pages with HS2Wiki”* on startup? Restart after installing HS2Wiki. |
+| Items load wrong / spheres | Re-save items after an update so **pose_items.tsv** v5 has bundle paths and attach data; apply the pose on the target character first when possible. |
+| Item position off after scale change | Load uses current character object scale and body height; re-save on the reference character if the pose or scale changed a lot. |
 | Image button does nothing | `pose-icon.png` must be next to the **same** DLL you run (or embedded — wiki **OpenImage** needs a **file path**, so the loose PNG next to the DLL is preferred). |
 
 ---

@@ -21,6 +21,7 @@ namespace HS2SandboxPlugin
         public const string PageSearchFilters = "Search & filters";
         public const string PageGridSelection = "Grid & selection";
         public const string PagePoseFiles = "Pose files & actions";
+        public const string PagePoseItems = "Pose items";
         public const string PageImportExport = "Import & export (ZIP)";
         public const string PageThumbnails = "Thumbnails";
         public const string PagePoseGroups = "Pose groups";
@@ -66,6 +67,7 @@ namespace HS2SandboxPlugin
                 InvokeRegister(WikiCategoryRoot, PageSearchFilters, DrawWikiSearchFilters);
                 InvokeRegister(WikiCategoryRoot, PageGridSelection, DrawWikiGridSelection);
                 InvokeRegister(WikiCategoryRoot, PagePoseFiles, DrawWikiPoseFiles);
+                InvokeRegister(WikiCategoryRoot, PagePoseItems, DrawWikiPoseItems);
                 InvokeRegister(WikiCategoryRoot, PageImportExport, DrawWikiImportExport);
                 InvokeRegister(WikiCategoryRoot, PageThumbnails, DrawWikiThumbnails);
                 InvokeRegister(WikiCategoryRoot, PagePoseGroups, DrawWikiPoseGroups);
@@ -144,6 +146,8 @@ namespace HS2SandboxPlugin
                 TryOpenWikiPage(WikiCategoryRoot, PagePoseGroups);
             if (GUILayout.Button("Wiki: Multi-character apply", GUILayout.Height(24f)))
                 TryOpenWikiPage(WikiCategoryRoot, PageMultiCharacterApply);
+            if (GUILayout.Button("Wiki: Pose items", GUILayout.Height(24f)))
+                TryOpenWikiPage(WikiCategoryRoot, PagePoseItems);
         }
 
         public static void TryOpenPoseIconImage()
@@ -246,8 +250,8 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<i>Browse, tag, and manage Studio pose files under UserData/studio/pose.</i>");
             GUILayout.Space(6f);
             GUILayout.Label(
-                "<b>Recent releases:</b> <b>HS2 Sandbox 2.0.0</b> added compact <b>Full / List / Mini</b> layouts, a <b>Sort</b> panel (including <b>Last used</b> timestamps), the <b>★ Favorites</b> library view, docked tag filter/sort windows, BepInEx <b>keyboard shortcuts</b>, and richer persistence in <b>pose_browser_options.json</b>. " +
-                "<b>Pose Browser 3.1.0</b> adds <b>auto-capture</b> for batch thumbnails (configurable delay). <b>3.0.0</b> added <b>pose groups</b> (grid segments, group tags, v3 ZIP metadata), tri-state tag <b>include/exclude</b> filters, and <b>multi-character apply</b> — see the dedicated pages below. v2/v3 ZIP import/export shipped in 2.1+.");
+                "<b>Recent releases:</b> <b>Pose Browser 5.0.0</b> adds <b>Pose items</b> — register workspace props per pose, load with position/rotation/scale toggles and optional free placement (<b>pose_items.tsv</b> v5). " +
+                "<b>3.2+</b> — group relative positions and object-scale layout. <b>3.0.0</b> — pose groups, tag include/exclude, multi-character apply. <b>2.0.0</b> — Full/List/Mini layouts, Sort, ★ Favorites, keyboard shortcuts. v2+ ZIP import/export — see pages below.");
 
             GUILayout.Space(8f);
             var tex = WikiBannerTexture();
@@ -266,6 +270,7 @@ namespace HS2SandboxPlugin
             NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
             NavButton("→ Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
             NavButton("→ Pose files & actions", WikiCategoryRoot, PagePoseFiles);
+            NavButton("→ Pose items", WikiCategoryRoot, PagePoseItems);
             NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
             NavButton("→ Thumbnails", WikiCategoryRoot, PageThumbnails);
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
@@ -363,6 +368,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Update Pose</b> (one selected) — overwrite file from the scene; choose keeping or regenerating the thumbnail.");
             GUILayout.Label("<b>Rename…</b> — optional rename of file to match display name.");
             GUILayout.Label("<b>Grouping</b> — <b>Group…</b> (2+ ungrouped poses), <b>Ungroup</b>. Group header selection shows a separate bar: rename, tags, export, apply, save/clear positions. See <b>Pose groups</b>.");
+            GUILayout.Label("<b>Items</b> (exactly one pose selected) — register Studio workspace items for that pose; see <b>Pose items</b>.");
             GUILayout.Label("<b>Tag Selected</b> — tag window in <b>assign</b> mode for <i>pose</i> tags on all selected items.");
             GUILayout.Label("<b>Fav Selected</b> — toggle favorite flag (★ filter).");
             GUILayout.Label("<b>Export…</b> — writes selected on-disk poses to a v2 <b>.zip</b> (embedded tags/favorites metadata).");
@@ -376,9 +382,70 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Grid & selection", WikiCategoryRoot, PageGridSelection);
+            NavButton("→ Pose items", WikiCategoryRoot, PagePoseItems);
             NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
             NavButton("→ Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
             NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
+        }
+
+        private static void DrawWikiPoseItems()
+        {
+            GUILayout.Label("<size=17><b>Pose items</b></size>");
+            GUILayout.Label(
+                "Link Studio <b>workspace items</b> (props, accessories, etc.) to a <b>single library pose</b>. When you apply that pose and load its items, layout is restored relative to one character — including optional parenting to a body-part row in the workspace tree.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Open the pane</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("1. Select <b>exactly one</b> pose in the library grid (not import preview).");
+            GUILayout.Label("2. Click <b>Items</b> in the bottom selection bar.");
+            GUILayout.Label("3. The <b>Items</b> pane docks beside Help / Options / Tags (same chain as other side panels).");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Add items to a pose</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("• Select <b>one character</b> in Studio (extra selected objects are ignored for add/load).");
+            GUILayout.Label("• Select one or more <b>workspace items</b> (tree row and/or item guide).");
+            GUILayout.Label("• The line above <b>Add selected item(s)</b> lists names that will be registered (<b>Will add: …</b>).");
+            GUILayout.Label("• Each entry stores catalog ids, bundle paths (for respawn after restart), transform layout, optional body-part attach path, and Studio attach offsets when parented.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Stored list (per pose)</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>☑</b> — include row in <b>Load Selection</b> (unchecked rows are skipped).");
+            GUILayout.Label("<b>Name button</b> — load that one entry immediately.");
+            GUILayout.Label("<b>✎</b> — rename the display label (saved in <b>pose_items.tsv</b>).");
+            GUILayout.Label("<b>X</b> — remove the entry from this pose.");
+            GUILayout.Label("<b>Bold name</b> — same catalog item is currently selected in Studio (still a button).");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Load options</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Position</b> / <b>Rotation</b> / <b>Scale</b> — turn off to keep the spawned item’s default on that axis.");
+            GUILayout.Label("<b>Load as free</b> — do not reparent in the workspace tree even when the item was saved on a body part; world layout still follows the character (scaled with current object scale / body height).");
+            GUILayout.Label("<b>Load Selection</b> — checked rows only. <b>Load All</b> — every stored row.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Layout & scaling</b>");
+            GUILayout.Label(
+                "• Saved <b>anchor-relative</b> position and rotation vs the character guide at save time.\n" +
+                "• On load, position and item scale adjust for the character’s current <b>Studio object scale</b> and <b>body height</b> (same ratio logic as group relative positions).\n" +
+                "• Items saved on a <b>body part</b> store a workspace tree path and Studio <b>changeAmount</b> attach offsets (v5 TSV). Default load reparents via the tree; <b>Load as free</b> uses the same world layout without parenting.\n" +
+                "• ⚠ <b>Yellow</b> banner — selected character does not have this pose applied (save/load still work). Orange ⚠ on a row — last load warning (e.g. body part not found).");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Data file</b>");
+            GUILayout.Label(
+                "<b>pose_items.tsv</b> (v5) under <b>BepInEx/config/com.hs2.sandbox/</b>, keyed by pose path relative to the library. Move/rename pose files update keys through the browser like tags.");
+
+            GUILayout.Space(8f);
+            NavButton("← Pose files & actions", WikiCategoryRoot, PagePoseFiles);
+            NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
+            NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
         }
 
         private static void DrawWikiPoseGroups()
@@ -578,6 +645,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
+            NavButton("→ Pose items", WikiCategoryRoot, PagePoseItems);
             NavButton("→ Pose groups", WikiCategoryRoot, PagePoseGroups);
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
         }
@@ -602,6 +670,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("• <b>pose_browser_options.json</b> — layout tier (Full/List/Mini) with remembered window rects per mode, sort mode + direction, card width, items per page.");
             GUILayout.Label("• <b>pose_tags.tsv</b> — per-pose tags and favorites (atomic save).");
             GUILayout.Label("• <b>pose_groups.tsv</b> — group membership, tags, relative offsets, body heights per pose (v3 TSV).");
+            GUILayout.Label("• <b>pose_items.tsv</b> — workspace items registered per pose (catalog paths, layout, attach data; v5 TSV).");
             GUILayout.Label("• <b>pose_browser_character_config.json</b> — unified character priority list for multi-character apply.");
             GUILayout.Label("• BepInEx <b>Pose Browser</b> section — <b>Card column width</b> and <b>Items per page</b> mirrored from Options.");
 
