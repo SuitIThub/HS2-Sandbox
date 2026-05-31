@@ -725,22 +725,33 @@ namespace HS2SandboxPlugin
             list.Add(oci);
         }
 
+        internal static TreeNodeCtrl? TryGetStudioTreeNodeCtrl()
+        {
+            try
+            {
+                return Singleton<Studio.Studio>.Instance.treeNodeCtrl;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private static void AddTreeSelectedCharacters(List<OCIChar> list)
         {
             try
             {
-                var tree = UnityEngine.Object.FindObjectOfType<TreeNodeCtrl>();
-                var selectedNodes = tree?.selectNodes;
-                if (selectedNodes == null || selectedNodes.Count() == 0)
+                var selectedNodes = TryGetStudioTreeNodeCtrl()?.selectNodes;
+                if (selectedNodes == null)
                     return;
 
-                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
+                var studio = Singleton<Studio.Studio>.Instance;
+                foreach (var node in selectedNodes)
                 {
-                    if (kvp.Value is not OCIChar oci || oci.treeNodeObject == null)
+                    if (node == null)
                         continue;
-                    if (!selectedNodes.Contains(oci.treeNodeObject))
-                        continue;
-                    AddUniqueOCIChar(list, oci);
+                    if (studio.dicInfo.TryGetValue(node, out ObjectCtrlInfo info) && info is OCIChar oci)
+                        AddUniqueOCIChar(list, oci);
                 }
             }
             catch

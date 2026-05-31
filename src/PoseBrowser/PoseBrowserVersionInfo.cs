@@ -10,7 +10,7 @@ namespace HS2SandboxPlugin
         public const string VersionsJsonDownloadKey = "poseBrowserKksDownload";
         public const string UpdateCheckUserAgent = "KKSSandbox-PoseBrowser-UpdateCheck";
 #else
-        public const string Version = "4.3.3";
+        public const string Version = "5.0.0";
         public const string StandaloneDllAssetName = "HS2Sandbox.PoseBrowser.dll";
         public const string VersionsJsonVersionKey = "poseBrowser";
         public const string VersionsJsonDownloadKey = "poseBrowserDownload";

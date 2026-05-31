@@ -935,6 +935,7 @@ namespace HS2SandboxPlugin
                 _displayEntries, _groupDb, _dataService.PoseRootPath, _poseSortMode, _sortAscending);
             SyncFilteredItemsFromDisplay();
             PruneSelectedGroups();
+            InvalidatePoseBrowserViewCaches();
         }
 
         private void ClearImportPreviewGroups()
@@ -1020,6 +1021,7 @@ namespace HS2SandboxPlugin
             PoseBrowserGridLayout.SortDisplayEntries(
                 _displayEntries, _groupDb, _dataService.PoseRootPath, _poseSortMode, _sortAscending, _importPreviewGroupsById);
             SyncFilteredItemsFromDisplay();
+            InvalidatePoseBrowserViewCaches();
         }
 
         private void SyncFilteredItemsFromDisplay()
@@ -1031,8 +1033,22 @@ namespace HS2SandboxPlugin
         {
             if (_itemsPerPage <= 0)
                 return _displayEntries;
+
+            int displayCount = _displayEntries.Count;
+            if (_cachedVisibleDisplayEntries != null &&
+                _cachedVisiblePage == _currentPage &&
+                _cachedVisibleItemsPerPage == _itemsPerPage &&
+                _cachedVisibleDisplayCount == displayCount)
+            {
+                return _cachedVisibleDisplayEntries;
+            }
+
             int skip = (_currentPage - 1) * _itemsPerPage;
-            return PoseBrowserGridLayout.SliceByPoseCount(_displayEntries, skip, _itemsPerPage);
+            _cachedVisibleDisplayEntries = PoseBrowserGridLayout.SliceByPoseCount(_displayEntries, skip, _itemsPerPage);
+            _cachedVisiblePage = _currentPage;
+            _cachedVisibleItemsPerPage = _itemsPerPage;
+            _cachedVisibleDisplayCount = displayCount;
+            return _cachedVisibleDisplayEntries;
         }
 
         private int CountDisplayPoses() => _displayEntries.Count;
@@ -1372,6 +1388,7 @@ namespace HS2SandboxPlugin
                 if (_dataService.MovePoseFileToFolder(it, destFolder, _tagDb))
                 {
                     _groupDb.OnItemPathChanged(oldRel, it);
+                    _itemDb.OnItemPathChanged(oldRel, it);
                     NotifyLibraryCachePoseMoved(oldPath, it);
                 }
             }
@@ -1383,7 +1400,11 @@ namespace HS2SandboxPlugin
             foreach (var item in GetGroupMemberItems(group.Id))
             {
                 var copy = _dataService.CopyPoseFileToFolder(item, destFolder, _tagDb);
-                if (copy != null) copies.Add(copy);
+                if (copy != null)
+                {
+                    _itemDb.CopyItemsFromTo(item, copy);
+                    copies.Add(copy);
+                }
             }
 
             if (copies.Count > 0)

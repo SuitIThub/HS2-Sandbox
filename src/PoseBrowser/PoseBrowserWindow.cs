@@ -39,6 +39,7 @@ namespace HS2SandboxPlugin
         private const int TagWindowId = 2024;
         private const int SortWindowId = 2025;
         private const int CharacterConfigWindowId = 2026;
+        private const int ItemAssociationWindowId = 2028;
         private const float DockedPaneGap = 4f;
         private const float OptionsPaneDefaultWidth = 420f;
         private const float HelpPaneDefaultWidth = 340f;
@@ -345,6 +346,7 @@ namespace HS2SandboxPlugin
             _dataService = new PoseDataService(poseRoot);
             _tagDb = new PoseTagDatabase(poseRoot);
             _groupDb = new PoseGroupDatabase(poseRoot);
+            _itemDb = new PoseItemDatabase(poseRoot);
             _folderTree = new PoseFolderTree(poseRoot);
             _thumbCapture = new PoseThumbnailCapture();
 
@@ -378,7 +380,10 @@ namespace HS2SandboxPlugin
             TryStartStudioLibraryCacheWarmup();
             MaybeProcessPoseBrowserWindowHotkeys();
             if (isVisible && !_isMinimized)
+            {
+                RefreshStudioSelectionCacheIfDue(force: false);
                 MaybeProcessPoseBrowserHotkeys();
+            }
         }
 
         private void OnDestroy()
@@ -397,6 +402,7 @@ namespace HS2SandboxPlugin
 
             _tagDb?.ForceSave();
             _groupDb?.ForceSave();
+            _itemDb?.ForceSave();
             SavePoseHistory();
             SavePersistedOptions();
             if (_libraryCacheCoroutine != null)
@@ -490,8 +496,10 @@ namespace HS2SandboxPlugin
             if (_layoutTier == PoseBrowserLayoutTier.Normal)
             {
                 bool anyDockedPane = _showOptionsPane || _showHelpPane || _showHistoryPane ||
-                    _tagWindowPurpose != TagWindowPurpose.None || _showCharacterConfigPane || _showSortPane;
-                if (anyDockedPane)
+                    _tagWindowPurpose != TagWindowPurpose.None || _showCharacterConfigPane || _showSortPane ||
+                    _showItemAssociationPane;
+                bool layoutPass = Event.current.type == EventType.Layout;
+                if (anyDockedPane && layoutPass)
                     SyncAllDockedPaneRects();
 
                 if (_showOptionsPane)
@@ -505,7 +513,7 @@ namespace HS2SandboxPlugin
 
                 if (_tagWindowPurpose != TagWindowPurpose.None)
                 {
-                    if (_tagWindowPurpose == TagWindowPurpose.EditSelection)
+                    if (_tagWindowPurpose == TagWindowPurpose.EditSelection && layoutPass)
                         SyncTagAssignWindowToSelection();
                     string tagTitle = _tagWindowPurpose == TagWindowPurpose.FilterLibrary
                         ? "Pose Browser · Tag filter"
@@ -520,6 +528,9 @@ namespace HS2SandboxPlugin
 
                 if (_showSortPane)
                     DrawDockedPaneWindow(SortWindowId, ref _sortWindowRect, DrawSortWindowContent, "Pose Browser · Sort", SortPaneDefaultWidth);
+
+                if (_showItemAssociationPane)
+                    DrawItemAssociationDockedPane();
             }
             else if (_layoutTier == PoseBrowserLayoutTier.CompactList &&
                      (_showCharacterConfigPane || _showHistoryPane))
@@ -580,7 +591,9 @@ namespace HS2SandboxPlugin
             if (_showCharacterConfigPane)
                 x = PlaceDockedPane(ref _characterConfigWindowRect, x, CharacterPaneDefaultWidth);
             if (_showSortPane)
-                PlaceDockedPane(ref _sortWindowRect, x, SortPaneDefaultWidth);
+                x = PlaceDockedPane(ref _sortWindowRect, x, SortPaneDefaultWidth);
+            if (_showItemAssociationPane)
+                PlaceDockedPane(ref _itemAssociationWindowRect, x, ItemAssociationPaneDefaultWidth);
 
             ShiftOpenDockedPanesLeftToFitScreen();
         }
@@ -614,6 +627,8 @@ namespace HS2SandboxPlugin
                 ShiftPaneX(ref _characterConfigWindowRect, -overflow);
             if (_showSortPane)
                 ShiftPaneX(ref _sortWindowRect, -overflow);
+            if (_showItemAssociationPane)
+                ShiftPaneX(ref _itemAssociationWindowRect, -overflow);
         }
 
         private bool TryGetOpenDockedPaneBounds(out float minX, out float maxX)
@@ -662,6 +677,13 @@ namespace HS2SandboxPlugin
                 any = true;
                 minX = Mathf.Min(minX, _sortWindowRect.x);
                 maxX = Mathf.Max(maxX, _sortWindowRect.xMax);
+            }
+
+            if (_showItemAssociationPane)
+            {
+                any = true;
+                minX = Mathf.Min(minX, _itemAssociationWindowRect.x);
+                maxX = Mathf.Max(maxX, _itemAssociationWindowRect.xMax);
             }
 
             return any;
@@ -1474,6 +1496,7 @@ namespace HS2SandboxPlugin
         private void DrawCompactPoseListPanel()
         {
             InitGroupStyles();
+            bool studioHasCharacters = GetCachedStudioHasSelectedCharacters();
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
 
             GUILayout.Label(
@@ -1514,7 +1537,7 @@ namespace HS2SandboxPlugin
                 var groupBtnContent = new GUIContent(
                     groupLabel,
                     applyTooltip ?? "Apply all poses in this group to selected Studio characters (Chars priority list).");
-                bool canGroupApply = _dataService.GetSelectedCharacters().Any() && i > start;
+                bool canGroupApply = studioHasCharacters && i > start;
                 var groupHeaderStyle = groupSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
                 GUI.enabled = canGroupApply;
                 if (GUILayout.Button(groupBtnContent, groupHeaderStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
@@ -1876,7 +1899,7 @@ namespace HS2SandboxPlugin
 
         private void DrawTopBarCharacterSection(float controlHeight, bool compact = false)
         {
-            var names = _dataService.GetSelectedCharacterDisplayNames();
+            var names = GetCachedStudioCharacterDisplayNames();
 
             bool charPaneOpen = _showCharacterConfigPane;
             if (GUILayout.Button(charPaneOpen ? "Chars ▶" : "Chars", GUILayout.Width(52f), GUILayout.Height(controlHeight)))
@@ -3280,9 +3303,19 @@ namespace HS2SandboxPlugin
                 int pages = Mathf.Max(1, Mathf.CeilToInt(CountDisplayPoses() / (float)_itemsPerPage));
                 GUILayout.Label($"Page {_currentPage}/{pages} · {CountDisplayPoses()} shown", GUILayout.Width(168f));
                 GUI.enabled = _currentPage > 1;
-                if (GUILayout.Button("◀", GUILayout.Width(28f))) { _currentPage--; _gridScroll = Vector2.zero; }
+                if (GUILayout.Button("◀", GUILayout.Width(28f)))
+                {
+                    _currentPage--;
+                    _gridScroll = Vector2.zero;
+                    InvalidatePoseBrowserViewCaches();
+                }
                 GUI.enabled = _currentPage < pages;
-                if (GUILayout.Button("▶", GUILayout.Width(28f))) { _currentPage++; _gridScroll = Vector2.zero; }
+                if (GUILayout.Button("▶", GUILayout.Width(28f)))
+                {
+                    _currentPage++;
+                    _gridScroll = Vector2.zero;
+                    InvalidatePoseBrowserViewCaches();
+                }
                 GUI.enabled = true;
             }
             else
@@ -3303,11 +3336,7 @@ namespace HS2SandboxPlugin
                 GUILayout.MaxWidth(gridAvailW),
                 GUILayout.ExpandHeight(true));
 
-            var gridRows = PoseBrowserGridLayout.BuildGridRows(
-                visibleEntries,
-                _groupDb,
-                columns,
-                ImportPreviewActive ? _importPreviewGroupsById : null);
+            var gridRows = GetOrBuildGridRows(visibleEntries, columns);
 
             if (Event.current.type == EventType.Layout ||
                 _poseGridLayout.Frame != Time.frameCount ||
@@ -3720,6 +3749,13 @@ namespace HS2SandboxPlugin
                 DrawActionBarSeparator();
             }
 
+            if (librarySelected.Count != 1 && _showItemAssociationPane)
+                CloseItemAssociationPane();
+            else if (librarySelected.Count == 1 && _showItemAssociationPane &&
+                     (_itemAssociationPose == null ||
+                      !string.Equals(_itemAssociationPose.FilePath, librarySelected[0].FilePath, StringComparison.OrdinalIgnoreCase)))
+                OpenItemAssociationPane(librarySelected[0]);
+
             if (librarySelected.Count > 0)
             {
                 var poseBar = new ActionBarWrapLayout();
@@ -3728,7 +3764,20 @@ namespace HS2SandboxPlugin
 
                 if (librarySelected.Count == 1)
                 {
-                    int selectedCharCount = _dataService.GetSelectedCharacterDisplayNames().Count;
+                    poseBar.Add(barBtnMinW, () =>
+                    {
+                        if (GUILayout.Button("Items", GUILayout.Height(barBtnH), GUILayout.MinWidth(barBtnMinW)))
+                        {
+                            if (_showItemAssociationPane &&
+                                _itemAssociationPose != null &&
+                                string.Equals(_itemAssociationPose.FilePath, librarySelected[0].FilePath, StringComparison.OrdinalIgnoreCase))
+                                CloseItemAssociationPane();
+                            else
+                                OpenItemAssociationPane(librarySelected[0]);
+                        }
+                    });
+
+                    int selectedCharCount = GetCachedStudioCharacterDisplayNames().Count;
                     bool canUpdatePose = selectedCharCount == 1;
                     const string updatePoseNeedOneCharTip =
                         "For updating a pose, exactly one character has to be selected in Studio.";
@@ -3843,7 +3892,10 @@ namespace HS2SandboxPlugin
                                 Destroy(it.Thumbnail);
                         }
                         foreach (var it in librarySelected)
+                        {
                             _groupDb.RemoveItem(it);
+                            _itemDb.RemovePoseKey(it.RelativePath(_dataService.PoseRootPath));
+                        }
                         NotifyLibraryCachePosesDeleted(librarySelected);
                         _dataService.DeletePoseFiles(librarySelected, _tagDb);
                         _showDeletePosesConfirm = false;
@@ -3942,6 +3994,7 @@ namespace HS2SandboxPlugin
                             if (_renamePoseAlsoFile && !string.Equals(oldPath, sel[0].FilePath, StringComparison.OrdinalIgnoreCase))
                             {
                                 _groupDb.OnItemPathChanged(oldRel, sel[0]);
+                                _itemDb.OnItemPathChanged(oldRel, sel[0]);
                                 NotifyLibraryCachePoseMoved(oldPath, sel[0]);
                             }
                             else
@@ -4103,6 +4156,7 @@ namespace HS2SandboxPlugin
                             if (_dataService.MovePoseFileToFolder(it, dest, _tagDb))
                             {
                                 _groupDb.OnItemPathChanged(oldRel, it);
+                                _itemDb.OnItemPathChanged(oldRel, it);
                                 NotifyLibraryCachePoseMoved(oldPath, it);
                             }
                         }
@@ -4120,7 +4174,14 @@ namespace HS2SandboxPlugin
                     else
                     {
                         foreach (var it in sel)
-                            NotifyLibraryCachePoseCopied(_dataService.CopyPoseFileToFolder(it, dest, _tagDb));
+                        {
+                            var copy = _dataService.CopyPoseFileToFolder(it, dest, _tagDb);
+                            if (copy != null)
+                            {
+                                _itemDb.CopyItemsFromTo(it, copy);
+                                NotifyLibraryCachePoseCopied(copy);
+                            }
+                        }
                     }
 
                     break;
@@ -4693,6 +4754,7 @@ namespace HS2SandboxPlugin
             {
                 _tagDb.OnItemPathChanged(oldRel, item);
                 _groupDb.OnItemPathChanged(oldRel, item);
+                _itemDb.OnItemPathChanged(oldRel, item);
                 NotifyLibraryCachePoseMoved(oldPath, item);
             }
             else
@@ -5026,7 +5088,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Selection bar (bottom)</b>", rich);
             GUILayout.Label(
-                "Shown when something is selected: <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v4 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
+                "Shown when something is selected: <b>Items</b> (one pose — register Studio props; load toggles for position/rotation/scale and free placement; stored list with ✎/X), <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v4 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
                 rich);
 
             GUILayout.Space(8f);
