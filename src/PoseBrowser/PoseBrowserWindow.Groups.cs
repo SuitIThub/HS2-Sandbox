@@ -609,13 +609,39 @@ namespace HS2SandboxPlugin
                 return list;
             }
 
+            // Look up via the cached group→members map instead of rescanning the whole display
+            // list on every call (hot path: selection-state checks per visible group per repaint).
+            // Return a fresh copy so existing callers may keep mutating their result freely.
+            if (GetGroupMembersMap().TryGetValue(groupId, out var cachedMembers))
+                list.AddRange(cachedMembers);
+            return list;
+        }
+
+        private Dictionary<string, List<PoseGridItem>>? _groupMembersById;
+
+        /// <summary>Group id → member items in display order, rebuilt only when the display list
+        /// changes (invalidated from <see cref="InvalidatePoseBrowserViewCaches"/>).</summary>
+        private Dictionary<string, List<PoseGridItem>> GetGroupMembersMap()
+        {
+            if (_groupMembersById != null)
+                return _groupMembersById;
+
+            var map = new Dictionary<string, List<PoseGridItem>>(StringComparer.Ordinal);
             foreach (var e in _displayEntries)
             {
-                if (e.Item.GroupId == groupId)
-                    list.Add(e.Item);
+                string? gid = e.Item.GroupId;
+                if (string.IsNullOrEmpty(gid))
+                    continue;
+                if (!map.TryGetValue(gid!, out var members))
+                {
+                    members = new List<PoseGridItem>();
+                    map[gid!] = members;
+                }
+                members.Add(e.Item);
             }
 
-            return list;
+            _groupMembersById = map;
+            return _groupMembersById;
         }
 
         private bool IsGroupHeaderChecked(string groupId)
@@ -1669,14 +1695,22 @@ namespace HS2SandboxPlugin
                 float titleW = Mathf.Max(20f, headerRect.width - headerCbRect.width - applyBtnW - 10f);
                 var titleRect = new Rect(headerCbRect.xMax + 4f, headerRect.y, titleW, headerRect.height);
                 var applyBtnRect = new Rect(headerRect.xMax - applyBtnW - 2f, headerRect.y + 2f, applyBtnW, headerRect.height - 4f);
-                string shownTitle = TruncateWithEllipsis(fullTitle, _groupTitleStyle!, titleW);
-                GUI.Label(titleRect, new GUIContent(shownTitle, fullTitle), _groupTitleStyle!);
+                if (Event.current.type == EventType.Repaint)
+                {
+                    string shownTitle = TruncateWithEllipsis(fullTitle, _groupTitleStyle!, titleW);
+                    GUI.Label(titleRect, new GUIContent(shownTitle, fullTitle), _groupTitleStyle!);
+                }
 
                 bool canGroupApply = !ImportPreviewActive &&
-                    _dataService.GetSelectedCharacters().Any() && segment.Poses.Count > 0;
-                string? applyTooltip = BuildGroupApplyAssignmentTooltip(segment.GroupId);
+                    GetCachedStudioHasSelectedCharacters() && segment.Poses.Count > 0;
+                // The assignment-plan tooltip is expensive (scans the display list, enumerates
+                // Studio selection, builds the full plan + string). Only compute it for the one
+                // group whose apply button the mouse is actually hovering, on the repaint pass.
+                string applyTooltip = "";
+                if (Event.current.type == EventType.Repaint && applyBtnRect.Contains(Event.current.mousePosition))
+                    applyTooltip = BuildGroupApplyAssignmentTooltip(segment.GroupId) ?? "";
                 GUI.enabled = canGroupApply;
-                if (GUI.Button(applyBtnRect, new GUIContent("▶", applyTooltip ?? "")))
+                if (GUI.Button(applyBtnRect, new GUIContent("▶", applyTooltip)))
                     ApplyGroupMembersToSelectedCharacters(segment.GroupId);
                 GUI.enabled = true;
 

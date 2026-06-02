@@ -188,6 +188,7 @@ namespace HS2SandboxPlugin
         private void OnMainPoseBrowserHidden()
         {
             _showDockedStash = false;
+            ReleaseThumbnailsOnHide();
         }
 
         private void PerformStashSelectedCharacter()

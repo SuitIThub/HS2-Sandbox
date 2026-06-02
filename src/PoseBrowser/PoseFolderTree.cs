@@ -14,6 +14,11 @@ namespace HS2SandboxPlugin
         public bool IsExpanded { get; set; }
         public bool HasChildren => Children.Count > 0;
 
+        // Cached ellipsis-truncated label for the tree row (rebuilt only when the available
+        // width changes), so the per-node CalcSize binary search doesn't run every IMGUI pass.
+        public string? CachedTruncatedName;
+        public float CachedTruncatedWidth = -1f;
+
         public PoseFolderNode(string fullPath, int depth)
         {
             FullPath = fullPath;

@@ -43,7 +43,7 @@ namespace HS2SandboxPlugin
             ItemsPerPage = cfg.Bind(
                 "Pose Browser",
                 "Items per page (grid)",
-                0,
+                150,
                 new ConfigDescription(
                     "Maximum poses per page in the thumbnail grid; 0 shows all. Editable in Pose Browser → Options.",
                     new AcceptableValueRange<int>(0, 5000)));

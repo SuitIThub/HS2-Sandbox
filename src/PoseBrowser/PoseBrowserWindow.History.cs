@@ -33,7 +33,9 @@ namespace HS2SandboxPlugin
 
         private void DrawHistoryUndoRedoButtons(float height = 24f, float buttonWidth = 48f)
         {
-            var selected = _dataService.GetSelectedCharacters().ToList();
+            // Draw path: use the cached Studio selection (refreshed ~5×/s) to avoid enumerating
+            // Studio and allocating a list every frame. The undo/redo actions still read it live.
+            var selected = GetCachedStudioSelectedCharacters();
             GUI.enabled = _poseHistory.CanUndo(selected);
             if (GUILayout.Button(
                     new GUIContent("Undo", "Undo last pose change for Studio-selected characters"),
@@ -203,7 +205,7 @@ namespace HS2SandboxPlugin
 
         private void DrawHistoryWindowContent(int id)
         {
-            var selected = _dataService.GetSelectedCharacters().ToList();
+            var selected = GetCachedStudioSelectedCharacters();
             GUILayout.Label(
                 "History for Studio-selected characters. Entries store absolute pose, position, and rotation.",
                 GUI.skin.label);
@@ -242,7 +244,7 @@ namespace HS2SandboxPlugin
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
         }
 
-        private void DrawHistoryTimelineForSelected(List<OCIChar> selected)
+        private void DrawHistoryTimelineForSelected(IReadOnlyList<OCIChar> selected)
         {
             var timelines = _poseHistory.GetTimelinesForSelected(selected);
             _historyScroll = GUILayout.BeginScrollView(_historyScroll, GUILayout.ExpandHeight(true));
@@ -263,11 +265,6 @@ namespace HS2SandboxPlugin
                         continue;
                     }
 
-                    var sorted = tl.Entries
-                        .Select((entry, index) => (entry, index))
-                        .OrderByDescending(x => x.entry.UtcTicks)
-                        .ToList();
-
                     if (!TryResolveTimelineCharacter(tl, selected, out var oci))
                     {
                         GUILayout.Label("  (character not in current selection)");
@@ -275,21 +272,19 @@ namespace HS2SandboxPlugin
                         continue;
                     }
 
-                    foreach (var (entry, index) in sorted)
+                    // Entries are appended in chronological order and only pruned at the ends, so
+                    // iterating backwards yields newest-first without sorting/allocating every frame.
+                    // `index` stays the original list index that JumpToEntry expects.
+                    for (int index = tl.Entries.Count - 1; index >= 0; index--)
                     {
+                        var entry = tl.Entries[index];
                         bool isCurrent = index == tl.CursorIndex;
-                        string prefix = isCurrent ? "▶ " : "";
-                        string posText = entry.Snapshot.HasPosition
-                            ? $"\npos ({entry.Snapshot.Position.x:F2}, {entry.Snapshot.Position.y:F2}, {entry.Snapshot.Position.z:F2})"
-                            : "";
-                        string rotText = entry.Snapshot.HasRotation
-                            ? $"\nrot ({entry.Snapshot.Rotation.eulerAngles.x:F0}°, {entry.Snapshot.Rotation.eulerAngles.y:F0}°, {entry.Snapshot.Rotation.eulerAngles.z:F0}°)"
-                            : "";
-
-                        string line = $"{prefix}{entry.FormatTimestampLocal()}  {entry.SummaryLine}{posText}{rotText}";
+                        GUIContent content = isCurrent
+                            ? new GUIContent("▶ " + entry.GetDisplayBody(), HistoryEntryApplyTooltip)
+                            : entry.GetDisplayContent(HistoryEntryApplyTooltip);
                         GUILayout.BeginVertical(isCurrent ? GetHistoryEntryCurrentBoxStyle() : GetHistoryEntryBoxStyle());
                         if (GUILayout.Button(
-                                new GUIContent(line, "Apply this snapshot to the character (uses checkboxes above)."),
+                                content,
                                 GetHistoryEntryButtonStyle(),
                                 GUILayout.ExpandWidth(true)))
                         {
@@ -316,7 +311,7 @@ namespace HS2SandboxPlugin
 
         private static bool TryResolveTimelineCharacter(
             PoseBrowserCharacterTimeline tl,
-            List<OCIChar> selected,
+            IReadOnlyList<OCIChar> selected,
             out OCIChar oci)
         {
             oci = null;
@@ -331,6 +326,8 @@ namespace HS2SandboxPlugin
 
             return false;
         }
+
+        private const string HistoryEntryApplyTooltip = "Apply this snapshot to the character (uses checkboxes above).";
 
         private GUIStyle? _historyRichLabelStyle;
         private GUIStyle? _historyEntryBoxStyle;

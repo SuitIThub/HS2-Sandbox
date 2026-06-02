@@ -47,6 +47,21 @@ namespace HS2SandboxPlugin
         private const float CharacterPaneDefaultWidth = 300f;
         private const float SortPaneDefaultWidth = 260f;
 
+        // Static GUIContent for constant UI elements (avoids per-frame allocations)
+        private static readonly GUIContent _gcBtnSoloDefault = new GUIContent("Solo", "Select all ungrouped poses in the current view");
+        private static readonly GUIContent _gcBtnSoloFiltered = new GUIContent("Solo", "Select ungrouped poses that match search / tag filters");
+        private static readonly GUIContent _gcBtnGroup = new GUIContent("▦ Group", "Select all group headers (▦ entities) shown in the current results — for rename, group tags, export, apply to characters…");
+        private static readonly GUIContent _gcBtnGroupPoseDefault = new GUIContent("▦ Pose", "Select all pose checkboxes in groups in the current view");
+        private static readonly GUIContent _gcBtnGroupPoseFiltered = new GUIContent("▦ Pose", "Select pose checkboxes in groups that match search / tag filters (skips dimmed non-matching members)");
+        private static readonly GUIContent _gcBtnAllDefault = new GUIContent("All", "Select all poses in the current folder / library view");
+        private static readonly GUIContent _gcBtnAllFiltered = new GUIContent("All", "Select all poses matching search / tag filters (skips dimmed group members that do not match)");
+        private static readonly GUIContent _gcBtnInvertGroup = new GUIContent("Invert", "Invert group header (▦) selection among groups in the current results");
+        private static readonly GUIContent _gcBtnInvertPose = new GUIContent("Invert", "Invert pose checkbox selection among poses in the current results (skips dimmed)");
+        private static readonly GUIContent _gcBtnNone = new GUIContent("None", "Clear all pose checkboxes and group header (▦) selection");
+        private static readonly GUIContent _gcPagePrev = new GUIContent("◀");
+        private static readonly GUIContent _gcPageNext = new GUIContent("▶");
+        private static readonly GUIContent _gcThumbnailLoading = new GUIContent("Loading…", "Thumbnail image is still being loaded from disk.");
+
         private enum PoseBrowserLayoutTier
         {
             Normal = 0,
@@ -83,6 +98,15 @@ namespace HS2SandboxPlugin
         private Vector2 _chipMouseDownPos;
         private int _compactPoseIndex = -1;
         private string? _compactSelectedGroupId;
+
+        // Compact-list virtualization: only the rows inside the scroll viewport are drawn.
+        // Blocks group a run of poses (ungrouped pose = 1 block, a group = 1 block) so each block
+        // is drawn atomically and the group card box stays intact.
+        private struct CompactListBlock { public int Start; public int Count; public string? GroupId; }
+        private List<CompactListBlock>? _compactBlocks;
+        private float _compactListViewportH;
+        private float _compactRowPitch = 24f;
+        private float _compactMeasureLastRowY = -1f;
         /// <summary>Last group whose poses were applied to characters; cleared when another pose is applied.</summary>
         private string? _lastAppliedGroupId;
         private bool _anyPoseAppliedSinceLastGroupApply;
@@ -186,6 +210,13 @@ namespace HS2SandboxPlugin
         private PoseGridLayoutMetrics _poseGridLayout;
         private readonly List<float> _gridRowOuterHeights = new List<float>();
         private int _gridUniformLayoutFrame = -1;
+        private int _gridUniformLayoutColumns = -1;
+        private float _gridUniformLayoutCellInnerW = -1f;
+        private float _gridUniformLayoutColumnFootprintW = -1f;
+        private float _gridUniformLayoutGridAvailW = -1f;
+        private int _gridUniformLayoutRowCount = -1;
+        private int _gridUniformLayoutDisplayCount = -1;
+        private bool _gridUniformLayoutImportPreview;
         private int _currentPage = 1;
 
         private bool _viewAllPosesRecursive;
@@ -205,6 +236,7 @@ namespace HS2SandboxPlugin
 
         private Vector2 _treeScroll;
         private Vector2 _gridScroll;
+        private float _gridScrollViewportH;
         private bool _isResizing;
 
         // Search & filter state
@@ -303,10 +335,16 @@ namespace HS2SandboxPlugin
         private UpdateMode _pendingUpdateMode = UpdateMode.None;
         private PoseGridItem? _pendingUpdateItem;
 
-        // Thumbnail loading coroutine
+        // Thumbnail loading coroutine (on-demand / viewport-bound + LRU eviction).
+        // Only cards that actually get drawn (i.e. the virtualized visible rows) request their
+        // thumbnail, so the queue stays tiny regardless of how many poses the page lists.
         private Coroutine? _thumbnailLoadCoroutine;
-        private int _thumbnailLoadIndex;
         private readonly HashSet<PoseGridItem> _thumbnailsPendingLoad = new HashSet<PoseGridItem>();
+        private readonly List<PoseGridItem> _thumbnailLoadBatch = new List<PoseGridItem>(8);
+        private const int ThumbnailLruMaxLoaded = 350;
+        private const int ThumbnailLruEvictBatch = 80;
+        private int _thumbnailEvictionFrame;
+        private bool _thumbnailLoadNeeded;
 
         // Background index for All poses / Favorites (warmed after Studio loads)
         private readonly PoseLibraryIndexCache _libraryCache = new PoseLibraryIndexCache();
@@ -384,6 +422,12 @@ namespace HS2SandboxPlugin
             {
                 RefreshStudioSelectionCacheIfDue(force: false);
                 MaybeProcessPoseBrowserHotkeys();
+                EvictLruThumbnailsIfNeeded();
+                if (_thumbnailLoadNeeded && _thumbnailLoadCoroutine == null && _thumbnailsPendingLoad.Count > 0)
+                {
+                    _thumbnailLoadNeeded = false;
+                    _thumbnailLoadCoroutine = StartCoroutine(LoadThumbnailsCoroutine());
+                }
             }
         }
 
@@ -451,6 +495,10 @@ namespace HS2SandboxPlugin
             {
                 _didAutoLoadBrowse = true;
                 LoadFolder(_folderTree.RootPath);
+            }
+            else if (visible && _allItems.Count > 0)
+            {
+                MaybeStartThumbnailsAfterLoad();
             }
         }
 
@@ -1239,8 +1287,9 @@ namespace HS2SandboxPlugin
 
         private void MaybeStartThumbnailsAfterLoad()
         {
-            if (_layoutTier == PoseBrowserLayoutTier.Normal && _allItems.Count > 0)
-                StartThumbnailLoading();
+            // No-op: thumbnails are now loaded on demand from the draw path (RequestThumbnail),
+            // so only the visible cards trigger a load. Kept for the existing call sites after
+            // a folder/view load; the next DrawGridCell pass queues whatever is on screen.
         }
 
         private void TryStartStudioLibraryCacheWarmup()
@@ -1542,6 +1591,79 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
 
             _compactListScroll = GUILayout.BeginScrollView(_compactListScroll, GUILayout.ExpandHeight(true));
+
+            // Virtualized: only blocks intersecting the scroll viewport are drawn; spacers stand
+            // in for the rest so the scrollbar stays correct regardless of list size.
+            var blocks = GetCompactBlocks();
+            float pitch = _compactRowPitch;
+            float viewportH = _compactListViewportH > 1f ? _compactListViewportH : 600f;
+            viewportH = Mathf.Min(viewportH, Mathf.Max(200f, windowRect.height));
+            float scrollY = _compactListScroll.y;
+
+            int firstBlock = 0;
+            int lastBlock = blocks.Count - 1;
+            if (blocks.Count > 0)
+            {
+                float y = 0f;
+                firstBlock = blocks.Count;
+                lastBlock = -1;
+                for (int b = 0; b < blocks.Count; b++)
+                {
+                    float h = CompactBlockHeight(blocks[b], pitch);
+                    float top = y;
+                    float bot = y + h;
+                    y = bot;
+                    if (bot >= scrollY && top <= scrollY + viewportH)
+                    {
+                        if (firstBlock > b) firstBlock = b;
+                        lastBlock = b;
+                    }
+                }
+                if (firstBlock > lastBlock) { firstBlock = 0; lastBlock = blocks.Count - 1; }
+                else { firstBlock = Mathf.Max(0, firstBlock - 1); lastBlock = Mathf.Min(blocks.Count - 1, lastBlock + 1); }
+            }
+
+            float spaceAbove = 0f;
+            for (int b = 0; b < firstBlock; b++) spaceAbove += CompactBlockHeight(blocks[b], pitch);
+            if (spaceAbove > 0f) GUILayout.Space(spaceAbove);
+
+            _compactMeasureLastRowY = -1f;
+            for (int b = firstBlock; b <= lastBlock && b < blocks.Count; b++)
+            {
+                var block = blocks[b];
+                if (block.GroupId == null)
+                {
+                    DrawCompactPoseRow(block.Start);
+                }
+                else
+                {
+                    _compactMeasureLastRowY = -1f;
+                    DrawCompactGroupBlock(block, studioHasCharacters);
+                    _compactMeasureLastRowY = -1f;
+                }
+            }
+
+            float spaceBelow = 0f;
+            for (int b = lastBlock + 1; b < blocks.Count; b++) spaceBelow += CompactBlockHeight(blocks[b], pitch);
+            if (spaceBelow > 0f) GUILayout.Space(spaceBelow);
+
+            GUILayout.EndScrollView();
+
+            if (Event.current.type == EventType.Repaint)
+            {
+                Rect svRect = GUILayoutUtility.GetLastRect();
+                if (svRect.height > 1f) _compactListViewportH = svRect.height;
+            }
+
+            GUILayout.EndVertical();
+        }
+
+        private List<CompactListBlock> GetCompactBlocks()
+        {
+            if (_compactBlocks != null)
+                return _compactBlocks;
+
+            var blocks = new List<CompactListBlock>();
             int i = 0;
             while (i < _displayEntries.Count)
             {
@@ -1549,7 +1671,7 @@ namespace HS2SandboxPlugin
                 var group = !string.IsNullOrEmpty(gid) ? _groupDb.TryGetGroup(gid) : null;
                 if (group == null)
                 {
-                    DrawCompactPoseRow(i);
+                    blocks.Add(new CompactListBlock { Start = i, Count = 1, GroupId = null });
                     i++;
                     continue;
                 }
@@ -1557,28 +1679,52 @@ namespace HS2SandboxPlugin
                 int start = i;
                 while (i < _displayEntries.Count && _displayEntries[i].Item.GroupId == gid)
                     i++;
-                bool groupSelected = IsCompactGroupSelected(gid!);
-                var cardStyle = groupSelected ? _groupCardSelectedStyle! : _groupCardStyle!;
-                GUILayout.BeginVertical(cardStyle, GUILayout.ExpandWidth(true));
-                string groupLabel = "▦ " + group.Name;
-                string? applyTooltip = BuildGroupApplyAssignmentTooltip(gid!);
-                var groupBtnContent = new GUIContent(
-                    groupLabel,
-                    applyTooltip ?? "Apply all poses in this group to selected Studio characters (Chars priority list).");
-                bool canGroupApply = studioHasCharacters && i > start;
-                var groupHeaderStyle = groupSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
-                GUI.enabled = canGroupApply;
-                if (GUILayout.Button(groupBtnContent, groupHeaderStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
-                {
-                    SelectCompactGroup(gid!);
-                    ApplyGroupMembersToSelectedCharacters(gid!);
-                }
-                GUI.enabled = true;
-                for (int j = start; j < i; j++)
-                    DrawCompactPoseRow(j);
-                GUILayout.EndVertical();
+                blocks.Add(new CompactListBlock { Start = start, Count = i - start, GroupId = gid });
             }
-            GUILayout.EndScrollView();
+
+            _compactBlocks = blocks;
+            return _compactBlocks;
+        }
+
+        private float CompactBlockHeight(in CompactListBlock block, float pitch)
+        {
+            if (block.GroupId == null)
+                return pitch;
+            float cardV = _groupCardStyle!.padding.vertical + _groupCardStyle.margin.vertical;
+            return cardV + (block.Count + 1) * pitch; // group header row + member rows
+        }
+
+        private void DrawCompactGroupBlock(in CompactListBlock block, bool studioHasCharacters)
+        {
+            string gid = block.GroupId!;
+            var group = _groupDb.TryGetGroup(gid);
+            bool groupSelected = IsCompactGroupSelected(gid);
+            var cardStyle = groupSelected ? _groupCardSelectedStyle! : _groupCardStyle!;
+            GUILayout.BeginVertical(cardStyle, GUILayout.ExpandWidth(true));
+
+            string groupLabel = "▦ " + (group != null ? group.Name : "Group");
+            var groupHeaderStyle = groupSelected ? _treeNodeSelectedStyle! : _treeNodeStyle!;
+            bool canGroupApply = studioHasCharacters && block.Count > 0;
+
+            // Manual rect so we can hover-test before building the (expensive) assignment-plan
+            // tooltip — only the group actually under the mouse pays for it.
+            var headerRect = GUILayoutUtility.GetRect(
+                new GUIContent(groupLabel), groupHeaderStyle, GUILayout.Height(22f), GUILayout.ExpandWidth(true));
+            string headerTip = "Apply all poses in this group to selected Studio characters (Chars priority list).";
+            if (Event.current.type == EventType.Repaint && headerRect.Contains(Event.current.mousePosition))
+                headerTip = BuildGroupApplyAssignmentTooltip(gid) ?? headerTip;
+
+            GUI.enabled = canGroupApply;
+            if (GUI.Button(headerRect, new GUIContent(groupLabel, headerTip), groupHeaderStyle))
+            {
+                SelectCompactGroup(gid);
+                ApplyGroupMembersToSelectedCharacters(gid);
+            }
+            GUI.enabled = true;
+
+            int end = block.Start + block.Count;
+            for (int j = block.Start; j < end; j++)
+                DrawCompactPoseRow(j);
 
             GUILayout.EndVertical();
         }
@@ -1615,6 +1761,20 @@ namespace HS2SandboxPlugin
                 ApplyPoseToSelectedWithUsage(item);
             }
             GUI.color = prev;
+
+            // Measure the real row pitch (height + inter-row margin) from two consecutive rows so
+            // the virtualization spacers match exactly and the scroll position never drifts.
+            if (Event.current.type == EventType.Repaint)
+            {
+                Rect rr = GUILayoutUtility.GetLastRect();
+                if (_compactMeasureLastRowY >= 0f)
+                {
+                    float p = rr.y - _compactMeasureLastRowY;
+                    if (p > 1f && p < 200f)
+                        _compactRowPitch = p;
+                }
+                _compactMeasureLastRowY = rr.y;
+            }
         }
 
         private void DrawCompactHoverThumbnail()
@@ -2792,7 +2952,13 @@ namespace HS2SandboxPlugin
                 bool moveDestSel = IsPickingFolderDestination && !string.IsNullOrEmpty(_pendingFolderDestPath) &&
                     Path.GetFullPath(node.FullPath).Equals(Path.GetFullPath(_pendingFolderDestPath), StringComparison.OrdinalIgnoreCase);
                 var style = (normalSel || moveDestSel) ? _treeNodeSelectedStyle! : _treeNodeStyle!;
-                string shownName = TruncateWithEllipsis(node.Name, style, TreeNodeLabelMaxWidth(node.Depth));
+                float treeLabelW = TreeNodeLabelMaxWidth(node.Depth);
+                if (node.CachedTruncatedName == null || node.CachedTruncatedWidth != treeLabelW)
+                {
+                    node.CachedTruncatedName = TruncateWithEllipsis(node.Name, style, treeLabelW);
+                    node.CachedTruncatedWidth = treeLabelW;
+                }
+                string shownName = node.CachedTruncatedName;
                 if (GUILayout.Button(new GUIContent(shownName, node.Name), style, GUILayout.Height(20f), GUILayout.ExpandWidth(true)))
                 {
                     if (IsPickingFolderDestination)
@@ -3137,6 +3303,26 @@ namespace HS2SandboxPlugin
             return h;
         }
 
+        private void UpdateMaxTagBlockHeight(ref float maxTagH, PoseGridItem item, float width)
+        {
+            if (item.Tags == null || item.Tags.Count == 0)
+                return;
+
+            if (item.CachedTagBlockTagCount == item.Tags.Count &&
+                Mathf.Approximately(item.CachedTagBlockWidth, width))
+            {
+                maxTagH = Mathf.Max(maxTagH, item.CachedTagBlockHeight);
+                return;
+            }
+
+            string tagStr = item.GetOrBuildTagString();
+            float h = MeasureTagBlockHeight(tagStr, _tagWrapStyle!, width);
+            item.CachedTagBlockHeight = h;
+            item.CachedTagBlockWidth = width;
+            item.CachedTagBlockTagCount = item.Tags.Count;
+            maxTagH = Mathf.Max(maxTagH, h);
+        }
+
         private void UpdateMaxTagBlockHeight(ref float maxTagH, IEnumerable<string> tags, float width)
         {
             if (tags == null || !tags.Any())
@@ -3163,7 +3349,7 @@ namespace HS2SandboxPlugin
                 {
                     if (gridCell.Kind == PoseBrowserGridCellKind.Pose)
                     {
-                        UpdateMaxTagBlockHeight(ref maxPoseTagH, gridCell.Pose!.Item.Tags, tagTextW);
+                        UpdateMaxTagBlockHeight(ref maxPoseTagH, gridCell.Pose!.Item, tagTextW);
                         continue;
                     }
 
@@ -3173,7 +3359,7 @@ namespace HS2SandboxPlugin
                     if (segment.ShowTags)
                         UpdateMaxTagBlockHeight(ref maxGroupTagH, segment.GroupTags, segInnerW);
                     foreach (var pose in segment.Poses)
-                        UpdateMaxTagBlockHeight(ref maxPoseTagH, pose.Item.Tags, tagTextW);
+                        UpdateMaxTagBlockHeight(ref maxPoseTagH, pose.Item, tagTextW);
                 }
             }
 
@@ -3284,64 +3470,37 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
 
             GUILayout.BeginHorizontal(GUILayout.Height(22f));
-            if (GUILayout.Button(new GUIContent(
-                    "Solo",
-                    HasActivePoseContentFilters()
-                        ? "Select ungrouped poses that match search / tag filters"
-                        : "Select all ungrouped poses in the current view"),
-                    GUILayout.Width(52f)))
+            bool hasFilters = HasActivePoseContentFilters();
+            if (GUILayout.Button(hasFilters ? _gcBtnSoloFiltered : _gcBtnSoloDefault, GUILayout.Width(52f)))
                 SelectAllStandalonePosesInView();
-            if (GUILayout.Button(new GUIContent(
-                    "▦ Group",
-                    "Select all group headers (▦ entities) shown in the current results — for rename, group tags, export, apply to characters…"),
-                    GUILayout.Width(80f)))
+            if (GUILayout.Button(_gcBtnGroup, GUILayout.Width(80f)))
                 SelectAllGroupEntitiesInView();
-            if (GUILayout.Button(new GUIContent(
-                    "▦ Pose",
-                    HasActivePoseContentFilters()
-                        ? "Select pose checkboxes in groups that match search / tag filters (skips dimmed non-matching members)"
-                        : "Select all pose checkboxes in groups in the current view"),
-                    GUILayout.Width(72f)))
+            if (GUILayout.Button(hasFilters ? _gcBtnGroupPoseFiltered : _gcBtnGroupPoseDefault, GUILayout.Width(72f)))
                 SelectAllGroupedPosesInView();
-            if (GUILayout.Button(new GUIContent(
-                    "All",
-                    HasActivePoseContentFilters()
-                        ? "Select all poses matching search / tag filters (skips dimmed group members that do not match)"
-                        : "Select all poses in the current folder / library view"),
-                    GUILayout.Width(44f)))
+            if (GUILayout.Button(hasFilters ? _gcBtnAllFiltered : _gcBtnAllDefault, GUILayout.Width(44f)))
                 SelectAllInCurrentFolderView();
             GUI.enabled = CanInvertSelection();
-            if (GUILayout.Button(new GUIContent(
-                    "Invert",
-                    HasGroupEntitySelection()
-                        ? "Invert group header (▦) selection among groups in the current results"
-                        : "Invert pose checkbox selection among poses in the current results (skips dimmed)"),
-                    GUILayout.Width(58f)))
+            if (GUILayout.Button(HasGroupEntitySelection() ? _gcBtnInvertGroup : _gcBtnInvertPose, GUILayout.Width(58f)))
                 InvertSelectionInView();
             GUI.enabled = true;
-            if (GUILayout.Button(new GUIContent(
-                    "None",
-                    "Clear all pose checkboxes and group header (▦) selection"),
-                    GUILayout.Width(52f)))
+            if (GUILayout.Button(_gcBtnNone, GUILayout.Width(52f)))
                 ClearAllSelection();
             GUILayout.Space(6f);
-            GUILayout.Label(
-                new GUIContent($"{_allItems.Count} in folder", "Total poses in the current tree scope (before search / tag filters)."),
-                GUILayout.Width(78f));
+            GUILayout.Label($"{_allItems.Count} in folder", GUILayout.Width(78f));
             if (_itemsPerPage > 0 && CountDisplayPoses() > 0)
             {
                 GUILayout.FlexibleSpace();
                 int pages = Mathf.Max(1, Mathf.CeilToInt(CountDisplayPoses() / (float)_itemsPerPage));
                 GUILayout.Label($"Page {_currentPage}/{pages} · {CountDisplayPoses()} shown", GUILayout.Width(168f));
                 GUI.enabled = _currentPage > 1;
-                if (GUILayout.Button("◀", GUILayout.Width(28f)))
+                if (GUILayout.Button(_gcPagePrev, GUILayout.Width(28f)))
                 {
                     _currentPage--;
                     _gridScroll = Vector2.zero;
                     InvalidatePoseBrowserViewCaches();
                 }
                 GUI.enabled = _currentPage < pages;
-                if (GUILayout.Button("▶", GUILayout.Width(28f)))
+                if (GUILayout.Button(_gcPageNext, GUILayout.Width(28f)))
                 {
                     _currentPage++;
                     _gridScroll = Vector2.zero;
@@ -3369,10 +3528,22 @@ namespace HS2SandboxPlugin
 
             var gridRows = GetOrBuildGridRows(visibleEntries, columns);
 
-            if (Event.current.type == EventType.Layout ||
-                _poseGridLayout.Frame != Time.frameCount ||
-                _gridUniformLayoutFrame != Time.frameCount ||
-                _gridRowOuterHeights.Count != gridRows.Count)
+            // Only the *inputs* to the (expensive) row-metrics pass matter: the available width
+            // (drives base columns / cell size), the row/pose counts and import-preview mode.
+            // GridAvailW is an input that RefineGridLayoutForRows never mutates, so it stays
+            // stable across frames while idle — unlike _poseGridLayout.Columns, which the refine
+            // step overwrites. Keying on it lets us skip the whole pass when nothing changed
+            // instead of recomputing every frame.
+            int displayCount = _displayEntries.Count;
+            bool importPreview = ImportPreviewActive;
+            bool layoutKeyChanged =
+                !Mathf.Approximately(_gridUniformLayoutGridAvailW, _poseGridLayout.GridAvailW) ||
+                _gridUniformLayoutRowCount != gridRows.Count ||
+                _gridUniformLayoutDisplayCount != displayCount ||
+                _gridUniformLayoutImportPreview != importPreview ||
+                _gridRowOuterHeights.Count != gridRows.Count;
+
+            if (layoutKeyChanged)
             {
                 RefineGridLayoutForRows(gridRows);
                 cellInnerW = _poseGridLayout.CellInnerW;
@@ -3380,16 +3551,106 @@ namespace HS2SandboxPlugin
                 columns = _poseGridLayout.Columns;
                 ComputeUniformGridRowMetrics(gridRows, cellInnerW);
                 _gridUniformLayoutFrame = Time.frameCount;
+                _gridUniformLayoutGridAvailW = _poseGridLayout.GridAvailW;
+                _gridUniformLayoutColumns = columns;
+                _gridUniformLayoutCellInnerW = cellInnerW;
+                _gridUniformLayoutColumnFootprintW = columnFootprintW;
+                _gridUniformLayoutRowCount = gridRows.Count;
+                _gridUniformLayoutDisplayCount = displayCount;
+                _gridUniformLayoutImportPreview = importPreview;
+            }
+            else
+            {
+                // Cache hit: UpdatePoseGridLayout reset Columns/CellInnerW to their unrefined base
+                // this frame, so restore the refined values we computed earlier. Uniform* heights
+                // and _gridRowOuterHeights persist on the struct/list and stay valid.
+                columns = _gridUniformLayoutColumns;
+                cellInnerW = _gridUniformLayoutCellInnerW;
+                columnFootprintW = _gridUniformLayoutColumnFootprintW;
+                _poseGridLayout.Columns = columns;
+                _poseGridLayout.CellInnerW = cellInnerW;
+                _poseGridLayout.ColumnFootprintW = columnFootprintW;
             }
 
             float uniformPoseCardOuterH = _poseGridLayout.UniformPoseCardOuterH;
             float uniformTagBlockH = _poseGridLayout.UniformTagBlockH;
             float uniformGroupTagBlockH = _poseGridLayout.UniformGroupTagBlockH;
 
-            int displayIdx = _itemsPerPage > 0 ? (_currentPage - 1) * _itemsPerPage : 0;
-            for (int rowIdx = 0; rowIdx < gridRows.Count; rowIdx++)
+            // --- Scroll virtualization: determine visible row range ---
+            int rowCount = gridRows.Count;
+            float viewportH = _gridScrollViewportH > 1f ? _gridScrollViewportH : 600f;
+            // Safety clamp: depending on IMGUI state, GUILayoutUtility.GetLastRect() after
+            // EndScrollView can report the scroll *content* height instead of the viewport.
+            // If that leaks in, every row counts as visible and virtualization silently draws
+            // the whole page. The visible window can never exceed the window height, so cap it.
+            viewportH = Mathf.Min(viewportH, Mathf.Max(200f, windowRect.height));
+            float scrollY = _gridScroll.y;
+
+            int firstVisible = 0;
+            int lastVisible = rowCount - 1;
+
+            if (rowCount > 0 && _gridRowOuterHeights.Count == rowCount)
             {
-                if (rowIdx > 0)
+                float yAccum = 0f;
+                firstVisible = rowCount;
+                lastVisible = -1;
+
+                for (int r = 0; r < rowCount; r++)
+                {
+                    float rowH = _gridRowOuterHeights[r];
+                    float rowTop = yAccum;
+                    float rowBot = yAccum + rowH;
+                    yAccum = rowBot + GridCellGap;
+
+                    if (rowBot >= scrollY && rowTop <= scrollY + viewportH)
+                    {
+                        if (firstVisible > r) firstVisible = r;
+                        lastVisible = r;
+                    }
+                }
+
+                if (firstVisible > lastVisible)
+                {
+                    firstVisible = 0;
+                    lastVisible = rowCount - 1;
+                }
+                else
+                {
+                    // Overscan one row each side so fast scrolling doesn't flash placeholders.
+                    firstVisible = Mathf.Max(0, firstVisible - 1);
+                    lastVisible = Mathf.Min(rowCount - 1, lastVisible + 1);
+                }
+            }
+
+            // Emit space for rows above the visible range
+            float spaceAbove = 0f;
+            for (int r = 0; r < firstVisible; r++)
+            {
+                spaceAbove += _gridRowOuterHeights[r];
+                if (r > 0) spaceAbove += GridCellGap;
+            }
+            if (firstVisible > 0)
+                spaceAbove += GridCellGap;
+            if (spaceAbove > 0f)
+                GUILayout.Space(spaceAbove);
+
+            // Compute displayIdx offset for the first visible row
+            int displayIdx = _itemsPerPage > 0 ? (_currentPage - 1) * _itemsPerPage : 0;
+            for (int r = 0; r < firstVisible; r++)
+            {
+                foreach (var cell in gridRows[r].Cells)
+                {
+                    if (cell.Kind == PoseBrowserGridCellKind.GroupSegment)
+                        displayIdx += cell.GroupSegment!.Poses.Count;
+                    else
+                        displayIdx++;
+                }
+            }
+
+            // Draw only visible rows
+            for (int rowIdx = firstVisible; rowIdx <= lastVisible; rowIdx++)
+            {
+                if (rowIdx > firstVisible)
                     GUILayout.Space(GridCellGap);
 
                 var gridRow = gridRows[rowIdx];
@@ -3437,7 +3698,28 @@ namespace HS2SandboxPlugin
                 GUILayout.EndHorizontal();
             }
 
+            // Emit space for rows below the visible range
+            float spaceBelow = 0f;
+            for (int r = lastVisible + 1; r < rowCount; r++)
+            {
+                spaceBelow += _gridRowOuterHeights[r];
+                if (r > lastVisible + 1) spaceBelow += GridCellGap;
+            }
+            if (lastVisible < rowCount - 1)
+                spaceBelow += GridCellGap;
+            if (spaceBelow > 0f)
+                GUILayout.Space(spaceBelow);
+
             GUILayout.EndScrollView();
+
+            // Capture viewport height for next frame's virtualization
+            if (Event.current.type == EventType.Repaint)
+            {
+                Rect svRect = GUILayoutUtility.GetLastRect();
+                if (svRect.height > 1f)
+                    _gridScrollViewportH = svRect.height;
+            }
+
             GUILayout.EndVertical();
         }
 
@@ -3496,6 +3778,8 @@ namespace HS2SandboxPlugin
 
             Rect thumbRect = GUILayoutUtility.GetRect(innerW, innerW, GUILayout.Width(innerW), GUILayout.Height(innerW));
             Texture2D tex = item.Thumbnail ?? _placeholderTex!;
+            item.ThumbnailLastUsedFrame = Time.frameCount;
+            RequestThumbnail(item);
 
             const float cbSize = 18f;
             var cbRect = new Rect(thumbRect.xMax - cbSize - 3f, thumbRect.y + 3f, cbSize, cbSize);
@@ -3559,12 +3843,15 @@ namespace HS2SandboxPlugin
             float nameW = Mathf.Max(20f, titleRowRect.width - pad * 2f - PoseCardNameStarW);
             var nameRect = new Rect(starRect.xMax, titleRowRect.y, nameW, titleRowRect.height);
 
-            string label = item.DisplayName;
-            var starStyle = _favoriteStyle!;
-            var nameStyle = favoriteCard ? _favoriteCardNameStyle! : _poseCardNameStyle!;
-            string shownName = TruncateWithEllipsis(label, nameStyle, nameW);
-            GUI.Label(starRect, item.IsFavorite ? "★" : " ", starStyle);
-            GUI.Label(nameRect, new GUIContent(shownName, label), nameStyle);
+            if (Event.current.type == EventType.Repaint)
+            {
+                string label = item.DisplayName;
+                var starStyle = _favoriteStyle!;
+                var nameStyle = favoriteCard ? _favoriteCardNameStyle! : _poseCardNameStyle!;
+                string shownName = GetCachedTruncatedName(item, label, nameStyle, nameW);
+                GUI.Label(starRect, item.IsFavorite ? "★" : " ", starStyle);
+                GUI.Label(nameRect, new GUIContent(shownName, label), nameStyle);
+            }
 
             if (uniformTagBlockH > 0f)
             {
@@ -3578,14 +3865,13 @@ namespace HS2SandboxPlugin
                 var tagTextRect = new Rect(tagRect.x + pad, tagRect.y, tagTextW, tagRect.height);
                 if (item.Tags.Count > 0 && Event.current.type == EventType.Repaint)
                 {
-                    var sortedTags = item.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
-                    string plainTagStr = string.Join(" · ", sortedTags);
+                    string plainTagStr = item.GetOrBuildTagString();
                     var tagStyle = favoriteCard ? _favoriteCardTagStyle! : _tagWrapStyle!;
                     bool highlightExcludedTags = entry.IsDimmed &&
                         !string.IsNullOrEmpty(item.GroupId) &&
-                        sortedTags.Any(t => _tagFiltersExclude.Contains(t));
+                        _tagFiltersExclude.Overlaps(item.Tags);
                     string displayTagStr = highlightExcludedTags
-                        ? BuildPoseCardTagRichText(sortedTags)
+                        ? BuildPoseCardTagRichText(plainTagStr, item.Tags)
                         : plainTagStr;
                     var drawStyle = highlightExcludedTags ? _tagWrapStyleRich! : tagStyle;
                     GUI.Label(tagTextRect, displayTagStr, drawStyle);
@@ -3602,6 +3888,22 @@ namespace HS2SandboxPlugin
         }
 
         private const string LabelEllipsis = "...";
+
+        private static string GetCachedTruncatedName(PoseGridItem item, string label, GUIStyle style, float maxWidth)
+        {
+            if (item.CachedTruncatedName != null &&
+                item.CachedTruncatedNameWidth == maxWidth &&
+                ReferenceEquals(item.CachedTruncatedNameSource, label))
+            {
+                return item.CachedTruncatedName;
+            }
+
+            string result = TruncateWithEllipsis(label, style, maxWidth);
+            item.CachedTruncatedName = result;
+            item.CachedTruncatedNameWidth = maxWidth;
+            item.CachedTruncatedNameSource = label;
+            return result;
+        }
 
         private static string TruncateWithEllipsis(string text, GUIStyle style, float maxWidth)
         {
@@ -3633,10 +3935,14 @@ namespace HS2SandboxPlugin
         private float TreeNodeLabelMaxWidth(int depth) =>
             Mathf.Max(40f, TreePanelWidth - 12f - VerticalScrollbarWidth() - depth * 16f - 24f);
 
-        private string BuildPoseCardTagRichText(IReadOnlyList<string> sortedTags)
+        private string BuildPoseCardTagRichText(string cachedPlainTagStr, IEnumerable<string> tags)
         {
             const string excludedColor = "#FF5555";
-            var parts = new List<string>(sortedTags.Count);
+            if (!_tagFiltersExclude.Overlaps(tags))
+                return cachedPlainTagStr;
+
+            var sortedTags = tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase);
+            var parts = new List<string>();
             foreach (var tag in sortedTags)
             {
                 string escaped = EscapeRichTextForLabel(tag);
@@ -4291,15 +4597,13 @@ namespace HS2SandboxPlugin
                 {
                     try
                     {
-                        var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
-                        if (tex.LoadImage(e.FileBytes))
+                        var tex = CreateDisplayThumbnail(e.FileBytes);
+                        if (tex != null)
                         {
-                            tex.wrapMode = TextureWrapMode.Clamp;
                             item.Thumbnail = tex;
                         }
                         else
                         {
-                            Destroy(tex);
                         }
                     }
                     catch { /* use placeholder */ }
@@ -4628,23 +4932,19 @@ namespace HS2SandboxPlugin
             var style = GUI.skin.label;
             TextAnchor prevAlign = style.alignment;
             style.alignment = TextAnchor.MiddleCenter;
-            GUI.Label(thumbRect, new GUIContent("Loading…", "Thumbnail image is still being loaded from disk."));
+            GUI.Label(thumbRect, _gcThumbnailLoading);
             style.alignment = prevAlign;
             GUI.color = prev;
         }
 
-        private void StartThumbnailLoading()
+        /// <summary>Queues a single thumbnail for background load. Called from the draw path for
+        /// cards that are actually visible, so loading naturally tracks the viewport.</summary>
+        private void RequestThumbnail(PoseGridItem item)
         {
-            _thumbnailLoadIndex = 0;
-            _thumbnailsPendingLoad.Clear();
-            for (int i = 0; i < _allItems.Count; i++)
-            {
-                var item = _allItems[i];
-                if (item.Thumbnail == null && item.IsPng && string.IsNullOrEmpty(item.ImportPackEntryId))
-                    _thumbnailsPendingLoad.Add(item);
-            }
-
-            _thumbnailLoadCoroutine = StartCoroutine(LoadThumbnailsCoroutine());
+            if (item.Thumbnail != null || !item.IsPng || !string.IsNullOrEmpty(item.ImportPackEntryId))
+                return;
+            if (_thumbnailsPendingLoad.Add(item))
+                _thumbnailLoadNeeded = true;
         }
 
         private void StopThumbnailLoading()
@@ -4658,24 +4958,106 @@ namespace HS2SandboxPlugin
             _thumbnailsPendingLoad.Clear();
         }
 
+        private void ReleaseThumbnailsOnHide()
+        {
+            StopThumbnailLoading();
+            foreach (var item in _allItems)
+            {
+                if (item.Thumbnail != null)
+                {
+                    Destroy(item.Thumbnail);
+                    item.Thumbnail = null;
+                }
+            }
+        }
+
+        private void EvictLruThumbnailsIfNeeded()
+        {
+            if (Time.frameCount - _thumbnailEvictionFrame < 60)
+                return;
+            _thumbnailEvictionFrame = Time.frameCount;
+
+            int loadedCount = 0;
+            foreach (var item in _allItems)
+            {
+                if (item.Thumbnail != null)
+                    loadedCount++;
+            }
+
+            if (loadedCount <= ThumbnailLruMaxLoaded)
+                return;
+
+            int toEvict = loadedCount - ThumbnailLruMaxLoaded + ThumbnailLruEvictBatch;
+            var candidates = new List<(PoseGridItem item, int frame)>(loadedCount);
+            foreach (var item in _allItems)
+            {
+                if (item.Thumbnail != null)
+                    candidates.Add((item, item.ThumbnailLastUsedFrame));
+            }
+
+            candidates.Sort((a, b) => a.frame.CompareTo(b.frame));
+
+            int evicted = 0;
+            for (int i = 0; i < candidates.Count && evicted < toEvict; i++)
+            {
+                var item = candidates[i].item;
+                if (item.ThumbnailLastUsedFrame >= Time.frameCount - 2)
+                    continue;
+                Destroy(item.Thumbnail);
+                item.Thumbnail = null;
+                evicted++;
+            }
+        }
+
+        private static Texture2D? CreateDisplayThumbnail(byte[] pngBytes)
+        {
+            var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+            if (!tex.LoadImage(pngBytes))
+            {
+                UnityEngine.Object.Destroy(tex);
+                return null;
+            }
+
+            int maxSize = PoseDataService.MaxThumbnailDisplaySize;
+            // Only downscale oversized previews; avoid a GPU readback purely for format conversion
+            // (hitches scrolling on weak GPUs). Preserve aspect ratio when downscaling.
+            if (tex.width > maxSize || tex.height > maxSize)
+            {
+                float scale = Mathf.Min((float)maxSize / tex.width, (float)maxSize / tex.height);
+                tex = PoseDataService.ResizeTexture(
+                    tex,
+                    Mathf.Max(1, Mathf.RoundToInt(tex.width * scale)),
+                    Mathf.Max(1, Mathf.RoundToInt(tex.height * scale)));
+            }
+
+            tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
+        }
+
         private IEnumerator LoadThumbnailsCoroutine()
         {
-            const int batchSize = 5;
-            while (_thumbnailLoadIndex < _allItems.Count)
+            const int batchSize = 4;
+            // Drain the pending set dynamically so on-demand additions made while we run
+            // (e.g. the user scrolling new rows into view) are picked up in the same pass.
+            while (_thumbnailsPendingLoad.Count > 0)
             {
-                int end = Mathf.Min(_thumbnailLoadIndex + batchSize, _allItems.Count);
-                for (int i = _thumbnailLoadIndex; i < end; i++)
+                _thumbnailLoadBatch.Clear();
+                foreach (var it in _thumbnailsPendingLoad)
                 {
-                    var item = _allItems[i];
+                    _thumbnailLoadBatch.Add(it);
+                    if (_thumbnailLoadBatch.Count >= batchSize) break;
+                }
+
+                foreach (var item in _thumbnailLoadBatch)
+                {
                     if (item.Thumbnail == null && item.IsPng)
                         item.Thumbnail = _dataService.LoadThumbnailTexture(item);
                     _thumbnailsPendingLoad.Remove(item);
                 }
-                _thumbnailLoadIndex = end;
                 yield return null;
             }
+            _thumbnailLoadBatch.Clear();
             _thumbnailLoadCoroutine = null;
-            _thumbnailsPendingLoad.Clear();
         }
 
         private void StartThumbnailCapture(List<PoseGridItem> items)
@@ -4706,9 +5088,7 @@ namespace HS2SandboxPlugin
                         _tagDb.OnItemPathChanged(oldRel, item);
                     }
 
-                    var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
-                    tex.LoadImage(pngBytes);
-                    tex.wrapMode = TextureWrapMode.Clamp;
+                    var tex = CreateDisplayThumbnail(pngBytes);
                     if (item.Thumbnail != null) Destroy(item.Thumbnail);
                     item.Thumbnail = tex;
 
@@ -4801,9 +5181,7 @@ namespace HS2SandboxPlugin
             }
             if (newPngBytes != null)
             {
-                var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
-                tex.LoadImage(newPngBytes);
-                tex.wrapMode = TextureWrapMode.Clamp;
+                var tex = CreateDisplayThumbnail(newPngBytes);
                 if (item.Thumbnail != null) Destroy(item.Thumbnail);
                 item.Thumbnail = tex;
             }

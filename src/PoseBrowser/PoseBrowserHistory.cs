@@ -26,6 +26,34 @@ namespace HS2SandboxPlugin
             string.IsNullOrEmpty(FromPoseLabel) && string.IsNullOrEmpty(ToPoseLabel)
                 ? FormatTimestampLocal()
                 : $"{FromPoseLabel} → {ToPoseLabel}";
+
+        // The entry's fields are set once at creation and never mutated, so the rendered text
+        // (timestamp + summary + pos + rot) is constant. Cache it to avoid rebuilding it — and
+        // the costly float formatting — for every entry on every IMGUI pass.
+        private string? _cachedDisplayBody;
+        private GUIContent? _cachedDisplayContent;
+
+        public string GetDisplayBody()
+        {
+            if (_cachedDisplayBody != null)
+                return _cachedDisplayBody;
+
+            string posText = Snapshot.HasPosition
+                ? $"\npos ({Snapshot.Position.x:F2}, {Snapshot.Position.y:F2}, {Snapshot.Position.z:F2})"
+                : "";
+            string rotText = Snapshot.HasRotation
+                ? $"\nrot ({Snapshot.Rotation.eulerAngles.x:F0}°, {Snapshot.Rotation.eulerAngles.y:F0}°, {Snapshot.Rotation.eulerAngles.z:F0}°)"
+                : "";
+            _cachedDisplayBody = $"{FormatTimestampLocal()}  {SummaryLine}{posText}{rotText}";
+            return _cachedDisplayBody;
+        }
+
+        public GUIContent GetDisplayContent(string tooltip)
+        {
+            if (_cachedDisplayContent == null)
+                _cachedDisplayContent = new GUIContent(GetDisplayBody(), tooltip);
+            return _cachedDisplayContent;
+        }
     }
 
     internal sealed class PoseBrowserCharacterTimeline

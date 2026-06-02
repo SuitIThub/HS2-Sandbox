@@ -32,6 +32,10 @@ namespace HS2SandboxPlugin
             _cachedVisiblePage = -1;
             _cachedGridRows = null;
             _cachedGridRowsPage = -1;
+            _gridUniformLayoutRowCount = -1;
+            _thumbnailLoadNeeded = true;
+            _groupMembersById = null;
+            _compactBlocks = null;
         }
 
         private void RefreshStudioSelectionCacheIfDue(bool force)

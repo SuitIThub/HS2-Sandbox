@@ -40,7 +40,8 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(6f);
             var slots = _characterConfig.Priority;
-            var selectedInStudio = new HashSet<OCIChar>(_dataService.GetSelectedCharacters());
+            // Draw path: cached Studio selection (refreshed ~5×/s) avoids enumerating Studio every frame.
+            var selectedInStudio = new HashSet<OCIChar>(GetCachedStudioSelectedCharacters());
             _characterConfigScroll = GUILayout.BeginScrollView(_characterConfigScroll, GUILayout.ExpandHeight(true));
             for (int i = 0; i < slots.Count; i++)
             {
@@ -338,7 +339,7 @@ namespace HS2SandboxPlugin
         {
             if (!CanShowMultiCharacterApply()) return;
 
-            bool canApply = _dataService.GetSelectedCharacters().Any();
+            bool canApply = GetCachedStudioHasSelectedCharacters();
             if (string.IsNullOrEmpty(groupIdForTooltip))
                 TryGetGroupIdForApplyTooltip(out groupIdForTooltip);
             string? tooltip = !string.IsNullOrEmpty(groupIdForTooltip)

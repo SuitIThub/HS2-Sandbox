@@ -18,6 +18,7 @@ namespace HS2SandboxPlugin
         private const string PoseMagic = "【pose】";
         private const int PoseVersion = 101;
         private const int ThumbnailSize = 256;
+        internal const int MaxThumbnailDisplaySize = ThumbnailSize;
         private const string BackupFolder = "!_AutoBackup";
 
         private static readonly byte[] PngHeader = { 137, 80, 78, 71, 13, 10, 26, 10 };
@@ -1384,6 +1385,19 @@ namespace HS2SandboxPlugin
 
                 var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
                 tex.LoadImage(pngBytes);
+
+                // Only downscale genuinely oversized previews. Resizing goes through a GPU
+                // Blit + ReadPixels (a synchronous GPU→CPU stall) that hitches scrolling on weak/
+                // integrated GPUs, so we must not trigger it just to convert the pixel format —
+                // already-small thumbnails are kept as-is. Aspect ratio is preserved.
+                if (tex.width > ThumbnailSize || tex.height > ThumbnailSize)
+                {
+                    float scale = Mathf.Min((float)ThumbnailSize / tex.width, (float)ThumbnailSize / tex.height);
+                    int targetW = Mathf.Max(1, Mathf.RoundToInt(tex.width * scale));
+                    int targetH = Mathf.Max(1, Mathf.RoundToInt(tex.height * scale));
+                    tex = ResizeTexture(tex, targetW, targetH);
+                }
+
                 tex.wrapMode = TextureWrapMode.Clamp;
                 return tex;
             }
@@ -1414,7 +1428,8 @@ namespace HS2SandboxPlugin
 
         public static Texture2D ResizeTexture(Texture2D source, int width, int height)
         {
-            if (source.width == width && source.height == height)
+            if (source.width == width && source.height == height &&
+                source.format == TextureFormat.RGB24)
                 return source;
 
             var rt = RenderTexture.GetTemporary(width, height);
