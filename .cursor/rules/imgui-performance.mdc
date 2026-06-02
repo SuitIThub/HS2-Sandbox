@@ -1,0 +1,55 @@
+---
+description: Performance rules for IMGUI (OnGUI) draw code and per-frame work
+alwaysApply: true
+---
+
+# IMGUI / per-frame performance
+
+This project draws its UI with Unity IMGUI (`OnGUI` → `DrawWindow` → `DrawWindowContent` and the many `DrawX` helpers). **`OnGUI` runs multiple times per frame** — at least a Layout pass and a Repaint pass, plus one extra pass per input event. So *any* work inside a draw method runs 2+ times every frame the window is visible. Treat draw code as the hottest path in the plugin.
+
+These rules are mandatory for new or changed UI/draw code. We already paid for these lessons (Pose Browser grid, compact list, history, groups) — do not reintroduce the patterns we removed.
+
+## Hard rules
+
+1. **Never do work that scales with the library/list size in a draw method.** Long lists (poses, history entries, search results) **must be virtualized**: compute the visible scroll range and only draw those rows; emit `GUILayout.Space(...)` for the rows above/below so the scrollbar stays correct. Drawing thousands of `GUILayout.Button`/rows per frame is the single biggest killer.
+2. **No per-frame allocations in draw paths.** Do not call `new GUIContent(...)`, LINQ (`.Where/.Select/.OrderBy/.ToList/.Any/.Count(...)`), `string.Join`, `$"...{x:F2}..."` interpolation, or `new List/HashSet/Dictionary` inside a method that runs every frame. Build these once and cache them.
+3. **Cache derived/measured values; recompute only when inputs change.** Layout metrics, grouped/sorted views, member lookups, truncated labels, etc. are computed once and stored. Invalidate through the existing hook (`InvalidatePoseBrowserViewCaches`) when the underlying data changes — do **not** key “staleness” on `Event.current.type == Layout` or `Time.frameCount` (that recomputes every frame and defeats the cache).
+4. **Guard draw-only work behind `Event.current.type == EventType.Repaint`.** Building label text, tag strings, rich text, and tooltips only matters on the repaint pass. Layout rects (`GUILayoutUtility.GetRect`) must still be requested every pass for layout consistency.
+5. **Build expensive tooltips only on hover.** If a tooltip is costly to compute (e.g. an assignment plan), use a manual rect (`GUILayoutUtility.GetRect` + `GUI.Button`) and compute the tooltip only when `Event.current.type == Repaint && rect.Contains(Event.current.mousePosition)`. Never build it for every item every pass.
+6. **Load textures on demand, free them, and avoid needless GPU readback.** Request a thumbnail only from the draw path for cards that are actually visible; cap how many stay resident (LRU) and release them when the window hides. Only run a texture through `ResizeTexture`/`Graphics.Blit`/`ReadPixels` when it is genuinely oversized — never just to convert pixel format. `ReadPixels` is a synchronous GPU→CPU stall that hitches scrolling on weak/integrated GPUs. Preserve aspect ratio when downscaling.
+7. **Do not query the game/Studio every frame in draw code.** Studio selection (`GetSelectedCharacters()` etc.) enumerates scene state and allocates. Use the cached selection (`GetCachedStudioSelectedCharacters` / `GetCachedStudioHasSelectedCharacters`, refreshed on a timer). Keep live calls only in click/action handlers, where freshness matters.
+8. **`Update()` runs every frame even while the window is closed.** Keep it cheap and gate heavy work behind a one-shot flag or a visibility check (`isVisible && !_isMinimized`). Never start per-frame scans, loads, or allocations there unconditionally.
+
+## What to do instead — reuse the established patterns
+
+- **Virtualization:** mirror `DrawGridPanel` (grid) / `DrawCompactPoseListPanel` (compact list): build a cached block/row list with heights, find the visible range from `scroll.y` + viewport height, draw only those + spacers. Clamp the viewport height to the window height as a safety net.
+- **Cache + invalidate:** add a nullable cache field, build lazily, and null it in `InvalidatePoseBrowserViewCaches` (see `_groupMembersById`, `_compactBlocks`, `_cachedGridRows`).
+- **Per-item string caches:** store rendered text on the data object and rebuild only when its inputs change (see `PoseGridItem.GetOrBuildTagString` / cached truncated names, `PoseBrowserHistoryEntry.GetDisplayBody`).
+
+## Examples
+
+```csharp
+// BAD — runs every frame, allocates + sorts the whole list every pass
+var sorted = entries.Select((e,i)=>(e,i)).OrderByDescending(x=>x.e.Ticks).ToList();
+foreach (var (e,i) in sorted)
+    GUILayout.Button(new GUIContent($"{e.Time}  {e.Pos.x:F2}", "Apply this entry"));
+
+// GOOD — no sort/alloc per frame; cached text; reverse-iterate an already-ordered list
+for (int i = entries.Count - 1; i >= 0; i--)
+    GUILayout.Button(entries[i].GetDisplayContent(ApplyTooltip));   // tooltip is a const, text is cached
+```
+
+```csharp
+// BAD — expensive tooltip built for every group on every pass
+string tip = BuildAssignmentPlanTooltip(groupId);
+if (GUILayout.Button(new GUIContent(label, tip))) { ... }
+
+// GOOD — only the hovered group pays for it
+var r = GUILayoutUtility.GetRect(new GUIContent(label), style, GUILayout.Height(22f));
+string tip = "";
+if (Event.current.type == EventType.Repaint && r.Contains(Event.current.mousePosition))
+    tip = BuildAssignmentPlanTooltip(groupId);
+if (GUI.Button(r, new GUIContent(label, tip), style)) { ... }
+```
+
+When adding any `DrawX` method or touching `OnGUI`/`Update`, first ask: *does this allocate or scale with data on every frame?* If yes, cache it, virtualize it, or gate it behind Repaint/hover before committing.
