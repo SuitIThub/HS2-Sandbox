@@ -962,8 +962,10 @@ namespace HS2SandboxPlugin
             _tagDb.RecordLastUsed(item);
             _dataService.ApplyPoseToSelected(item);
             RecordPoseHistoryAfterSingleApply(item);
+#if !KKS
             HeelzControlService.ApplyTagRulesForSelectedCharacters(
                 _dataService.GetSelectedCharacters(), item.Tags);
+#endif
             if (_poseSortMode == PoseSortMode.LastUsed)
             {
                 ResortPoseItemsInPlace();
@@ -1195,12 +1197,14 @@ namespace HS2SandboxPlugin
                 SetVisible(false);
         }
 
+#if !KKS
         private void ToggleHeelzControlWindow()
         {
             var gui = FindObjectOfType<SandboxGUI>();
             if (gui != null)
                 gui.SetHeelzControlVisible(!gui.IsHeelzControlVisible);
         }
+#endif
 
         private void DrawMinimizedRestoreChip()
         {
@@ -2071,8 +2075,10 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
                 CycleLayoutTier();
 
+#if !KKS
             if (GUILayout.Button("Heelz", GUILayout.Width(52f), GUILayout.Height(24f)))
                 ToggleHeelzControlWindow();
+#endif
 
             if (GUILayout.Button(_showHelpPane ? "Help ▶" : "Help", GUILayout.Width(56f), GUILayout.Height(24f)))
                 _showHelpPane = !_showHelpPane;
@@ -2749,8 +2755,10 @@ namespace HS2SandboxPlugin
                 foreach (var t in group.Tags)
                     set.Add(t);
             }
+#if !KKS
             foreach (var t in HeelzControlService.GetAllRuleTags())
                 set.Add(t);
+#endif
 
             return set.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
         }
@@ -5541,6 +5549,8 @@ namespace HS2SandboxPlugin
                 "Shown when something is selected: <b>Items</b> (one pose), <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v5 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
                 rich);
 
+
+#if !KKS
             GUILayout.Space(8f);
             GUILayout.Label("<b>Heelz Control</b>", rich);
             GUILayout.Label(
@@ -5550,11 +5560,16 @@ namespace HS2SandboxPlugin
                 "• <b>Tag Rules</b> section (bottom): click <b>Edit</b> to open a tag picker for each rule set. Tags created here appear in Pose Browser tag lists even if no pose uses them yet.\n" +
                 "• Requires <b>HS2Heelz</b> installed. Without it the window shows a notice. Per-character overrides reset each session; tag rules persist in BepInEx config.",
                 rich);
+#endif
 
             GUILayout.Space(8f);
             GUILayout.Label("<b>Options panel</b>", rich);
             GUILayout.Label(
+#if !KKS
                 "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle Heelz Control; toggle undocked pose stash; no text field focused).\n" +
+#else
+                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash; no text field focused).\n" +
+#endif
                 "Card width and page cap are mirrored in BepInEx under <b>Pose Browser</b>. Window positions, layout tier (<b>Full</b>/<b>List</b>/<b>Mini</b>), sort mode, and the group layout toggle live in <b>pose_browser_options.json</b> next to the other Sandbox config files.",
                 rich);
 

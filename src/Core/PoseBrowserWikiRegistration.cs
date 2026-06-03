@@ -75,7 +75,9 @@ namespace HS2SandboxPlugin
                 InvokeRegister(WikiCategoryRoot, PagePoseGroups, DrawWikiPoseGroups);
                 InvokeRegister(WikiCategoryRoot, PageMultiCharacterApply, DrawWikiMultiCharacterApply);
                 InvokeRegister(WikiCategoryRoot, PagePoseStash, DrawWikiPoseStash);
+#if !KKS
                 InvokeRegister(WikiCategoryRoot, PageHeelzControl, DrawWikiHeelzControl);
+#endif
                 InvokeRegister(WikiCategoryAdvanced, "Tag storage & migration", DrawWikiTagStorage);
                 InvokeRegister(WikiCategoryRoot, PageOptionsData, DrawWikiOptionsData);
 
@@ -154,8 +156,10 @@ namespace HS2SandboxPlugin
                 TryOpenWikiPage(WikiCategoryRoot, PagePoseStash);
             if (GUILayout.Button("Wiki: Pose items", GUILayout.Height(24f)))
                 TryOpenWikiPage(WikiCategoryRoot, PagePoseItems);
+#if !KKS
             if (GUILayout.Button("Wiki: Heelz Control", GUILayout.Height(24f)))
                 TryOpenWikiPage(WikiCategoryRoot, PageHeelzControl);
+#endif
         }
 
         public static void TryOpenPoseIconImage()
@@ -258,7 +262,11 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<i>Browse, tag, and manage Studio pose files under UserData/studio/pose.</i>");
             GUILayout.Space(6f);
             GUILayout.Label(
+#if !KKS
                 "<b>Recent releases:</b> <b>Heelz Control</b> — per-character On/Off/Auto heel-hover overrides with tag-based rules (requires HS2Heelz). <b>Pose stash</b> — temporary FK/IK clipboard with docked or floating window. <b>Pose Browser 5.0.0</b> adds <b>Pose items</b> — register workspace props per pose, load with position/rotation/scale toggles and optional free placement (<b>pose_items.tsv</b> v5). " +
+#else
+                "<b>Recent releases:</b> <b>Pose stash</b> — temporary FK/IK clipboard with docked or floating window. <b>Pose Browser 5.0.0</b> adds <b>Pose items</b> — register workspace props per pose, load with position/rotation/scale toggles and optional free placement (<b>pose_items.tsv</b> v5). " +
+#endif
                 "<b>3.2+</b> — group relative positions and object-scale layout. <b>3.0.0</b> — pose groups, tag include/exclude, multi-character apply. <b>2.0.0</b> — Full/List/Mini layouts, Sort, ★ Favorites, keyboard shortcuts. v2+ ZIP import/export — see pages below.");
 
             GUILayout.Space(8f);
@@ -282,7 +290,9 @@ namespace HS2SandboxPlugin
             NavButton("→ Pose items", WikiCategoryRoot, PagePoseItems);
             NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
             NavButton("→ Thumbnails", WikiCategoryRoot, PageThumbnails);
+#if !KKS
             NavButton("→ Heelz Control", WikiCategoryRoot, PageHeelzControl);
+#endif
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
             NavButton("→ Tag storage & migration", WikiCategoryAdvanced, "Tag storage & migration");
 
@@ -590,7 +600,9 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
+#if !KKS
             NavButton("→ Heelz Control", WikiCategoryRoot, PageHeelzControl);
+#endif
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
             NavButton("↑ Overview", WikiCategoryRoot, PageOverview);
         }
@@ -710,6 +722,7 @@ namespace HS2SandboxPlugin
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
         }
 
+#if !KKS
         private static void DrawWikiHeelzControl()
         {
             GUILayout.Label("<size=17><b>Heelz Control</b></size>");
@@ -786,6 +799,7 @@ namespace HS2SandboxPlugin
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
             NavButton("↑ Overview", WikiCategoryRoot, PageOverview);
         }
+#endif
 
         private static void DrawWikiOptionsData()
         {
@@ -798,7 +812,13 @@ namespace HS2SandboxPlugin
             GUILayout.Label("• <b>Apply stored relative positions when applying a group</b> — global layout toggle (see <b>Pose groups</b>).");
             GUILayout.Label("• <b>Adjust relative layout for body height (saved per pose)</b> — scales saved <b>offset.y</b> from body-height ratios; requires relative positions.");
             GUILayout.Label("• <b>Select all filtered / Deselect all</b> — bulk selection in the current filtered list.");
-            GUILayout.Label("• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle Heelz Control; toggle undocked pose stash). Active while the browser is focused unless a text field holds keyboard focus.");
+            GUILayout.Label(
+#if !KKS
+                "• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle Heelz Control; toggle undocked pose stash). Active while the browser is focused unless a text field holds keyboard focus."
+#else
+                "• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash). Active while the browser is focused unless a text field holds keyboard focus."
+#endif
+            );
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
@@ -816,7 +836,9 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             NavButton("← Thumbnails", WikiCategoryRoot, PageThumbnails);
             NavButton("→ Pose stash", WikiCategoryRoot, PagePoseStash);
+#if !KKS
             NavButton("→ Heelz Control", WikiCategoryRoot, PageHeelzControl);
+#endif
             NavButton("→ Tag storage (advanced)", WikiCategoryAdvanced, "Tag storage & migration");
         }
 

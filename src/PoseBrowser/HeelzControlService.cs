@@ -1,3 +1,4 @@
+#if !KKS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -526,3 +527,4 @@ namespace HS2SandboxPlugin
         }
     }
 }
+#endif
