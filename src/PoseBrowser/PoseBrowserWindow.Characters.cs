@@ -215,6 +215,8 @@ namespace HS2SandboxPlugin
                     _tagDb.RecordLastUsed(pose);
                 });
 
+            HeelzControlService.ApplyTagRulesForMultiApply(chars, poses);
+
             int layoutMoved = 0;
             bool heightAdjust = _applyGroupRelativeHeights && _applyGroupRelativePositions;
             bool scaleAdjust = _applyGroupRelativeObjectScales && _applyGroupRelativePositions;

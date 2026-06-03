@@ -27,6 +27,7 @@ namespace HS2SandboxPlugin
         public const string PagePoseGroups = "Pose groups";
         public const string PageMultiCharacterApply = "Multi-character apply";
         public const string PagePoseStash = "Pose stash";
+        public const string PageHeelzControl = "Heelz Control";
         public const string PageOptionsData = "Options & data files";
 
         public const string WikiDownloadUrl = "https://github.com/SuIT-pub/HS2Wiki";
@@ -74,6 +75,7 @@ namespace HS2SandboxPlugin
                 InvokeRegister(WikiCategoryRoot, PagePoseGroups, DrawWikiPoseGroups);
                 InvokeRegister(WikiCategoryRoot, PageMultiCharacterApply, DrawWikiMultiCharacterApply);
                 InvokeRegister(WikiCategoryRoot, PagePoseStash, DrawWikiPoseStash);
+                InvokeRegister(WikiCategoryRoot, PageHeelzControl, DrawWikiHeelzControl);
                 InvokeRegister(WikiCategoryAdvanced, "Tag storage & migration", DrawWikiTagStorage);
                 InvokeRegister(WikiCategoryRoot, PageOptionsData, DrawWikiOptionsData);
 
@@ -152,6 +154,8 @@ namespace HS2SandboxPlugin
                 TryOpenWikiPage(WikiCategoryRoot, PagePoseStash);
             if (GUILayout.Button("Wiki: Pose items", GUILayout.Height(24f)))
                 TryOpenWikiPage(WikiCategoryRoot, PagePoseItems);
+            if (GUILayout.Button("Wiki: Heelz Control", GUILayout.Height(24f)))
+                TryOpenWikiPage(WikiCategoryRoot, PageHeelzControl);
         }
 
         public static void TryOpenPoseIconImage()
@@ -254,7 +258,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<i>Browse, tag, and manage Studio pose files under UserData/studio/pose.</i>");
             GUILayout.Space(6f);
             GUILayout.Label(
-                "<b>Recent releases:</b> <b>Pose stash</b> — temporary FK/IK clipboard with docked or floating window. <b>Pose Browser 5.0.0</b> adds <b>Pose items</b> — register workspace props per pose, load with position/rotation/scale toggles and optional free placement (<b>pose_items.tsv</b> v5). " +
+                "<b>Recent releases:</b> <b>Heelz Control</b> — per-character On/Off/Auto heel-hover overrides with tag-based rules (requires HS2Heelz). <b>Pose stash</b> — temporary FK/IK clipboard with docked or floating window. <b>Pose Browser 5.0.0</b> adds <b>Pose items</b> — register workspace props per pose, load with position/rotation/scale toggles and optional free placement (<b>pose_items.tsv</b> v5). " +
                 "<b>3.2+</b> — group relative positions and object-scale layout. <b>3.0.0</b> — pose groups, tag include/exclude, multi-character apply. <b>2.0.0</b> — Full/List/Mini layouts, Sort, ★ Favorites, keyboard shortcuts. v2+ ZIP import/export — see pages below.");
 
             GUILayout.Space(8f);
@@ -278,6 +282,7 @@ namespace HS2SandboxPlugin
             NavButton("→ Pose items", WikiCategoryRoot, PagePoseItems);
             NavButton("→ Import & export (ZIP)", WikiCategoryRoot, PageImportExport);
             NavButton("→ Thumbnails", WikiCategoryRoot, PageThumbnails);
+            NavButton("→ Heelz Control", WikiCategoryRoot, PageHeelzControl);
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
             NavButton("→ Tag storage & migration", WikiCategoryAdvanced, "Tag storage & migration");
 
@@ -585,6 +590,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             NavButton("← Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
+            NavButton("→ Heelz Control", WikiCategoryRoot, PageHeelzControl);
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
             NavButton("↑ Overview", WikiCategoryRoot, PageOverview);
         }
@@ -704,6 +710,83 @@ namespace HS2SandboxPlugin
             NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
         }
 
+        private static void DrawWikiHeelzControl()
+        {
+            GUILayout.Label("<size=17><b>Heelz Control</b></size>");
+            GUILayout.Label(
+                "Override the heel-hover adjustment that <b>HS2Heelz</b> applies when a character wears high-heel shoes. " +
+                "Force hover <b>On</b> or <b>Off</b> per character, or let tag-based rules decide automatically when poses are applied.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Requirements</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("• <b>HS2Heelz</b> plugin must be installed (IL_Heelz / HS2_Heelz.dll).");
+            GUILayout.Label("• Without it, the Heelz Control window shows a notice and the feature is inactive.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Opening the window</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("• <b>Heelz</b> button on the Pose Browser top bar (Full layout).");
+            GUILayout.Label("• Keyboard shortcut: <b>Toggle Heelz Control window</b> (Configuration Manager → <b>Pose Browser · Keyboard shortcuts</b>).");
+            GUILayout.Label("• Close with the <b>Close</b> button at the bottom of the Heelz Control window.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Character list</b>");
+            GUILayout.Label(
+                "Lists every character currently in the scene. Each row shows:");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Name</b> — Studio display name of the character.");
+            GUILayout.Label("<b>Shoes</b> — current shoe state (On / Off) from the game.");
+            GUILayout.Label("<b>Heel config</b> — whether HS2Heelz has heel data loaded for the character's current shoes (Active / Inactive / No handler).");
+            GUILayout.Label("<b>On / Off</b> — force heel hover on or off. Highlighted when the corresponding override is active.");
+            GUILayout.Label("<b>Auto</b> — when checked, tag rules can change the On/Off state when a pose is applied. When unchecked, only manual toggles affect this character.");
+            GUILayout.EndVertical();
+            GUILayout.Label("The character list refreshes automatically every few seconds. Per-character overrides are session-only and reset when Studio restarts.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Tag rules</b>");
+            GUILayout.Label(
+                "Define which pose tags trigger automatic heel-hover changes. Two rule sets:");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Heels OFF tags</b> — when a pose has any of these tags, heel hover is turned <b>off</b> for characters with Auto enabled.");
+            GUILayout.Label("<b>Heels ON tags</b> — when a pose has any of these tags, heel hover is turned <b>on</b> for characters with Auto enabled.");
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+            GUILayout.Label(
+                "Click <b>Edit</b> next to a rule set to open a tag picker. Tags are shared with the Pose Browser tag system " +
+                "— tags created here appear in Pose Browser tag filters even if no pose uses them yet. If a pose has tags from both rule sets, <b>OFF</b> takes precedence.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>When rules apply</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("• <b>Single-pose apply</b> — left-click or right-click a thumbnail; rules evaluate for all selected characters.");
+            GUILayout.Label("• <b>Multi-character apply</b> — Apply to characters… or group apply; rules evaluate per character based on the individual pose assigned.");
+            GUILayout.Label("• <b>Undo / Redo</b> — overrides are reset to Default so the restored pose is not interfered with.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>How it works internally</b>");
+            GUILayout.Label(
+                "Heelz Control uses a Harmony prefix patch on <b>HeelsHandler.HoverBody</b> (from HS2Heelz) to intercept hover adjustments. " +
+                "When a character has a <b>ForceOff</b> override, the hover call is skipped; when <b>ForceOn</b>, it forces the hover to apply even if Heelz would skip it. " +
+                "This is done via reflection so there is no compile-time dependency on HS2Heelz.");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Persistence</b>");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("• <b>Tag rules</b> (Heels OFF / Heels ON tag lists) are saved in BepInEx config under <b>Heelz Control</b>.");
+            GUILayout.Label("• <b>Per-character overrides</b> (On/Off/Auto) are <b>session-only</b> — they reset when Studio restarts.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(8f);
+            NavButton("← Pose stash", WikiCategoryRoot, PagePoseStash);
+            NavButton("← Multi-character apply", WikiCategoryRoot, PageMultiCharacterApply);
+            NavButton("→ Options & data files", WikiCategoryRoot, PageOptionsData);
+            NavButton("↑ Overview", WikiCategoryRoot, PageOverview);
+        }
+
         private static void DrawWikiOptionsData()
         {
             GUILayout.Label("<size=17><b>Options & data files</b></size>");
@@ -715,7 +798,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("• <b>Apply stored relative positions when applying a group</b> — global layout toggle (see <b>Pose groups</b>).");
             GUILayout.Label("• <b>Adjust relative layout for body height (saved per pose)</b> — scales saved <b>offset.y</b> from body-height ratios; requires relative positions.");
             GUILayout.Label("• <b>Select all filtered / Deselect all</b> — bulk selection in the current filtered list.");
-            GUILayout.Label("• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash). Active while the browser is focused unless a text field holds keyboard focus.");
+            GUILayout.Label("• <b>Keyboard shortcuts</b> — read-only here; assign in Configuration Manager under <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle Heelz Control; toggle undocked pose stash). Active while the browser is focused unless a text field holds keyboard focus.");
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
@@ -733,6 +816,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             NavButton("← Thumbnails", WikiCategoryRoot, PageThumbnails);
             NavButton("→ Pose stash", WikiCategoryRoot, PagePoseStash);
+            NavButton("→ Heelz Control", WikiCategoryRoot, PageHeelzControl);
             NavButton("→ Tag storage (advanced)", WikiCategoryAdvanced, "Tag storage & migration");
         }
 

@@ -7,6 +7,7 @@ namespace HS2SandboxPlugin
         public const string SonScale = "SonScale";
         public const string Notebook = "Notebook";
         public const string PoseBrowser = "PoseBrowser";
+        public const string HeelzControl = "HeelzControl";
     }
 }
 

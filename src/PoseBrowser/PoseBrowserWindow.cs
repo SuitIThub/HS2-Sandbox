@@ -962,6 +962,8 @@ namespace HS2SandboxPlugin
             _tagDb.RecordLastUsed(item);
             _dataService.ApplyPoseToSelected(item);
             RecordPoseHistoryAfterSingleApply(item);
+            HeelzControlService.ApplyTagRulesForSelectedCharacters(
+                _dataService.GetSelectedCharacters(), item.Tags);
             if (_poseSortMode == PoseSortMode.LastUsed)
             {
                 ResortPoseItemsInPlace();
@@ -1191,6 +1193,13 @@ namespace HS2SandboxPlugin
                 gui.SetPoseBrowserVisible(false);
             else
                 SetVisible(false);
+        }
+
+        private void ToggleHeelzControlWindow()
+        {
+            var gui = FindObjectOfType<SandboxGUI>();
+            if (gui != null)
+                gui.SetHeelzControlVisible(!gui.IsHeelzControlVisible);
         }
 
         private void DrawMinimizedRestoreChip()
@@ -2062,6 +2071,9 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
                 CycleLayoutTier();
 
+            if (GUILayout.Button("Heelz", GUILayout.Width(52f), GUILayout.Height(24f)))
+                ToggleHeelzControlWindow();
+
             if (GUILayout.Button(_showHelpPane ? "Help ▶" : "Help", GUILayout.Width(56f), GUILayout.Height(24f)))
                 _showHelpPane = !_showHelpPane;
 
@@ -2726,8 +2738,8 @@ namespace HS2SandboxPlugin
             ApplyFilters();
         }
 
-        /// <summary>Every tag used on any pose (tag DB) or any pose group — shared by all tag windows.</summary>
-        private List<string> GetAllLibraryTagNames()
+        /// <summary>Every tag used on any pose (tag DB), any pose group, or Heelz Control rules — shared by all tag windows.</summary>
+        internal List<string> GetAllLibraryTagNames()
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var t in _tagDb.GetAllKnownTags())
@@ -2737,6 +2749,8 @@ namespace HS2SandboxPlugin
                 foreach (var t in group.Tags)
                     set.Add(t);
             }
+            foreach (var t in HeelzControlService.GetAllRuleTags())
+                set.Add(t);
 
             return set.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
         }
@@ -5528,9 +5542,19 @@ namespace HS2SandboxPlugin
                 rich);
 
             GUILayout.Space(8f);
+            GUILayout.Label("<b>Heelz Control</b>", rich);
+            GUILayout.Label(
+                "• <b>Heelz</b> button (top bar, Full layout) opens the Heelz Control window. Also toggled via keyboard shortcut (<b>Configuration Manager → Pose Browser · Keyboard shortcuts → Toggle Heelz Control window</b>).\n" +
+                "• Lists all scene characters with <b>On</b>/<b>Off</b> buttons to force heel hover on or off, and an <b>Auto</b> checkbox.\n" +
+                "• When <b>Auto</b> is checked (default), applying a pose whose tags match a <b>Heels OFF</b> or <b>Heels ON</b> rule automatically sets On/Off for that character. When unchecked, tag rules are ignored and only manual toggles apply.\n" +
+                "• <b>Tag Rules</b> section (bottom): click <b>Edit</b> to open a tag picker for each rule set. Tags created here appear in Pose Browser tag lists even if no pose uses them yet.\n" +
+                "• Requires <b>HS2Heelz</b> installed. Without it the window shows a notice. Per-character overrides reset each session; tag rules persist in BepInEx config.",
+                rich);
+
+            GUILayout.Space(8f);
             GUILayout.Label("<b>Options panel</b>", rich);
             GUILayout.Label(
-                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash; only while this window is focused and no text field has keyboard focus).\n" +
+                "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle Heelz Control; toggle undocked pose stash; no text field focused).\n" +
                 "Card width and page cap are mirrored in BepInEx under <b>Pose Browser</b>. Window positions, layout tier (<b>Full</b>/<b>List</b>/<b>Mini</b>), sort mode, and the group layout toggle live in <b>pose_browser_options.json</b> next to the other Sandbox config files.",
                 rich);
 
@@ -6102,6 +6126,18 @@ namespace HS2SandboxPlugin
                 return;
             }
 
+            if (PoseBrowserConfig.HotkeyUndo!.Value.IsDown())
+            {
+                PerformPoseHistoryUndo();
+                return;
+            }
+
+            if (PoseBrowserConfig.HotkeyRedo!.Value.IsDown())
+            {
+                PerformPoseHistoryRedo();
+                return;
+            }
+
             if (!isVisible) return;
 
             if (PoseBrowserConfig.HotkeyToggleMinimize!.Value.IsDown())
@@ -6171,15 +6207,6 @@ namespace HS2SandboxPlugin
                 HotkeyStepPose(-1);
                 return;
             }
-
-            if (PoseBrowserConfig.HotkeyUndo!.Value.IsDown())
-            {
-                PerformPoseHistoryUndo();
-                return;
-            }
-
-            if (PoseBrowserConfig.HotkeyRedo!.Value.IsDown())
-                PerformPoseHistoryRedo();
         }
 
         private void HotkeyStepPose(int delta)

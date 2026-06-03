@@ -89,6 +89,7 @@ namespace HS2SandboxPlugin
 
             _poseHistory.Undo(_dataService, selected, HistoryMaxEntries);
             _poseHistory.SaveToDiskIfDirty();
+            ResetHeelzOverridesForCharacters(selected);
         }
 
         private void PerformPoseHistoryRedo()
@@ -105,6 +106,16 @@ namespace HS2SandboxPlugin
 
             _poseHistory.Redo(_dataService, selected, HistoryMaxEntries);
             _poseHistory.SaveToDiskIfDirty();
+            ResetHeelzOverridesForCharacters(selected);
+        }
+
+        private static void ResetHeelzOverridesForCharacters(IEnumerable<Studio.OCIChar> characters)
+        {
+            foreach (var oci in characters)
+            {
+                if (oci?.charInfo != null)
+                    HeelzControlService.SetOverride(oci.charInfo, HeelzOverride.Default);
+            }
         }
 
         private void RecordPoseHistoryBeforeSingleApply(PoseGridItem item)
