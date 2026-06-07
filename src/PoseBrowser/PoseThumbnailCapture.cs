@@ -23,8 +23,14 @@ namespace HS2SandboxPlugin
         private Action<PoseGridItem, byte[]>? _onCaptured;
         private Action? _onComplete;
         private Action<PoseGridItem>? _onApplyPose;
+        private Action? _onGroupSetup;
+        private Action<int>? _onGroupFocusIndex;
+        private Action? _onGroupCleanup;
+        private bool _groupCaptureMode;
         private MonoBehaviour? _runner;
         private Coroutine? _activeCoroutine;
+
+        public bool IsGroupCaptureMode => _groupCaptureMode;
 
         public void StartCapture(
             MonoBehaviour runner,
@@ -40,12 +46,56 @@ namespace HS2SandboxPlugin
             _onApplyPose = onApplyPose;
             _onCaptured = onCaptured;
             _onComplete = onComplete;
+            _onGroupSetup = null;
+            _onGroupFocusIndex = null;
+            _onGroupCleanup = null;
+            _groupCaptureMode = false;
             TotalCount = items.Count;
             CurrentIndex = 0;
             Mode = CaptureMode.Manual;
             IsActive = true;
             IsCapturing = false;
 
+            InitCaptureRect();
+            ApplyCurrentPose();
+        }
+
+        /// <summary>
+        /// Group thumbnail capture: all poses are applied once up front; each step toggles monocolor on non-focus characters.
+        /// </summary>
+        public void StartGroupCapture(
+            MonoBehaviour runner,
+            List<PoseGridItem> items,
+            Action onGroupSetup,
+            Action<int> onGroupFocusIndex,
+            Action onGroupCleanup,
+            Action<PoseGridItem, byte[]> onCaptured,
+            Action onComplete)
+        {
+            if (items.Count == 0) return;
+
+            _runner = runner;
+            _queue = items;
+            _onApplyPose = null;
+            _onCaptured = onCaptured;
+            _onComplete = onComplete;
+            _onGroupSetup = onGroupSetup;
+            _onGroupFocusIndex = onGroupFocusIndex;
+            _onGroupCleanup = onGroupCleanup;
+            _groupCaptureMode = true;
+            TotalCount = items.Count;
+            CurrentIndex = 0;
+            Mode = CaptureMode.Manual;
+            IsActive = true;
+            IsCapturing = false;
+
+            InitCaptureRect();
+            _onGroupSetup?.Invoke();
+            ApplyCurrentPose();
+        }
+
+        private void InitCaptureRect()
+        {
             float side = Screen.height * 0.9f;
             side = Mathf.Min(side, Screen.width - 16f);
             side = Mathf.Min(side, Screen.height - 16f);
@@ -54,8 +104,6 @@ namespace HS2SandboxPlugin
                 (Screen.height - side) / 2f,
                 side,
                 side);
-
-            ApplyCurrentPose();
         }
 
         public void Cancel()
@@ -63,10 +111,22 @@ namespace HS2SandboxPlugin
             if (_activeCoroutine != null && _runner != null)
                 _runner.StopCoroutine(_activeCoroutine);
             _activeCoroutine = null;
+            if (_groupCaptureMode)
+                _onGroupCleanup?.Invoke();
+            ResetSession();
+        }
+
+        private void ResetSession()
+        {
             IsActive = false;
             IsCapturing = false;
             CurrentItem = null;
             _queue = null;
+            _onApplyPose = null;
+            _onGroupSetup = null;
+            _onGroupFocusIndex = null;
+            _onGroupCleanup = null;
+            _groupCaptureMode = false;
         }
 
         private void ApplyCurrentPose()
@@ -78,7 +138,10 @@ namespace HS2SandboxPlugin
             }
 
             CurrentItem = _queue[CurrentIndex];
-            _onApplyPose?.Invoke(CurrentItem);
+            if (_groupCaptureMode)
+                _onGroupFocusIndex?.Invoke(CurrentIndex);
+            else
+                _onApplyPose?.Invoke(CurrentItem);
 
             if (Mode == CaptureMode.Auto)
                 ScheduleAutoCapture();
@@ -168,10 +231,9 @@ namespace HS2SandboxPlugin
 
         private void Finish()
         {
-            IsActive = false;
-            IsCapturing = false;
-            CurrentItem = null;
-            _queue = null;
+            if (_groupCaptureMode)
+                _onGroupCleanup?.Invoke();
+            ResetSession();
             _onComplete?.Invoke();
         }
 
@@ -219,9 +281,10 @@ namespace HS2SandboxPlugin
 
             var panelRect = new Rect(panelX, panelY, panelW, panelH);
             GUILayout.BeginArea(panelRect, GUI.skin.box);
+            string prefix = _groupCaptureMode ? "Group thumb" : "Capture";
             string status = Mode == CaptureMode.Auto
                 ? $"Auto {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}"
-                : $"Capture {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}";
+                : $"{prefix} {CurrentIndex + 1} / {TotalCount}: {CurrentItem?.DisplayName ?? ""}";
             GUILayout.Label(status, GUILayout.Height(labelH));
 
             GUILayout.BeginHorizontal();

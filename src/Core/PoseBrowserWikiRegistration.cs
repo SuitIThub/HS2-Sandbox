@@ -521,7 +521,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6f);
             GUILayout.Label("<b>Two kinds of selection</b>");
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("<b>Group entity</b> — click the <b>group header</b> (▦ row). Highlights the segment; shows the group bar (rename, tags, export, apply, save/clear positions, <b>Apply relative positions</b>, <b>Adjust for body height</b>). Ctrl+click toggles group entities; Shift+click range-selects group headers in the filtered list.");
+            GUILayout.Label("<b>Group entity</b> — click the <b>group header</b> (▦ row). Highlights the segment; shows the group bar (rename, tags, export, apply, <b>Group thumbnails…</b>, save/clear positions, <b>Apply relative positions</b>, <b>Adjust for body height</b>). Ctrl+click toggles group entities; Shift+click range-selects group headers in the filtered list.");
             GUILayout.Label("<b>Pose members</b> — checkboxes / thumbnail clicks on cards inside the segment. Used for move, copy, delete, tag selected, partial export, etc.");
             GUILayout.Label("During <b>import preview</b>, clicking the group header toggles <b>all member checkboxes</b> for import (not group-entity mode).");
             GUILayout.EndVertical();
@@ -710,7 +710,8 @@ namespace HS2SandboxPlugin
         {
             GUILayout.Label("<size=17><b>Thumbnails</b></size>");
             GUILayout.Label(
-                "Use <b>Thumbs…</b> on the selection to capture new preview images. The overlay guides posing the camera or frame; complete or cancel from the overlay controls.");
+                "Use <b>Thumbs…</b> on the selection to capture new preview images. The overlay guides posing the camera or frame; complete or cancel from the overlay controls.\n\n" +
+                "For a <b>group entity</b>, use <b>Group thumbnails…</b> when exactly as many Studio characters are selected as poses (matching gender tags and <b>Chars</b> priority). All poses are applied once (including relative layout when enabled), then each pose is captured in order with other assigned characters in <b>monocolor</b> (Studio simple color).");
 
             GUILayout.Space(6f);
             GUILayout.Label("Missing thumbnails use a neutral placeholder until a file is loaded or regenerated.");

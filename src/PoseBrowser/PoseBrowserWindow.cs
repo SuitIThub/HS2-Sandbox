@@ -3480,16 +3480,18 @@ namespace HS2SandboxPlugin
             if (Event.current.type == EventType.Layout || _poseGridLayout.Frame != Time.frameCount)
                 UpdatePoseGridLayout(gridAvailW);
 
+            // Process search/filter input before reading the display list — otherwise the grid
+            // renders one keystroke behind (filter bar used to run after GetVisibleDisplayEntries).
+            DrawPoseFilterBarRow();
+            GUILayout.Space(4f);
+            ClampCurrentPage();
+
             int columns = _poseGridLayout.Columns;
             float contentWidth = _poseGridLayout.ContentWidth;
             float columnFootprintW = _poseGridLayout.ColumnFootprintW;
             float cellInnerW = _poseGridLayout.CellInnerW;
 
             var visibleEntries = GetVisibleDisplayEntries();
-            ClampCurrentPage();
-
-            DrawPoseFilterBarRow();
-            GUILayout.Space(4f);
 
             GUILayout.BeginHorizontal(GUILayout.Height(22f));
             bool hasFilters = HasActivePoseContentFilters();
@@ -5088,39 +5090,39 @@ namespace HS2SandboxPlugin
                 this,
                 items,
                 onApplyPose: ApplyPoseToSelectedWithUsage,
-                onCaptured: (item, pngBytes) =>
-                {
-                    string oldPath = item.FilePath;
-                    if (item.IsPng)
-                    {
-                        string oldRel = item.RelativePath(_dataService.PoseRootPath);
-                        _dataService.BackupFile(item.FilePath);
+                onCaptured: CommitCapturedThumbnail,
+                onComplete: () => { });
+        }
 
-                        byte[] poseData = _dataService.ReadPoseDataBytes(item);
-                        using var fs = new FileStream(item.FilePath, FileMode.Create, FileAccess.Write);
-                        using var bw = new BinaryWriter(fs);
-                        bw.Write(pngBytes);
-                        bw.Write(poseData);
-                        item.DataPosition = pngBytes.Length;
-                    }
-                    else
-                    {
-                        string oldRel = item.RelativePath(_dataService.PoseRootPath);
-                        _dataService.ConvertDatToPng(item, pngBytes);
-                        _tagDb.OnItemPathChanged(oldRel, item);
-                    }
+        private void CommitCapturedThumbnail(PoseGridItem item, byte[] pngBytes)
+        {
+            string oldPath = item.FilePath;
+            if (item.IsPng)
+            {
+                _dataService.BackupFile(item.FilePath);
 
-                    var tex = CreateDisplayThumbnail(pngBytes);
-                    if (item.Thumbnail != null) Destroy(item.Thumbnail);
-                    item.Thumbnail = tex;
+                byte[] poseData = _dataService.ReadPoseDataBytes(item);
+                using var fs = new FileStream(item.FilePath, FileMode.Create, FileAccess.Write);
+                using var bw = new BinaryWriter(fs);
+                bw.Write(pngBytes);
+                bw.Write(poseData);
+                item.DataPosition = pngBytes.Length;
+            }
+            else
+            {
+                string oldRel = item.RelativePath(_dataService.PoseRootPath);
+                _dataService.ConvertDatToPng(item, pngBytes);
+                _tagDb.OnItemPathChanged(oldRel, item);
+            }
 
-                    if (!string.Equals(oldPath, item.FilePath, StringComparison.OrdinalIgnoreCase))
-                        NotifyLibraryCachePoseMoved(oldPath, item);
-                    else
-                        _libraryCache.SyncMetadata(item);
-                },
-                onComplete: () => { }
-            );
+            var tex = CreateDisplayThumbnail(pngBytes);
+            if (item.Thumbnail != null) Destroy(item.Thumbnail);
+            item.Thumbnail = tex;
+
+            if (!string.Equals(oldPath, item.FilePath, StringComparison.OrdinalIgnoreCase))
+                NotifyLibraryCachePoseMoved(oldPath, item);
+            else
+                _libraryCache.SyncMetadata(item);
         }
 
         private void DoSavePose()

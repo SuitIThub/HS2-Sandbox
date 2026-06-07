@@ -125,6 +125,7 @@ namespace HS2SandboxPlugin
             wrap.AddButton("Copy…", barBtnH, barBtnMinW, () => BeginFolderOpForGroupEntities(PendingFolderOperation.CopyPoses));
 
             DrawMultiCharacterApplyButton(barBtnH, barBtnMinW, wrap, group.Id);
+            DrawGroupThumbnailCaptureButton(group, members, barBtnH, barBtnMinW, wrap);
             DrawSaveGroupRelativePositionsButton(group, members, barBtnH, barBtnMinW, wrap);
             DrawClearGroupRelativePositionsButton(group, barBtnH, barBtnMinW, wrap);
             DrawApplyGroupRelativePositionsToggle(group, barBtnH, wrap);
@@ -259,6 +260,96 @@ namespace HS2SandboxPlugin
                 return;
             _groupDb.ClearMemberRelativeOffsets(group.Id);
             SandboxServices.Log.LogMessage($"PoseBrowser: Cleared relative positions for group \"{group.Name}\".");
+        }
+
+        private void DrawGroupThumbnailCaptureButton(
+            PoseGroup group,
+            IReadOnlyList<PoseGridItem> members,
+            float barBtnH,
+            float barBtnMinW,
+            ActionBarWrapLayout wrap)
+        {
+            bool canCapture = CanCaptureGroupThumbnails(group, members, out string? tip);
+            wrap.AddButton(
+                "Group thumbnails…",
+                barBtnH,
+                barBtnMinW + 40f,
+                () => StartGroupThumbnailCapture(group),
+                canCapture,
+                tip ?? "Apply all group poses, then capture one thumbnail per pose with other characters in monocolor.");
+        }
+
+        private bool CanCaptureGroupThumbnails(
+            PoseGroup group,
+            IReadOnlyList<PoseGridItem> members,
+            out string? disableReason)
+        {
+            disableReason = null;
+            if (ImportPreviewActive)
+            {
+                disableReason = "Not available during import preview.";
+                return false;
+            }
+
+            if (_thumbCapture.IsActive)
+            {
+                disableReason = "Finish or cancel the current thumbnail capture first.";
+                return false;
+            }
+
+            if (members.Count == 0)
+            {
+                disableReason = "Group has no poses.";
+                return false;
+            }
+
+            var chars = _dataService.GetSelectedCharacters().ToList();
+            if (chars.Count != members.Count)
+            {
+                disableReason =
+                    $"Select exactly {members.Count} character(s) in Studio (currently {chars.Count} selected).";
+                return false;
+            }
+
+            var poses = GetGroupMemberItemsInDisplayOrder(group.Id);
+            if (!PoseBrowserCharacterApply.CanApplyPosesOneToOne(_characterConfig, poses, chars))
+            {
+                disableReason =
+                    "Selected characters must match group pose genders (male/female tags and Chars priority list).";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void StartGroupThumbnailCapture(PoseGroup group)
+        {
+            var members = GetGroupMemberItemsInDisplayOrder(group.Id);
+            if (!CanCaptureGroupThumbnails(group, members, out string? reason))
+            {
+                SandboxServices.Log.LogMessage($"PoseBrowser: Cannot capture group thumbnails — {reason}");
+                return;
+            }
+
+            var chars = _dataService.GetSelectedCharacters().ToList();
+            if (!PoseBrowserCharacterApply.TryBuildPoseCharacterAssignments(
+                    _characterConfig, members, chars, out var assignments) ||
+                assignments == null || assignments.Count == 0)
+            {
+                SandboxServices.Log.LogMessage("PoseBrowser: Cannot capture group thumbnails — assignment failed.");
+                return;
+            }
+
+            var assignmentList = assignments;
+            _thumbCapture.StartGroupCapture(
+                this,
+                members,
+                onGroupSetup: () => ApplyPosesListToSelectedCharacters(members, group.Id),
+                onGroupFocusIndex: focusIndex =>
+                    PoseBrowserCharacterSimpleColor.ApplyGroupThumbnailFocus(assignmentList, focusIndex),
+                onGroupCleanup: () => PoseBrowserCharacterSimpleColor.RestoreAll(assignmentList),
+                onCaptured: CommitCapturedThumbnail,
+                onComplete: () => { });
         }
 
         private void DrawSaveGroupRelativePositionsButton(
