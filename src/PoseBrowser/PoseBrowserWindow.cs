@@ -5440,7 +5440,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label("<b>Pose groups (grid)</b>", rich);
             GUILayout.Label(
                 "• Select <b>2+ ungrouped</b> poses → bottom bar <b>Group…</b> (name the group). <b>Ungroup</b> removes membership.\n" +
-                "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, tags, export, <b>Apply to characters…</b>, save/clear <b>positions</b>). Card checkboxes = individual poses.\n" +
+                "• <b>Group header</b> (▦ row) = select the <b>group entity</b> (rename, tags, export, <b>Apply to characters…</b>, <b>Group thumbnails…</b>, save/clear <b>positions</b>). Card checkboxes = individual poses.\n" +
                 "• <b>Exclude</b> tag filters: hide ungrouped poses; grouped poses use <b>group + pose</b> tags. In a visible group, excluded tags dim cards (red tag text).\n" +
                 "• <b>Grouped poses</b> / <b>Thumbnails</b> in the tag filter panel cycle neutral → hide (−) → only (+), like per-tag filters.\n" +
                 "• Move/Copy one <b>full group</b> at a time. Data: <b>pose_groups.tsv</b> in Sandbox config.",
@@ -5460,6 +5460,17 @@ namespace HS2SandboxPlugin
                 "• <b>Adjust for body height</b> (needs relative positions on) — still applies the full offset, but <b>offset.y</b> is scaled from saved vs current body-height ratios on each pose path (spread ratio when heights differed at save; otherwise anchor or averaged scale). No fixed meter constant.\n" +
                 "• <b>Adjust for object scale</b> (needs relative positions on) — scales saved offset <b>X/Y/Z</b> from saved vs current Studio object-scale ratios (same spread logic as body height). Relative rotation is unchanged.\n" +
                 "• <b>Clear positions</b> — removes stored offsets, heights, scales, and rotations for that group.",
+                rich);
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Thumbnails</b>", rich);
+            GUILayout.Label(
+                "<b>Thumbnails…</b> (selection bar, one or more poses checked) — capture preview PNGs for selected library poses. Each step applies that pose to Studio-selected character(s), then opens the capture overlay: drag/resize the green frame, <b>Capture</b>, <b>Skip</b>, <b>Auto-capture</b> (remaining poses after a configurable pause — Options / BepInEx), or <b>Cancel</b>.\n\n" +
+                "<b>Group thumbnails…</b> (group entity bar when the <b>group header</b> is selected) — capture one thumbnail per pose in the group while all characters stay posed together:\n" +
+                "• Requires <b>exactly as many Studio characters as poses</b>, with the same one-to-one gender / <b>Chars</b> assignment as multi-character apply (poses need not be applied beforehand).\n" +
+                "• On start: applies <b>all</b> group poses at once (same path as <b>Apply to characters…</b>, including <b>Apply relative positions</b> / height / object-scale toggles when enabled).\n" +
+                "• Overlay: frame the whole scene once. For each pose in display order, characters assigned to <b>other</b> poses render in Studio <b>simple color</b> (monocolor) so only the focus character shows full detail.\n" +
+                "• <b>Capture</b> saves that pose's PNG and advances; <b>Skip</b> leaves that pose unchanged; <b>Auto-capture</b> chains the rest; <b>Cancel</b> restores all characters from monocolor. Not available during import preview.",
                 rich);
 
             GUILayout.Space(6f);
@@ -5548,7 +5559,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(6f);
             GUILayout.Label("<b>Selection bar (bottom)</b>", rich);
             GUILayout.Label(
-                "Shown when something is selected: <b>Items</b> (one pose), <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbs…</b>, <b>Export…</b> (v5 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>.",
+                "Shown when something is selected: <b>Items</b> (one pose), <b>Update Pose</b> (one), <b>Rename…</b>, <b>Tag Selected</b>, <b>Group…</b> / <b>Ungroup</b> / group tags, <b>Fav Selected</b>, <b>Thumbnails…</b>, <b>Export…</b> (v5 pose ZIP), <b>Move…</b> / <b>Copy…</b> (ungrouped poses or one full group), <b>Delete…</b>, <b>Deselect</b>. Group entity bar (header selected): includes <b>Group thumbnails…</b> among rename, apply, and layout controls.",
                 rich);
 
 

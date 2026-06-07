@@ -519,6 +519,29 @@ namespace HS2SandboxPlugin
             GUILayout.EndVertical();
 
             GUILayout.Space(6f);
+            GUILayout.Label("<b>Group thumbnails</b>");
+            GUILayout.Label(
+                "Capture preview images for <b>every pose in a group</b> while characters stay posed together in the scene.");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>When Group thumbnails… is enabled</b>");
+            GUILayout.Label("• Select the <b>group header</b> (group entity, not individual member checkboxes).");
+            GUILayout.Label("• Select <b>exactly as many characters in Studio as poses</b> in the group.");
+            GUILayout.Label("• Characters must match pose genders and <b>Chars</b> priority (same one-to-one rules as multi-character apply).");
+            GUILayout.Label("• Not during import preview; not while another capture overlay is open.");
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>What happens</b>");
+            GUILayout.Label("1. All group poses are applied at once (including relative layout when <b>Apply relative positions</b> / height / object-scale toggles are on — same as <b>Apply to characters…</b>).");
+            GUILayout.Label("2. The capture overlay opens; frame the shot with the green square (drag / resize).");
+            GUILayout.Label("3. For each pose in display order, characters on <b>other</b> poses use Studio <b>simple color</b> (monocolor) so the thumbnail highlights one character.");
+            GUILayout.Label("4. <b>Capture</b> writes that pose's PNG; <b>Skip</b> skips it; <b>Auto-capture</b> finishes the rest automatically; <b>Cancel</b> exits and restores normal rendering.");
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+            GUILayout.Label(
+                "Example: two-pose group, characters A and B — A gets pose 1, B gets pose 2. While capturing pose 1, B is monocolor; while capturing pose 2, A is monocolor.");
+
+            GUILayout.Space(6f);
             GUILayout.Label("<b>Two kinds of selection</b>");
             GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label("<b>Group entity</b> — click the <b>group header</b> (▦ row). Highlights the segment; shows the group bar (rename, tags, export, apply, <b>Group thumbnails…</b>, save/clear positions, <b>Apply relative positions</b>, <b>Adjust for body height</b>). Ctrl+click toggles group entities; Shift+click range-selects group headers in the filtered list.");
@@ -709,9 +732,43 @@ namespace HS2SandboxPlugin
         private static void DrawWikiThumbnails()
         {
             GUILayout.Label("<size=17><b>Thumbnails</b></size>");
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Single-pose capture — Thumbnails…</b>");
             GUILayout.Label(
-                "Use <b>Thumbs…</b> on the selection to capture new preview images. The overlay guides posing the camera or frame; complete or cancel from the overlay controls.\n\n" +
-                "For a <b>group entity</b>, use <b>Group thumbnails…</b> when exactly as many Studio characters are selected as poses (matching gender tags and <b>Chars</b> priority). All poses are applied once (including relative layout when enabled), then each pose is captured in order with other assigned characters in <b>monocolor</b> (Studio simple color).");
+                "Select one or more library poses (member checkboxes), then click <b>Thumbnails…</b> in the bottom selection bar.");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("• Each pose in the queue is applied to Studio-selected character(s) before its shot.");
+            GUILayout.Label("• The overlay shows a draggable/resizable green frame over the scene.");
+            GUILayout.Label("• <b>Capture</b> — save PNG into the pose file and advance.");
+            GUILayout.Label("• <b>Skip</b> — advance without writing a file.");
+            GUILayout.Label("• <b>Auto-capture</b> — capture this pose, then all remaining poses automatically (pause: Options / BepInEx <b>Auto capture delay</b>).");
+            GUILayout.Label("• <b>Cancel</b> — exit; files already captured stay saved.");
+            GUILayout.EndVertical();
+
+            GUILayout.Space(6f);
+            GUILayout.Label("<b>Group capture — Group thumbnails…</b>");
+            GUILayout.Label(
+                "When a <b>group entity</b> is selected (click the <b>▦ group header</b>), the group action bar offers <b>Group thumbnails…</b> to refresh every member thumbnail in one session.");
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Requirements</b>");
+            GUILayout.Label("• <b>Exactly as many characters selected in Studio as poses</b> in the group.");
+            GUILayout.Label("• One-to-one assignment must succeed: <b>Male</b> / <b>Female</b> pose tags and the <b>Chars</b> priority list (see <b>Multi-character apply</b>).");
+            GUILayout.Label("• Poses do <b>not</b> need to be applied beforehand — the capture run applies them.");
+            GUILayout.Label("• Disabled during ZIP import preview or while another capture overlay is active.");
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("<b>Workflow</b>");
+            GUILayout.Label("1. Select characters in Studio; select the group header.");
+            GUILayout.Label("2. Click <b>Group thumbnails…</b>. All poses are applied at once using the same rules as <b>Apply to characters…</b> (including <b>Apply relative positions</b>, <b>Adjust for body height</b>, and <b>Adjust for object scale</b> when those toggles are on).");
+            GUILayout.Label("3. Frame the scene in the overlay.");
+            GUILayout.Label("4. For each pose in <b>display order</b>, characters assigned to other poses render in Studio <b>simple color</b> (monocolor) so only the focus character shows full detail.");
+            GUILayout.Label("5. Use <b>Capture</b>, <b>Skip</b>, <b>Auto-capture</b>, or <b>Cancel</b> as in single-pose capture. Status shows <b>Group thumb n / total</b>.");
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+            GUILayout.Label(
+                "<b>Example:</b> Group with poses 1 and 2; characters A and B assigned by priority. Pose 1 captures with B in monocolor; pose 2 captures with A in monocolor.");
 
             GUILayout.Space(6f);
             GUILayout.Label("Missing thumbnails use a neutral placeholder until a file is loaded or regenerated.");

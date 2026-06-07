@@ -14,7 +14,7 @@ The Pose Browser is a Studio utility that:
 - Lets you **search**, **filter by tags**, **favorite** poses, and **apply** stored poses to **one or more selected characters** in Studio.
 - Supports **saving** the current scene pose, **updating** an existing file, **renaming**, **moving**, **copying**, and **deleting** (with backup).
 - Stores **tags and favorites** in a config-side database (**TSV**), separate from game files.
-- Offers optional **thumbnail capture** for selected poses.
+- Offers optional **thumbnail capture** for selected poses and **group thumbnail capture** for whole pose groups (monocolor isolation per pose).
 - In **2.0.0** (all-in-one **HS2 Sandbox**): **Full / List / Mini** layouts, **Sort** panel (including **Last used** tracking), **★ Favorites** library view, docked tag filter window, optional **keyboard shortcuts** (BepInEx Configuration Manager), and expanded **`pose_browser_options.json`** (per-layout window geometry and sort).
 - In **2.1.0+**: **v2/v3 pose pack ZIP** **Import…** / **Export…**, branch/tree exports, modder docs **`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`** (stored-only ZIP requirement).
 - In **3.0.0** (split **Pose Browser** module — same sources ship inside the all-in-one build):
@@ -23,6 +23,7 @@ The Pose Browser is a Studio utility that:
 - **Multi-character apply** — **Chars** priority lists (male/female), **Apply to characters…** for multiple poses or a whole group, driven by **Male** / **Female** pose tags and list order.
 - In **3.1.0**: **Auto-capture** for batch thumbnails (configurable pause in Options / BepInEx), grid layout and window-resize fixes, multi-group action bar improvements.
 - In **3.2.0+**: **Group relative positions** — save offsets from an anchor pose (first in display order) plus **maker body height** per pose; re-apply with the group; stored in **pose_groups.tsv** and v5 ZIP; global **Apply relative positions** and **Adjust for body height** toggles (group bar + Options).
+- **Group thumbnails** — **Group thumbnails…** on the group action bar: apply all group poses, then capture one preview PNG per member with other assigned characters in Studio **simple color** (monocolor); same character-count and gender rules as one-to-one multi-apply.
 - In **5.0.0+**: **Pose items** — register Studio **workspace items** per pose; docked **Items** pane with add/load, optional body-part attach, load toggles (position / rotation / scale / free placement), character scale and body-height adjustment on load; **pose_items.tsv** (v5).
 - **Pose stash** — temporary FK/IK clipboard: stash from one character, apply to any selection; docked side pane or independent floating window (persists when the main browser closes); **pose_stash.json**; hotkey for floating window.
 
@@ -166,17 +167,43 @@ A **pose group** is a named collection of library poses stored in **`pose_groups
 1. Select **two or more ungrouped** poses (bottom bar **Grouping** section).
 2. Click **Group…**, enter a name.
 3. **Ungroup** removes selected poses from their groups (files stay on disk).
-4. With a **group entity** selected (header click), use **Rename…**, **Tags…**, or **Export…** on the group action bar.
+4. With a **group entity** selected (header click), use **Rename…**, **Tags…**, **Export…**, or **Group thumbnails…** on the group action bar.
 
 #### Two selection modes
 
 | Mode | How | Used for |
 |------|-----|----------|
-| **Group entity** | Click the **group header** | Rename, tags, export, **Apply to characters…**, **Save positions…** / **Clear positions**, **Apply relative positions**, **Adjust for body height** |
+| **Group entity** | Click the **group header** | Rename, tags, export, **Apply to characters…**, **Group thumbnails…**, **Save positions…** / **Clear positions**, **Apply relative positions**, **Adjust for body height** |
 | **Pose members** | Card checkboxes / thumbnail selection | Tag selected, move, copy, delete, partial export |
 
 - **Ctrl+click** / **Shift+click** on group headers work like pose selection (range within the filtered list).
 - During **import preview**, the group header toggles **import checkboxes** for all members.
+
+#### Group thumbnails
+
+Capture **one preview PNG per pose** in a group while all assigned characters stay posed together in the scene.
+
+**Requirements** (same one-to-one rules as **Save positions…**, except poses need **not** be applied beforehand):
+
+| Requirement | Detail |
+|-------------|--------|
+| **Selection** | **Group entity** selected (header click). |
+| **Character count** | Exactly **as many characters selected in Studio as poses** in the group. |
+| **Gender pairing** | **Male** / **Female** pose tags and **Chars** priority must allow a full one-to-one assignment (see **§6.2**). |
+| **Not import preview** | Disabled while a ZIP import preview is open or another capture overlay is active. |
+
+**Workflow:**
+
+1. Select characters in Studio; click the **group header**.
+2. Click **Group thumbnails…** on the group action bar.
+3. All group poses are applied at once (**Apply to characters…** rules, including **Apply relative positions** / **Adjust for body height** / **Adjust for object scale** when those global toggles are on).
+4. The capture **overlay** opens — drag/resize the green frame to compose the shot.
+5. For each pose in **display order**, characters assigned to **other** poses render in Studio **simple color** (monocolor) so the thumbnail highlights one character at a time.
+6. **Capture** writes that pose's PNG; **Skip** leaves it unchanged; **Auto-capture** chains the rest (configurable delay in Options / BepInEx); **Cancel** exits and restores normal character rendering.
+
+**Example:** Two-pose group; characters A and B assigned by priority (A → pose 1, B → pose 2). While capturing pose 1, B is monocolor; while capturing pose 2, A is monocolor.
+
+Use **Thumbnails…** on individual pose checkboxes for ordinary single-pose capture (re-applies each pose before its shot). See **§11**.
 
 #### Relative positions (save & apply)
 
@@ -349,23 +376,32 @@ Visible when **at least one** selected card refers to an **on-disk** pose in you
 | Control | Purpose |
 |---------|---------|
 | **Selection: n** | Count of selected items |
-| **Items** | Exactly **one** pose: open docked **Items** pane (workspace item registration — see **§7.3**) |
+| **Items** | Exactly **one** pose: open docked **Items** pane (workspace item registration — see **§7.4**) |
 | **Update Pose** | One item only: overwrite file from scene; optional thumbnail refresh |
 | **Rename…** | One item: display name; optional rename file to safe name |
 | **Group…** / **Ungroup** | Create a group from 2+ ungrouped poses, or remove membership |
 | **Tag Selected** | Mass add/remove **pose** tags via assign window |
 | **Fav Selected** | Toggle favorite flag for each selected item |
-| **Thumbs…** | Start thumbnail capture overlay for selection |
+| **Thumbnails…** | Start thumbnail capture overlay for selection |
 | **Export…** | Save selected poses to a **v3 .zip** (tags, favorites, **groups** when fully selected) |
 | **Move…** / **Copy…** | Ungrouped poses, or **one full group**; pick destination in the folder tree, then **Apply** / **Cancel** in the footer |
 | **Delete…** | Confirms; copies to **`!_AutoBackup`** then deletes files; refreshes data |
 | **Deselect** | Clears selection on filtered list |
 
-### 7.2 Import preview mode
+### 7.2 Group entity bar
+
+Shown above the pose selection bar when exactly **one group header** is selected (click the **▦** row). Includes rename, tags, ungroup, export, move/copy, **Apply to characters…**, **Group thumbnails…**, save/clear relative positions, and layout toggles. See **§5.4**.
+
+| Control | Purpose |
+|---------|---------|
+| **Group thumbnails…** | Apply all group poses, then capture one preview PNG per member (monocolor on non-focus characters). See **§11.2**. |
+| **Save positions…** | Store relative layout after a prior group apply (stricter requirements — see **§5.4**). |
+
+### 7.3 Import preview mode
 
 After **Import…**, the bar shows import-specific text and **Cancel import**. Choose poses in the grid, pick **Root only** or a folder in **Folders**, then **Apply** / **Cancel** at the **top** of the folder footer (**§3.5**). **Tree branch** packs create one new subfolder under the destination you select.
 
-### 7.3 Pose items (Items pane)
+### 7.4 Pose items (Items pane)
 
 Register Studio **workspace items** (props, accessories, etc.) against **one library pose** so they can be respawned and repositioned when you use that pose again.
 
@@ -488,12 +524,24 @@ Details of the TSV format (headers, delimiters) are implementation-specific; tre
 
 ## 11. Thumbnail capture
 
-**Thumbs…** opens the thumbnail capture **overlay** (full-screen style interaction managed by `PoseThumbnailCapture`):
+### 11.1 Single-pose — **Thumbnails…**
 
-- Frame the shot and confirm or cancel from the controls shown in the overlay.
-- On success, thumbnails refresh for affected poses.
+Select one or more library poses (member checkboxes), then **Thumbnails…** in the bottom selection bar.
 
-If capture is cancelled, files stay unchanged.
+- Each pose in the queue is applied to Studio-selected character(s) before its shot.
+- The **overlay** shows a draggable/resizable green frame.
+- **Capture** — write PNG into the pose file and advance.
+- **Skip** — advance without saving.
+- **Auto-capture** — capture the current pose, then all remaining poses automatically (delay: Options / BepInEx **Auto capture delay**).
+- **Cancel** — exit; files already captured remain saved.
+
+On success, thumbnails refresh in the grid. If capture is cancelled mid-run, poses not yet captured stay unchanged.
+
+### 11.2 Group — **Group thumbnails…**
+
+When a **group entity** is selected (group header), the group action bar offers **Group thumbnails…**. See **§5.4** for requirements, workflow, and the monocolor example.
+
+Unlike **Thumbnails…**, the group run applies **all** poses once up front, frames the whole scene, then captures each member in order with non-focus characters in Studio **simple color**.
 
 ---
 
