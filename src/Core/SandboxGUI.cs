@@ -20,7 +20,7 @@ namespace HS2SandboxPlugin
 
         public void RegisterWindow(string key, SubWindow window, bool initialVisible = false)
         {
-            if (string.IsNullOrWhiteSpace(key) || window == null)
+            if (StringEx.IsNullOrWhiteSpace(key) || window == null)
                 return;
 
             _windows[key] = window;

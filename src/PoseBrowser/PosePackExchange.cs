@@ -61,7 +61,7 @@ namespace HS2SandboxPlugin
         {
             /// <summary>Path inside the ZIP (forward slashes), e.g. <c>poses/MyPose.png</c> or <c>poses/Branch/sub/a.png</c>.</summary>
             public string file = "";
-            public string[] tags = Array.Empty<string>();
+            public string[] tags = new string[0];
             public bool favorite;
             public string lastWriteTimeUtc = "";
             public string creationTimeUtc = "";
@@ -72,9 +72,9 @@ namespace HS2SandboxPlugin
         {
             public string id = "";
             public string name = "";
-            public string[] tags = Array.Empty<string>();
+            public string[] tags = new string[0];
             /// <summary>ZIP-internal pose paths (<c>poses/…</c>) belonging to this group.</summary>
-            public string[] members = Array.Empty<string>();
+            public string[] members = new string[0];
             /// <summary>
             /// Optional layout offsets parallel to <see cref="members"/> (v4). Index 0 is anchor [0,0,0];
             /// later entries are anchor-local position offsets (orbit with anchor rotation on apply).
@@ -194,7 +194,7 @@ namespace HS2SandboxPlugin
             string poseLibraryRoot,
             string rootFolderNodeFullPath,
             string treeRootFolderName,
-            IReadOnlyList<PoseGridItem> items)
+            IList<PoseGridItem> items)
         {
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             string rootNorm = Path.GetFullPath(rootFolderNodeFullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -225,7 +225,7 @@ namespace HS2SandboxPlugin
 
         public static Dictionary<string, string> MapItemsToFlatZipPaths(
             string poseLibraryRoot,
-            IReadOnlyList<PoseGridItem> items)
+            IList<PoseGridItem> items)
         {
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var usedFlatLeaves = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -246,8 +246,8 @@ namespace HS2SandboxPlugin
         public static bool TryExportPosePack(
             string zipPath,
             string poseLibraryRoot,
-            IReadOnlyList<PoseGridItem> items,
-            IReadOnlyList<PoseZipGroupJson>? groups = null)
+            IList<PoseGridItem> items,
+            IList<PoseZipGroupJson>? groups = null)
         {
             try
             {
@@ -258,7 +258,7 @@ namespace HS2SandboxPlugin
                     Directory.CreateDirectory(dir);
 
                 var metaItems = new PoseZipItemJson[items.Count];
-                var parts = new List<(string name, byte[] data)>(items.Count + 2);
+                var parts = new List<ZipEntryPart>(items.Count + 2);
                 var usedFlatLeaves = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 for (int i = 0; i < items.Count; i++)
@@ -266,18 +266,18 @@ namespace HS2SandboxPlugin
                     var item = items[i];
                     string full = Path.GetFullPath(item.FilePath);
                     if (full.Length < libNorm.Length || !full.StartsWith(libNorm, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException("Exported pose is not under the pose library folder.");
+                        throw new PackFormatException("Exported pose is not under the pose library folder.");
                     if (full.Length > libNorm.Length && full[libNorm.Length] != Path.DirectorySeparatorChar &&
                         full[libNorm.Length] != Path.AltDirectorySeparatorChar)
-                        throw new InvalidDataException("Exported pose is not under the pose library folder.");
+                        throw new PackFormatException("Exported pose is not under the pose library folder.");
 
                     string leaf = MakeUniqueFlatZipEntryName(item.FilePath, usedFlatLeaves);
                     string zipInternal = PosesDirectoryPrefix + leaf;
                     if (!IsSafeZipInternalPath(zipInternal))
-                        throw new InvalidDataException($"Unsafe path for ZIP: {zipInternal}");
+                        throw new PackFormatException($"Unsafe path for ZIP: {zipInternal}");
 
                     byte[] bytes = File.ReadAllBytes(item.FilePath);
-                    parts.Add((zipInternal, bytes));
+                    parts.Add(new ZipEntryPart(zipInternal, bytes));
 
                     metaItems[i] = new PoseZipItemJson
                     {
@@ -299,8 +299,8 @@ namespace HS2SandboxPlugin
                     metadata = DefaultMetadataEntryName
                 };
 
-                parts.Add((ManifestEntryName, Encoding.UTF8.GetBytes(JsonUtility.ToJson(manifest))));
-                parts.Add((DefaultMetadataEntryName, SerializeMetadataUtf8(metaItems, groups)));
+                parts.Add(new ZipEntryPart(ManifestEntryName, Encoding.UTF8.GetBytes(JsonUtility.ToJson(manifest))));
+                parts.Add(new ZipEntryPart(DefaultMetadataEntryName, SerializeMetadataUtf8(metaItems, groups)));
 
                 MinimalStoredZip.Write(zipPath, parts);
                 return true;
@@ -324,8 +324,8 @@ namespace HS2SandboxPlugin
             string poseLibraryRoot,
             string rootFolderNodeFullPath,
             string treeRootFolderName,
-            IReadOnlyList<PoseGridItem> items,
-            IReadOnlyList<PoseZipGroupJson>? groups = null)
+            IList<PoseGridItem> items,
+            IList<PoseZipGroupJson>? groups = null)
         {
             try
             {
@@ -333,7 +333,7 @@ namespace HS2SandboxPlugin
                 string rootNorm = Path.GetFullPath(rootFolderNodeFullPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 string libNorm = Path.GetFullPath(poseLibraryRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 if (!rootNorm.StartsWith(libNorm, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Tree export root is not under the pose library.");
+                    throw new PackFormatException("Tree export root is not under the pose library.");
                 string? dir = Path.GetDirectoryName(Path.GetFullPath(zipPath));
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
@@ -343,7 +343,7 @@ namespace HS2SandboxPlugin
                     safeRootName = "folder";
 
                 var entryList = new List<PoseZipItemJson>();
-                var parts = new List<(string name, byte[] data)>(items.Count + 2);
+                var parts = new List<ZipEntryPart>(items.Count + 2);
 
                 string branchPrefix = PosesDirectoryPrefix + safeRootName.Trim('/').Replace('\\', '/') + "/";
 
@@ -361,10 +361,10 @@ namespace HS2SandboxPlugin
 
                     string zipInternal = branchPrefix + relUnderBranch;
                     if (!IsSafeZipInternalPath(zipInternal))
-                        throw new InvalidDataException($"Unsafe path for ZIP: {zipInternal}");
+                        throw new PackFormatException($"Unsafe path for ZIP: {zipInternal}");
 
                     byte[] bytes = File.ReadAllBytes(item.FilePath);
-                    parts.Add((zipInternal, bytes));
+                    parts.Add(new ZipEntryPart(zipInternal, bytes));
 
                     entryList.Add(new PoseZipItemJson
                     {
@@ -388,8 +388,8 @@ namespace HS2SandboxPlugin
 
                 var metaArr = entryList.ToArray();
 
-                parts.Add((ManifestEntryName, Encoding.UTF8.GetBytes(JsonUtility.ToJson(manifest))));
-                parts.Add((DefaultMetadataEntryName, SerializeMetadataUtf8(metaArr, groups)));
+                parts.Add(new ZipEntryPart(ManifestEntryName, Encoding.UTF8.GetBytes(JsonUtility.ToJson(manifest))));
+                parts.Add(new ZipEntryPart(DefaultMetadataEntryName, SerializeMetadataUtf8(metaArr, groups)));
 
                 MinimalStoredZip.Write(zipPath, parts);
                 return true;
@@ -460,7 +460,7 @@ namespace HS2SandboxPlugin
             result = null;
             error = null;
 
-            string metaName = string.IsNullOrWhiteSpace(manifest.metadata) ? DefaultMetadataEntryName : manifest.metadata!.Trim().Replace('\\', '/');
+            string metaName = StringEx.IsNullOrWhiteSpace(manifest.metadata) ? DefaultMetadataEntryName : manifest.metadata!.Trim().Replace('\\', '/');
             if (metaName.IndexOf("..", StringComparison.Ordinal) >= 0 || metaName.StartsWith("/", StringComparison.Ordinal))
             {
                 error = "Invalid metadata path in manifest.";
@@ -502,7 +502,7 @@ namespace HS2SandboxPlugin
             int idx = 0;
             foreach (var it in metaItems)
             {
-                if (it == null || string.IsNullOrWhiteSpace(it.file))
+                if (it == null || StringEx.IsNullOrWhiteSpace(it.file))
                 {
                     error = "Metadata item missing \"file\" path.";
                     return false;
@@ -547,7 +547,7 @@ namespace HS2SandboxPlugin
                     bytes,
                     Path.GetFileNameWithoutExtension(suggestedName),
                     isPng,
-                    it.tags ?? Array.Empty<string>(),
+                    it.tags ?? new string[0],
                     it.favorite,
                     ParseIsoOrMin(it.lastWriteTimeUtc),
                     ParseIsoOrMin(it.creationTimeUtc),
@@ -558,8 +558,8 @@ namespace HS2SandboxPlugin
             var packGroups = readGroups.Select(g => new PosePackReadGroup(
                 g.id ?? "",
                 g.name ?? "",
-                g.tags ?? Array.Empty<string>(),
-                g.members ?? Array.Empty<string>(),
+                g.tags ?? new string[0],
+                g.members ?? new string[0],
                 ConvertGroupMemberOffsets(g),
                 ConvertGroupMemberBodyHeights(g),
                 ConvertGroupMemberRotations(g),
@@ -603,7 +603,7 @@ namespace HS2SandboxPlugin
                         bytes,
                         e.displayName,
                         isPng,
-                        e.tags ?? Array.Empty<string>(),
+                        e.tags ?? new string[0],
                         e.favorite,
                         ParseIsoOrMin(e.lastWriteTimeUtc),
                         ParseIsoOrMin(e.creationTimeUtc),
@@ -655,7 +655,7 @@ namespace HS2SandboxPlugin
                         bytes,
                         e.displayName,
                         isPng,
-                        e.tags ?? Array.Empty<string>(),
+                        e.tags ?? new string[0],
                         e.favorite,
                         ParseIsoOrMin(e.lastWriteTimeUtc),
                         ParseIsoOrMin(e.creationTimeUtc),
@@ -677,14 +677,14 @@ namespace HS2SandboxPlugin
                 return true;
             }
 
-            bytes = Array.Empty<byte>();
+            bytes = new byte[0];
             return false;
         }
 
         /// <summary>
         /// Unity <see cref="JsonUtility.ToJson"/> often drops arrays of nested serializable types; metadata must round-trip reliably.
         /// </summary>
-        private static byte[] SerializeMetadataUtf8(PoseZipItemJson[] items, IReadOnlyList<PoseZipGroupJson>? groups = null)
+        private static byte[] SerializeMetadataUtf8(PoseZipItemJson[] items, IList<PoseZipGroupJson>? groups = null)
         {
             var sb = new StringBuilder(Math.Max(64, items.Length * 160));
             sb.Append("{\"items\":[");
@@ -991,8 +991,8 @@ namespace HS2SandboxPlugin
             out PoseZipGroupJson[] groups,
             out string? error)
         {
-            items = Array.Empty<PoseZipItemJson>();
-            groups = Array.Empty<PoseZipGroupJson>();
+            items = new PoseZipItemJson[0];
+            groups = new PoseZipGroupJson[0];
             error = null;
             try
             {
@@ -1014,8 +1014,8 @@ namespace HS2SandboxPlugin
             out PoseZipGroupJson[] groups,
             out string? error)
         {
-            items = Array.Empty<PoseZipItemJson>();
-            groups = Array.Empty<PoseZipGroupJson>();
+            items = new PoseZipItemJson[0];
+            groups = new PoseZipGroupJson[0];
             error = null;
             int i = 0;
             MetadataJson_SkipWs(json, ref i);
@@ -1093,7 +1093,7 @@ namespace HS2SandboxPlugin
             }
 
             items = parsed.ToArray();
-            groups = parsedGroups != null ? parsedGroups.ToArray() : Array.Empty<PoseZipGroupJson>();
+            groups = parsedGroups != null ? parsedGroups.ToArray() : new PoseZipGroupJson[0];
             return true;
         }
 
@@ -1449,8 +1449,8 @@ namespace HS2SandboxPlugin
                 if (i < json.Length && json[i] == '}')
                 {
                     i++;
-                    group.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
-                    group.members = membersList.Count > 0 ? membersList.ToArray() : Array.Empty<string>();
+                    group.tags = tagsList.Count > 0 ? tagsList.ToArray() : new string[0];
+                    group.members = membersList.Count > 0 ? membersList.ToArray() : new string[0];
                     group.memberRelativeOffsets = offsetsList != null && offsetsList.Count > 0
                         ? offsetsList.ToArray()
                         : null;
@@ -1540,8 +1540,8 @@ namespace HS2SandboxPlugin
                 if (i < json.Length && json[i] == '}')
                 {
                     i++;
-                    group.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
-                    group.members = membersList.Count > 0 ? membersList.ToArray() : Array.Empty<string>();
+                    group.tags = tagsList.Count > 0 ? tagsList.ToArray() : new string[0];
+                    group.members = membersList.Count > 0 ? membersList.ToArray() : new string[0];
                     group.memberRelativeOffsets = offsetsList != null && offsetsList.Count > 0
                         ? offsetsList.ToArray()
                         : null;
@@ -1754,7 +1754,7 @@ namespace HS2SandboxPlugin
                 if (i < json.Length && json[i] == '}')
                 {
                     i++;
-                    item.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
+                    item.tags = tagsList.Count > 0 ? tagsList.ToArray() : new string[0];
                     return true;
                 }
 
@@ -1815,7 +1815,7 @@ namespace HS2SandboxPlugin
                 if (i < json.Length && json[i] == '}')
                 {
                     i++;
-                    item.tags = tagsList.Count > 0 ? tagsList.ToArray() : Array.Empty<string>();
+                    item.tags = tagsList.Count > 0 ? tagsList.ToArray() : new string[0];
                     return true;
                 }
 
@@ -1933,7 +1933,7 @@ namespace HS2SandboxPlugin
         /// <summary>No path traversal, no absolute segments, only forward slashes; must stay under sane relative paths.</summary>
         private static bool IsSafeZipInternalPath(string path)
         {
-            if (string.IsNullOrWhiteSpace(path)) return false;
+            if (StringEx.IsNullOrWhiteSpace(path)) return false;
             path = path.Replace('\\', '/').Trim('/');
             if (path.Length == 0 || path.StartsWith("/", StringComparison.Ordinal) || path.IndexOf("//", StringComparison.Ordinal) >= 0)
                 return false;
@@ -1961,7 +1961,7 @@ namespace HS2SandboxPlugin
         {
             normalizedRelPath = "";
             error = null;
-            if (string.IsNullOrWhiteSpace(relPathUnix))
+            if (StringEx.IsNullOrWhiteSpace(relPathUnix))
             {
                 error = "Empty relative path.";
                 return false;
@@ -1999,7 +1999,7 @@ namespace HS2SandboxPlugin
             public string format = "";
             public int version;
             public string exportedUtc = "";
-            public LegacyPosePackEntryJson[] entries = Array.Empty<LegacyPosePackEntryJson>();
+            public LegacyPosePackEntryJson[] entries = new LegacyPosePackEntryJson[0];
         }
 
         [Serializable]
@@ -2009,7 +2009,7 @@ namespace HS2SandboxPlugin
             public string fileName = "";
             public string displayName = "";
             public int formatKind;
-            public string[] tags = Array.Empty<string>();
+            public string[] tags = new string[0];
             public bool favorite;
             public string lastWriteTimeUtc = "";
             public string creationTimeUtc = "";
@@ -2022,7 +2022,7 @@ namespace HS2SandboxPlugin
             public int version;
             public string exportedUtc = "";
             public string rootFolderName = "";
-            public LegacyTreePackEntryJson[] entries = Array.Empty<LegacyTreePackEntryJson>();
+            public LegacyTreePackEntryJson[] entries = new LegacyTreePackEntryJson[0];
         }
 
         [Serializable]
@@ -2032,7 +2032,7 @@ namespace HS2SandboxPlugin
             public string relPath = "";
             public string displayName = "";
             public int formatKind;
-            public string[] tags = Array.Empty<string>();
+            public string[] tags = new string[0];
             public bool favorite;
             public string lastWriteTimeUtc = "";
             public string creationTimeUtc = "";

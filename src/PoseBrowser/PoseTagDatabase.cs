@@ -79,7 +79,7 @@ namespace HS2SandboxPlugin
         {
             string key = GetKey(item);
             var entry = GetOrCreate(key);
-            var tagList = tags.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var tagList = tags.Where(t => !StringEx.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             entry.Tags = tagList;
             item.Tags = new HashSet<string>(tagList, StringComparer.OrdinalIgnoreCase);
             _allTagsCache = null;
@@ -91,7 +91,7 @@ namespace HS2SandboxPlugin
             var existing = GetTags(item);
             foreach (var t in tagsToAdd)
             {
-                if (!string.IsNullOrWhiteSpace(t))
+                if (!StringEx.IsNullOrWhiteSpace(t))
                     existing.Add(t.Trim());
             }
             SetTags(item, existing);
@@ -244,15 +244,12 @@ namespace HS2SandboxPlugin
                         string key = NormalizeStorageKey(kvp.Key);
                         string tagsCol = kvp.Value.Tags == null || kvp.Value.Tags.Length == 0
                             ? ""
-                            : string.Join(TagDelimiter.ToString(), kvp.Value.Tags);
+                            : string.Join(TagDelimiter.ToString(), kvp.Value.Tags.ToArray());
                         sw.WriteLine($"{key}\t{(kvp.Value.Favorite ? "1" : "0")}\t{tagsCol}\t{kvp.Value.LastUsedUtcTicks}");
                     }
                 }
 
-                if (File.Exists(_storagePath))
-                    File.Replace(tempPath, _storagePath, null);
-                else
-                    File.Move(tempPath, _storagePath);
+                FileEx.CommitTempFile(tempPath, _storagePath);
 
                 _dirty = false;
             }
@@ -311,7 +308,7 @@ namespace HS2SandboxPlugin
             var temp = new Dictionary<string, PoseTagEntry>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                foreach (string rawLine in File.ReadLines(path, Encoding.UTF8))
+                foreach (string rawLine in File.ReadAllLines(path, Encoding.UTF8))
                 {
                     string line = rawLine.TrimStart('\uFEFF').TrimEnd('\r');
                     if (line.Length == 0) continue;
@@ -342,7 +339,7 @@ namespace HS2SandboxPlugin
 
                     string[] tags;
                     if (string.IsNullOrEmpty(tagsCell))
-                        tags = Array.Empty<string>();
+                        tags = new string[0];
                     else
                     {
                         tags = tagsCell.Split(TagDelimiter)
@@ -390,7 +387,7 @@ namespace HS2SandboxPlugin
                     if (string.IsNullOrEmpty(k) || v == null) continue;
                     string[] tags = v.tags != null && v.tags.Length > 0
                         ? (string[])v.tags.Clone()
-                        : Array.Empty<string>();
+                        : new string[0];
                     _entries[NormalizeStorageKey(k)] = new PoseTagEntry { Favorite = v.favorite, Tags = tags };
                 }
 
@@ -440,7 +437,7 @@ namespace HS2SandboxPlugin
         private sealed class PoseTagEntry
         {
             public bool Favorite;
-            public string[] Tags = Array.Empty<string>();
+            public string[] Tags = new string[0];
             public long LastUsedUtcTicks;
 
             public bool HasPersistableData() =>
@@ -449,7 +446,7 @@ namespace HS2SandboxPlugin
             public PoseTagEntry Clone() => new PoseTagEntry
             {
                 Favorite = Favorite,
-                Tags = Tags != null ? (string[])Tags.Clone() : Array.Empty<string>(),
+                Tags = Tags != null ? (string[])Tags.Clone() : new string[0],
                 LastUsedUtcTicks = LastUsedUtcTicks
             };
         }
@@ -459,14 +456,14 @@ namespace HS2SandboxPlugin
         private sealed class PoseTagEntryDtoLegacy
         {
             public bool favorite;
-            public string[] tags = Array.Empty<string>();
+            public string[] tags = new string[0];
         }
 
         [Serializable]
         private sealed class PoseTagStoreDtoLegacy
         {
-            public string[] keys = Array.Empty<string>();
-            public PoseTagEntryDtoLegacy[] values = Array.Empty<PoseTagEntryDtoLegacy>();
+            public string[] keys = new string[0];
+            public PoseTagEntryDtoLegacy[] values = new PoseTagEntryDtoLegacy[0];
         }
         #pragma warning restore CS0649
     }

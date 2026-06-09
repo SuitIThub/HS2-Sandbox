@@ -29,14 +29,14 @@ namespace HS2SandboxPlugin
     {
         public string GroupId { get; }
         public string GroupName { get; }
-        public IReadOnlyList<string> GroupTags { get; }
+        public IList<string> GroupTags { get; }
         public List<PoseBrowserDisplayEntry> Poses { get; } = new List<PoseBrowserDisplayEntry>();
         public bool ShowHeader { get; set; } = true;
         public bool ShowTags { get; set; } = true;
         /// <summary>True when this segment continues the same group on the next grid row.</summary>
         public bool IsContinuation { get; set; }
 
-        public PoseBrowserGroupSegment(string groupId, string groupName, IReadOnlyList<string> groupTags)
+        public PoseBrowserGroupSegment(string groupId, string groupName, IList<string> groupTags)
         {
             GroupId = groupId;
             GroupName = groupName;
@@ -86,7 +86,7 @@ namespace HS2SandboxPlugin
     internal static class PoseBrowserGridLayout
     {
         public static List<PoseBrowserDisplayEntry> BuildFilteredDisplayList(
-            IReadOnlyList<PoseGridItem> allItems,
+            IList<PoseGridItem> allItems,
             PoseGroupDatabase groupDb,
             string poseRoot,
             string searchText,
@@ -104,7 +104,7 @@ namespace HS2SandboxPlugin
             var groupById = groupDb.GroupsById;
 
             Regex? searchRx = null;
-            if (searchUseRegex && !string.IsNullOrWhiteSpace(searchText))
+            if (searchUseRegex && !StringEx.IsNullOrWhiteSpace(searchText))
             {
                 try
                 {
@@ -216,7 +216,7 @@ namespace HS2SandboxPlugin
             string poseRootPath,
             PoseSortMode sortMode,
             bool ascending,
-            IReadOnlyDictionary<string, PoseGroup>? groupsOverride = null)
+            IDictionary<string, PoseGroup>? groupsOverride = null)
         {
             var blocks = new List<SortBlock>();
             var seenGroup = new HashSet<string>(StringComparer.Ordinal);
@@ -250,7 +250,7 @@ namespace HS2SandboxPlugin
         }
 
         public static List<PoseBrowserDisplayEntry> SliceByPoseCount(
-            IReadOnlyList<PoseBrowserDisplayEntry> entries, int skip, int take)
+            IList<PoseBrowserDisplayEntry> entries, int skip, int take)
         {
             if (skip <= 0 && take <= 0) return entries.ToList();
             var result = new List<PoseBrowserDisplayEntry>();
@@ -267,10 +267,10 @@ namespace HS2SandboxPlugin
         }
 
         public static List<PoseBrowserGridRow> BuildGridRows(
-            IReadOnlyList<PoseBrowserDisplayEntry> entries,
+            IList<PoseBrowserDisplayEntry> entries,
             PoseGroupDatabase groupDb,
             int columns,
-            IReadOnlyDictionary<string, PoseGroup>? groupsOverride = null)
+            IDictionary<string, PoseGroup>? groupsOverride = null)
         {
             var rows = new List<PoseBrowserGridRow>();
             if (columns < 1) columns = 1;
@@ -371,7 +371,7 @@ namespace HS2SandboxPlugin
         private static PoseGroup? ResolveGroup(
             PoseGroupDatabase groupDb,
             string groupId,
-            IReadOnlyDictionary<string, PoseGroup>? groupsOverride)
+            IDictionary<string, PoseGroup>? groupsOverride)
         {
             if (groupsOverride != null && groupsOverride.TryGetValue(groupId, out var g))
                 return g;
@@ -526,7 +526,7 @@ namespace HS2SandboxPlugin
 
         private static HashSet<string> CollectEffectiveFilterTags(
             PoseGridItem item,
-            IReadOnlyDictionary<string, PoseGroup> groupById)
+            IDictionary<string, PoseGroup> groupById)
         {
             var tags = new HashSet<string>(item.Tags, StringComparer.OrdinalIgnoreCase);
             if (!string.IsNullOrEmpty(item.GroupId) &&

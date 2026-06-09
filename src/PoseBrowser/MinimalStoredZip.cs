@@ -34,24 +34,28 @@ namespace HS2SandboxPlugin
             }
         }
 
-        public static void Write(string path, IReadOnlyList<(string entryName, byte[] data)> entries)
+        public static void Write(string path, IList<ZipEntryPart> entries)
         {
-            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-            Write(fs, entries);
+            using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+                Write(fs, entries);
         }
 
-        public static void Write(Stream stream, IReadOnlyList<(string entryName, byte[] data)> entries)
+        public static void Write(Stream stream, IList<ZipEntryPart> entries)
         {
-            using var bw = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+            var bw = new BinaryWriter(stream, Encoding.UTF8);
+            try
+            {
             var centralPieces = new List<Action<BinaryWriter>>();
 
-            foreach (var (entryName, data) in entries)
+            foreach (ZipEntryPart entry in entries)
             {
+                string entryName = entry.Name;
+                byte[] data = entry.Data;
                 if (string.IsNullOrEmpty(entryName))
                     throw new ArgumentException("Empty entry name.", nameof(entries));
                 NormalizeEntryName(entryName, out _, out byte[] nameBytes);
                 if (nameBytes.Length > ushort.MaxValue || (ulong)data.LongLength > uint.MaxValue)
-                    throw new InvalidDataException("Entry too large for ZIP (use smaller pack).");
+                    throw new PackFormatException("Entry too large for ZIP (use smaller pack).");
 
                 uint crc = Crc32(data, 0, data.Length);
                 uint uncompressed = (uint)data.Length;
@@ -101,7 +105,7 @@ namespace HS2SandboxPlugin
 
             long centralSize = stream.Position - centralStart;
             if (centralSize > uint.MaxValue || centralPieces.Count > ushort.MaxValue)
-                throw new InvalidDataException("Central directory too large.");
+                throw new PackFormatException("Central directory too large.");
 
             bw.Write(EndOfCentralDirectorySignature);
             bw.Write((ushort)0);
@@ -111,13 +115,18 @@ namespace HS2SandboxPlugin
             bw.Write((uint)centralSize);
             bw.Write((uint)centralStart);
             bw.Write((ushort)0);
+            }
+            finally
+            {
+                bw.Flush();
+            }
         }
 
         /// <summary>Reads all stored (method 0) entries. Deflate is not supported.</summary>
         public static Dictionary<string, byte[]> ReadAll(string path)
         {
-            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            return ReadAll(fs);
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                return ReadAll(fs);
         }
 
         public static Dictionary<string, byte[]> ReadAll(Stream stream)
@@ -126,114 +135,106 @@ namespace HS2SandboxPlugin
             stream.Seek(eocdOffset, SeekOrigin.Begin);
             ushort totalCentralEntries;
             uint centralDirOffset;
-            using (var br = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true))
-            {
-                uint sig = br.ReadUInt32();
-                if (sig != EndOfCentralDirectorySignature)
-                    throw new InvalidDataException("Invalid ZIP (EOCD).");
+            var br = new BinaryReader(stream, Encoding.UTF8);
+            uint sig = br.ReadUInt32();
+            if (sig != EndOfCentralDirectorySignature)
+                throw new PackFormatException("Invalid ZIP (EOCD).");
 
-                br.ReadUInt16();
-                br.ReadUInt16();
-                ushort cdTotalOnDisk = br.ReadUInt16();
-                totalCentralEntries = br.ReadUInt16();
-                _ = br.ReadUInt32();
-                centralDirOffset = br.ReadUInt32();
-                ushort zipCommentLength = br.ReadUInt16();
-                if (zipCommentLength > 0)
-                    br.ReadBytes(zipCommentLength);
+            br.ReadUInt16();
+            br.ReadUInt16();
+            ushort cdTotalOnDisk = br.ReadUInt16();
+            totalCentralEntries = br.ReadUInt16();
+            br.ReadUInt32();
+            centralDirOffset = br.ReadUInt32();
+            ushort zipCommentLength = br.ReadUInt16();
+            if (zipCommentLength > 0)
+                br.ReadBytes(zipCommentLength);
 
-                if (cdTotalOnDisk != totalCentralEntries)
-                    throw new InvalidDataException("Multi-disk ZIP not supported.");
-            }
+            if (cdTotalOnDisk != totalCentralEntries)
+                throw new PackFormatException("Multi-disk ZIP not supported.");
 
             var central = new List<CentralRecord>(totalCentralEntries);
             stream.Seek(centralDirOffset, SeekOrigin.Begin);
-            using (var br = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true))
+            for (int i = 0; i < totalCentralEntries; i++)
             {
-                for (int i = 0; i < totalCentralEntries; i++)
-                {
-                    uint sig = br.ReadUInt32();
-                    if (sig != CentralDirectoryHeaderSignature)
-                        throw new InvalidDataException("Invalid ZIP (central directory).");
+                sig = br.ReadUInt32();
+                if (sig != CentralDirectoryHeaderSignature)
+                    throw new PackFormatException("Invalid ZIP (central directory).");
 
-                    br.ReadUInt16();
-                    br.ReadUInt16();
-                    ushort gpCd = br.ReadUInt16();
-                    ushort methodCd = br.ReadUInt16();
-                    br.ReadUInt16();
-                    br.ReadUInt16();
-                    uint crcCd = br.ReadUInt32();
-                    uint compSizeCd = br.ReadUInt32();
-                    uint uncompSizeCd = br.ReadUInt32();
-                    ushort nameLenCd = br.ReadUInt16();
-                    ushort extraLenCd = br.ReadUInt16();
-                    ushort commentLenCd = br.ReadUInt16();
-                    br.ReadUInt16();
-                    br.ReadUInt16();
-                    br.ReadUInt32();
-                    uint localHeaderOffset = br.ReadUInt32();
-                    byte[] nameBytesCd = br.ReadBytes(nameLenCd);
-                    if (extraLenCd > 0)
-                        br.ReadBytes(extraLenCd);
-                    if (commentLenCd > 0)
-                        br.ReadBytes(commentLenCd);
+                br.ReadUInt16();
+                br.ReadUInt16();
+                ushort gpCd = br.ReadUInt16();
+                ushort methodCd = br.ReadUInt16();
+                br.ReadUInt16();
+                br.ReadUInt16();
+                uint crcCd = br.ReadUInt32();
+                uint compSizeCd = br.ReadUInt32();
+                uint uncompSizeCd = br.ReadUInt32();
+                ushort nameLenCd = br.ReadUInt16();
+                ushort extraLenCd = br.ReadUInt16();
+                ushort commentLenCd = br.ReadUInt16();
+                br.ReadUInt16();
+                br.ReadUInt16();
+                br.ReadUInt32();
+                uint localHeaderOffset = br.ReadUInt32();
+                byte[] nameBytesCd = br.ReadBytes(nameLenCd);
+                if (extraLenCd > 0)
+                    br.ReadBytes(extraLenCd);
+                if (commentLenCd > 0)
+                    br.ReadBytes(commentLenCd);
 
-                    string entryName = NormalizeForLookup(DecodeName(nameBytesCd, gpCd));
+                string entryName = NormalizeForLookup(DecodeName(nameBytesCd, gpCd));
 
-                    if (methodCd != 0)
-                        throw new InvalidDataException(
-                            "This ZIP uses compressed entries; only uncompressed (stored) packs from Pose Browser are supported.");
+                if (methodCd != 0)
+                    throw new PackFormatException(
+                        "This ZIP uses compressed entries; only uncompressed (stored) packs from Pose Browser are supported.");
 
-                    if (compSizeCd != uncompSizeCd)
-                        throw new InvalidDataException("ZIP size mismatch.");
+                if (compSizeCd != uncompSizeCd)
+                    throw new PackFormatException("ZIP size mismatch.");
 
-                    central.Add(new CentralRecord(entryName, localHeaderOffset, crcCd, uncompSizeCd));
-                }
+                central.Add(new CentralRecord(entryName, localHeaderOffset, crcCd, uncompSizeCd));
             }
 
             var dict = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             foreach (var rec in central)
             {
                 stream.Seek(rec.LocalHeaderOffset, SeekOrigin.Begin);
-                using (var lr = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true))
-                {
-                    uint sig = lr.ReadUInt32();
-                    if (sig != LocalFileHeaderSignature)
-                        throw new InvalidDataException("Invalid ZIP (local header).");
+                sig = br.ReadUInt32();
+                if (sig != LocalFileHeaderSignature)
+                    throw new PackFormatException("Invalid ZIP (local header).");
 
-                    lr.ReadUInt16();
-                    ushort gpLocal = lr.ReadUInt16();
-                    ushort methodLocal = lr.ReadUInt16();
-                    lr.ReadUInt16();
-                    lr.ReadUInt16();
-                    uint crcLocal = lr.ReadUInt32();
-                    uint compLocal = lr.ReadUInt32();
-                    uint uncompLocal = lr.ReadUInt32();
-                    ushort nameLenLocal = lr.ReadUInt16();
-                    ushort extraLenLocal = lr.ReadUInt16();
-                    byte[] nameBytesLocal = lr.ReadBytes(nameLenLocal);
-                    if (extraLenLocal > 0)
-                        lr.ReadBytes(extraLenLocal);
+                br.ReadUInt16();
+                ushort gpLocal = br.ReadUInt16();
+                ushort methodLocal = br.ReadUInt16();
+                br.ReadUInt16();
+                br.ReadUInt16();
+                uint crcLocal = br.ReadUInt32();
+                uint compLocal = br.ReadUInt32();
+                uint uncompLocal = br.ReadUInt32();
+                ushort nameLenLocal = br.ReadUInt16();
+                ushort extraLenLocal = br.ReadUInt16();
+                byte[] nameBytesLocal = br.ReadBytes(nameLenLocal);
+                if (extraLenLocal > 0)
+                    br.ReadBytes(extraLenLocal);
 
-                    string entryNameLocal = NormalizeForLookup(DecodeName(nameBytesLocal, gpLocal));
-                    if (!string.Equals(rec.Name, entryNameLocal, StringComparison.Ordinal))
-                        throw new InvalidDataException("ZIP central/local name mismatch.");
+                string entryNameLocal = NormalizeForLookup(DecodeName(nameBytesLocal, gpLocal));
+                if (!string.Equals(rec.Name, entryNameLocal, StringComparison.Ordinal))
+                    throw new PackFormatException("ZIP central/local name mismatch.");
 
-                    if (methodLocal != 0 || compLocal != uncompLocal)
-                        throw new InvalidDataException("ZIP entry is not stored.");
+                if (methodLocal != 0 || compLocal != uncompLocal)
+                    throw new PackFormatException("ZIP entry is not stored.");
 
-                    if (uncompLocal != rec.UncompressedSize || crcLocal != rec.Crc32Expected)
-                        throw new InvalidDataException("ZIP local/central metadata mismatch.");
+                if (uncompLocal != rec.UncompressedSize || crcLocal != rec.Crc32Expected)
+                    throw new PackFormatException("ZIP local/central metadata mismatch.");
 
-                    byte[] payload = lr.ReadBytes(checked((int)uncompLocal));
-                    if (payload.LongLength != uncompLocal)
-                        throw new EndOfStreamException("Truncated ZIP entry.");
+                byte[] payload = br.ReadBytes(checked((int)uncompLocal));
+                if (payload.LongLength != uncompLocal)
+                    throw new EndOfStreamException("Truncated ZIP entry.");
 
-                    if (Crc32(payload, 0, payload.Length) != rec.Crc32Expected)
-                        throw new InvalidDataException("ZIP CRC mismatch.");
+                if (Crc32(payload, 0, payload.Length) != rec.Crc32Expected)
+                    throw new PackFormatException("ZIP CRC mismatch.");
 
-                    dict[rec.Name] = payload;
-                }
+                dict[rec.Name] = payload;
             }
 
             return dict;
@@ -258,7 +259,7 @@ namespace HS2SandboxPlugin
         {
             long len = stream.Length;
             if (len < 22)
-                throw new InvalidDataException("Not a ZIP file (too small).");
+                throw new PackFormatException("Not a ZIP file (too small).");
 
             int scan = (int)Math.Min(len, 65536 + 22);
             var buf = new byte[scan];
@@ -274,7 +275,7 @@ namespace HS2SandboxPlugin
                     return len - scan + i;
             }
 
-            throw new InvalidDataException("Not a ZIP file (missing EOCD).");
+            throw new PackFormatException("Not a ZIP file (missing EOCD).");
         }
 
         private static uint Crc32(byte[] data, int offset, int count)

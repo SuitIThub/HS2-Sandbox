@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-#if !KKS
+#if HS2
 using AIChara;
 #endif
 using Studio;
@@ -39,7 +39,7 @@ namespace HS2SandboxPlugin
             try
             {
                 var extSaveType = AppDomain.CurrentDomain.GetAssemblies()
-                    .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
+                    .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
                     .FirstOrDefault(t => t.FullName == "ExtensibleSaveFormat.ExtendedSave");
 
                 if (extSaveType == null) return;
@@ -790,7 +790,7 @@ namespace HS2SandboxPlugin
             return null;
         }
 
-        public IReadOnlyList<string> GetSelectedCharacterDisplayNames()
+        public IList<string> GetSelectedCharacterDisplayNames()
         {
             try
             {
@@ -798,19 +798,19 @@ namespace HS2SandboxPlugin
             }
             catch
             {
-                return Array.Empty<string>();
+                return new string[0];
             }
         }
 
-        public List<(OCIChar oci, int dicKey)> GetSceneCharacters()
+        public List<OciDicKeyPair> GetSceneCharacters()
         {
-            var list = new List<(OCIChar, int)>();
+            var list = new List<OciDicKeyPair>();
             try
             {
                 foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
                 {
                     if (kvp.Value is OCIChar oci)
-                        list.Add((oci, kvp.Key));
+                        list.Add(new OciDicKeyPair(oci, kvp.Key));
                 }
             }
             catch
@@ -917,7 +917,7 @@ namespace HS2SandboxPlugin
             position = Vector3.zero;
             try
             {
-#if KKS
+#if KKS || KK
                 if (TryGetCharacterGuideWorldPositionFromChangeAmount(oci, out position))
                     return true;
 #endif
@@ -946,7 +946,7 @@ namespace HS2SandboxPlugin
             if (oci?.guideObject == null)
                 return false;
 
-#if KKS
+#if KKS || KK
             if (TrySetCharacterGuideWorldPositionFromChangeAmount(oci, worldPosition))
                 return true;
 #endif
@@ -977,7 +977,7 @@ namespace HS2SandboxPlugin
             }
         }
 
-#if KKS
+#if KKS || KK
         /// <summary>
         /// KKS character guides often disagree with <see cref="GuideObject.transformTarget"/>; use Studio changeAmount space.
         /// </summary>
@@ -1104,7 +1104,7 @@ namespace HS2SandboxPlugin
             try
             {
                 var tn = oci.treeNodeObject;
-                if (tn != null && !string.IsNullOrWhiteSpace(tn.textName))
+                if (tn != null && !StringEx.IsNullOrWhiteSpace(tn.textName))
                     return tn.textName.Trim();
             }
             catch
@@ -1115,7 +1115,7 @@ namespace HS2SandboxPlugin
             try
             {
                 var param = oci.oiCharInfo?.charFile?.parameter;
-                if (param != null && !string.IsNullOrWhiteSpace(param.fullname))
+                if (param != null && !StringEx.IsNullOrWhiteSpace(param.fullname))
                     return param.fullname.Trim();
             }
             catch
@@ -1146,11 +1146,11 @@ namespace HS2SandboxPlugin
 
                 _setExHookValue?.Invoke(item.FilePath, ociChar);
                 fileInfo.Load(br, version);
-#if KKS
+#if KKS || KK
                 bool hadGuidePos = TryGetCharacterWorldPosition(ociChar, out Vector3 guidePosBefore);
 #endif
                 fileInfo.Apply(ociChar);
-#if KKS
+#if KKS || KK
                 if (hadGuidePos)
                     RestoreCharacterGuideWorldPositionAfterPoseApply(ociChar, guidePosBefore);
 #endif
@@ -1164,7 +1164,7 @@ namespace HS2SandboxPlugin
             }
         }
 
-#if KKS
+#if KKS || KK
         /// <summary>
         /// Pose IK/FK apply can shift the character guide on KKS; keep the pre-apply studio layout position.
         /// </summary>
@@ -1269,7 +1269,7 @@ namespace HS2SandboxPlugin
 
                 if (item.IsPng)
                 {
-                    byte[] pngBytes = LoadPngBytes(item.FilePath) ?? Array.Empty<byte>();
+                    byte[] pngBytes = LoadPngBytes(item.FilePath) ?? new byte[0];
                     if (!SavePose(item.FilePath, item.DisplayName, pngBytes, ociChar))
                         return false;
                     SyncPoseFileLayoutFromDisk(item);
@@ -1316,7 +1316,7 @@ namespace HS2SandboxPlugin
             try
             {
                 string relativePath = GetRelativePath(PoseRootPath, Path.GetDirectoryName(filePath) ?? "");
-                string backupDir = Path.Combine(PoseRootPath, BackupFolder, relativePath);
+                string backupDir = PathEx.Combine(PoseRootPath, BackupFolder, relativePath);
                 if (!Directory.Exists(backupDir))
                     Directory.CreateDirectory(backupDir);
 
@@ -1550,11 +1550,11 @@ namespace HS2SandboxPlugin
                     using var br = new BinaryReader(ms);
                     var fileInfo = new PauseCtrl.FileInfo(null);
                     fileInfo.Load(br, PoseVersion);
-#if KKS
+#if KKS || KK
                     bool hadGuidePos = TryGetCharacterWorldPosition(oci, out Vector3 guidePosBefore);
 #endif
                     fileInfo.Apply(oci);
-#if KKS
+#if KKS || KK
                     if (hadGuidePos)
                         RestoreCharacterGuideWorldPositionAfterPoseApply(oci, guidePosBefore);
 #endif
@@ -1581,7 +1581,7 @@ namespace HS2SandboxPlugin
 
     internal sealed class PoseCharacterSnapshot
     {
-        public byte[] PoseData = Array.Empty<byte>();
+        public byte[] PoseData = new byte[0];
         public Vector3 Position;
         public Quaternion Rotation = Quaternion.identity;
         public bool HasPosition;

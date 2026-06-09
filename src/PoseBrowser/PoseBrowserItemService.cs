@@ -96,7 +96,7 @@ namespace HS2SandboxPlugin
             try
             {
                 var tn = oci.treeNodeObject;
-                if (tn != null && !string.IsNullOrWhiteSpace(tn.textName))
+                if (tn != null && !StringEx.IsNullOrWhiteSpace(tn.textName))
                     return tn.textName.Trim();
             }
             catch
@@ -277,7 +277,7 @@ namespace HS2SandboxPlugin
             record.ItemScale = itemScale;
             record.HasAttachChangeAmount = false;
 
-            if (!string.IsNullOrWhiteSpace(record.ParentTreePath) &&
+            if (!StringEx.IsNullOrWhiteSpace(record.ParentTreePath) &&
                 TryGetItemGuideChangeAmount(item, out Vector3 attachPos, out Vector3 attachRotEuler))
             {
                 record.HasAttachChangeAmount = true;
@@ -340,7 +340,7 @@ namespace HS2SandboxPlugin
                 {
                     int sep = treePath.LastIndexOf('|');
                     string leaf = sep >= 0 ? treePath.Substring(sep + 1) : treePath;
-                    if (!string.IsNullOrWhiteSpace(leaf))
+                    if (!StringEx.IsNullOrWhiteSpace(leaf))
                         return leaf.Trim();
                 }
 
@@ -391,7 +391,7 @@ namespace HS2SandboxPlugin
             var record = new PoseAssociatedItemRecord
             {
                 ItemKind = info.kind,
-                ItemKinds = info.kinds ?? Array.Empty<int>(),
+                ItemKinds = info.kinds ?? new int[0],
                 DisplayName = GetItemDisplayName(item),
                 ParentObjectName = DetectParentBodyPartName(item, anchor),
                 SavedAnchorBodyHeight = anchorH,
@@ -454,8 +454,8 @@ namespace HS2SandboxPlugin
             if (!options.AppliesAnyTransform)
             {
                 if (!attachedToBodyPart && !forceFree &&
-                    (!string.IsNullOrWhiteSpace(record.ParentTreePath) ||
-                     !string.IsNullOrWhiteSpace(record.ParentObjectName)))
+                    (!StringEx.IsNullOrWhiteSpace(record.ParentTreePath) ||
+                     !StringEx.IsNullOrWhiteSpace(record.ParentObjectName)))
                 {
                     string label = record.ParentObjectName ?? record.ParentTreePath ?? "parent";
                     rowWarning = $"Body part '{label}' not found in workspace tree — placed freely";
@@ -484,8 +484,8 @@ namespace HS2SandboxPlugin
                 rowWarning = transformWarn;
 
             if (!attachedToBodyPart && !forceFree &&
-                (!string.IsNullOrWhiteSpace(record.ParentTreePath) ||
-                 !string.IsNullOrWhiteSpace(record.ParentObjectName)))
+                (!StringEx.IsNullOrWhiteSpace(record.ParentTreePath) ||
+                 !StringEx.IsNullOrWhiteSpace(record.ParentObjectName)))
             {
                 string label = record.ParentObjectName ?? record.ParentTreePath ?? "parent";
                 rowWarning = $"Body part '{label}' not found in workspace tree — placed freely";
@@ -752,7 +752,7 @@ namespace HS2SandboxPlugin
             if (node != null)
                 return node;
 
-            if (string.IsNullOrWhiteSpace(record.ParentObjectName))
+            if (StringEx.IsNullOrWhiteSpace(record.ParentObjectName))
                 return null;
 
             return PoseItemTreeAttach.FindDescendantUnderCharacter(anchor, record.ParentObjectName);

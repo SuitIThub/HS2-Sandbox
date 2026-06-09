@@ -459,7 +459,7 @@ namespace HS2SandboxPlugin
             GUILayout.EndScrollView();
         }
 
-        private void MaybeScrollStashToPendingDelete(IReadOnlyList<PoseBrowserStashEntry> entries, float viewHeight)
+        private void MaybeScrollStashToPendingDelete(IList<PoseBrowserStashEntry> entries, float viewHeight)
         {
             if (string.IsNullOrEmpty(_pendingDeleteStashEntryId) || viewHeight <= 0f)
                 return;

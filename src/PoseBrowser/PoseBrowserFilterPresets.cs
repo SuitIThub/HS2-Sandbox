@@ -14,8 +14,8 @@ namespace HS2SandboxPlugin
         public bool tagFilterAndMode = true;
         public int tagFilterGroupsMode;
         public int tagFilterThumbnailMode;
-        public string[] includeTags = Array.Empty<string>();
-        public string[] excludeTags = Array.Empty<string>();
+        public string[] includeTags = new string[0];
+        public string[] excludeTags = new string[0];
 
         public bool MatchesState(
             string searchText,
@@ -23,8 +23,8 @@ namespace HS2SandboxPlugin
             bool tagFilterAndMode,
             int tagFilterGroupsMode,
             int tagFilterThumbnailMode,
-            IReadOnlyCollection<string> includeTags,
-            IReadOnlyCollection<string> excludeTags)
+            ICollection<string> includeTags,
+            ICollection<string> excludeTags)
         {
             return string.Equals(this.searchText ?? "", searchText ?? "", StringComparison.Ordinal)
                 && searchUseRegex == this.searchUseRegex
@@ -35,9 +35,9 @@ namespace HS2SandboxPlugin
                 && TagSetsEqual(this.excludeTags, excludeTags);
         }
 
-        private static bool TagSetsEqual(string[]? saved, IReadOnlyCollection<string> current)
+        private static bool TagSetsEqual(string[]? saved, ICollection<string> current)
         {
-            var a = saved ?? Array.Empty<string>();
+            var a = saved ?? new string[0];
             var set = new HashSet<string>(current, StringComparer.OrdinalIgnoreCase);
             if (set.Count != a.Length)
                 return false;
@@ -60,7 +60,7 @@ namespace HS2SandboxPlugin
         public const int FormatVersion = 1;
 
         public static string GetDefaultPath()
-            => Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_filter_presets.json");
+            => PathEx.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_filter_presets.json");
 
         public static bool TryLoad(string path, out List<PoseBrowserFilterPreset> presets)
         {
@@ -83,7 +83,7 @@ namespace HS2SandboxPlugin
             return presets.Count > 0;
         }
 
-        public static void Save(string path, IReadOnlyList<PoseBrowserFilterPreset> presets)
+        public static void Save(string path, IList<PoseBrowserFilterPreset> presets)
         {
             try
             {
@@ -96,10 +96,7 @@ namespace HS2SandboxPlugin
                 var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
                 File.WriteAllText(tempPath, json, utf8);
 
-                if (File.Exists(path))
-                    File.Replace(tempPath, path, null);
-                else
-                    File.Move(tempPath, path);
+                FileEx.CommitTempFile(tempPath, path);
             }
             catch (Exception ex)
             {
@@ -107,7 +104,7 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private static string BuildJson(IReadOnlyList<PoseBrowserFilterPreset> presets)
+        private static string BuildJson(IList<PoseBrowserFilterPreset> presets)
         {
             var sb = new StringBuilder(256);
             sb.Append("{\n  \"version\": ").Append(FormatVersion)
@@ -140,7 +137,7 @@ namespace HS2SandboxPlugin
         private static void AppendStringArray(StringBuilder sb, string[]? tags)
         {
             sb.Append('[');
-            var arr = tags ?? Array.Empty<string>();
+            var arr = tags ?? new string[0];
             for (int i = 0; i < arr.Length; i++)
             {
                 if (i > 0)
@@ -200,10 +197,10 @@ namespace HS2SandboxPlugin
                     preset.tagFilterGroupsMode = TryParseDisplayFilterMode(obj, "tagFilterGroupsMode", "tagFilterExcludeGroups");
                     preset.tagFilterThumbnailMode = TryParseDisplayFilterMode(obj, "tagFilterThumbnailMode", "tagFilterExcludeNoThumbnail");
                     if (TryParseStringArray(obj, "includeTags", out string[]? inc))
-                        preset.includeTags = inc ?? Array.Empty<string>();
+                        preset.includeTags = inc ?? new string[0];
                     if (TryParseStringArray(obj, "excludeTags", out string[]? exc))
-                        preset.excludeTags = exc ?? Array.Empty<string>();
-                    if (!string.IsNullOrWhiteSpace(preset.name))
+                        preset.excludeTags = exc ?? new string[0];
+                    if (!StringEx.IsNullOrWhiteSpace(preset.name))
                         presets.Add(preset);
                 }
 
@@ -218,7 +215,7 @@ namespace HS2SandboxPlugin
 
         private static bool TryParseStringArray(string obj, string key, out string[]? values)
         {
-            values = Array.Empty<string>();
+            values = new string[0];
             int keyIdx = obj.IndexOf('"' + key + '"', StringComparison.OrdinalIgnoreCase);
             if (keyIdx < 0)
                 return false;

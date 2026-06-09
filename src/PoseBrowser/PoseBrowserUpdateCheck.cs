@@ -22,15 +22,20 @@ namespace HS2SandboxPlugin
         public string? RemoteVersion { get; private set; }
         public string? DownloadUrl { get; private set; }
 
-        private static readonly Regex PoseBrowserVersionRegex = VersionsJsonStringRegex(
-            PoseBrowserVersionInfo.VersionsJsonVersionKey);
+        private static Regex _poseBrowserVersionRegex;
+        private static Regex PoseBrowserVersionRegex =>
+            _poseBrowserVersionRegex ??
+            (_poseBrowserVersionRegex = VersionsJsonStringRegex(PoseBrowserVersionInfo.VersionsJsonVersionKey));
 
-        private static readonly Regex PoseBrowserDownloadRegex = VersionsJsonUrlRegex(
-            PoseBrowserVersionInfo.VersionsJsonDownloadKey);
+        private static Regex _poseBrowserDownloadRegex;
+        private static Regex PoseBrowserDownloadRegex =>
+            _poseBrowserDownloadRegex ??
+            (_poseBrowserDownloadRegex = VersionsJsonUrlRegex(PoseBrowserVersionInfo.VersionsJsonDownloadKey));
 
-        private static readonly Regex AllInOneDownloadRegex = new Regex(
-            @"""allInOneDownload""\s*:\s*""(https://[^""]+)""",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static Regex _allInOneDownloadRegex;
+        private static Regex AllInOneDownloadRegex =>
+            _allInOneDownloadRegex ??
+            (_allInOneDownloadRegex = RegexEx.Create(@"""allInOneDownload""\s*:\s*""(https://[^""]+)"""));
 
         public IEnumerator RunCheck()
         {
@@ -46,7 +51,7 @@ namespace HS2SandboxPlugin
                 versionsJsonDownload = downloadUrl;
             });
 
-            if (string.IsNullOrWhiteSpace(remoteVersion))
+            if (StringEx.IsNullOrWhiteSpace(remoteVersion))
             {
                 State = Status.Unavailable;
                 yield break;
@@ -94,15 +99,20 @@ namespace HS2SandboxPlugin
             using (var req = UnityWebRequest.Get(PoseBrowserVersionInfo.VersionsJsonUrl))
             {
                 req.timeout = 12;
+#if KK
+                yield return req.Send();
+                if (!string.IsNullOrEmpty(req.error))
+#else
                 yield return req.SendWebRequest();
-
                 if (req.isNetworkError || req.isHttpError)
+#endif
                 {
                     onDone(null, null);
                     yield break;
                 }
 
-                string body = req.downloadHandler.text ?? "";
+                string body = req.downloadHandler != null ? req.downloadHandler.text : "";
+                if (body == null) body = "";
                 string version = null;
                 var versionMatch = PoseBrowserVersionRegex.Match(body);
                 if (versionMatch.Success)
@@ -126,15 +136,20 @@ namespace HS2SandboxPlugin
                 req.timeout = 15;
                 req.SetRequestHeader("Accept", "application/vnd.github+json");
                 req.SetRequestHeader("User-Agent", PoseBrowserVersionInfo.UpdateCheckUserAgent);
+#if KK
+                yield return req.Send();
+                if (!string.IsNullOrEmpty(req.error))
+#else
                 yield return req.SendWebRequest();
-
                 if (req.isNetworkError || req.isHttpError)
+#endif
                 {
                     onDone(null);
                     yield break;
                 }
 
-                string body = req.downloadHandler.text ?? "";
+                string body = req.downloadHandler != null ? req.downloadHandler.text : "";
+                if (body == null) body = "";
                 onDone(TryParseAssetDownloadUrl(body, assetFileName));
             }
         }
@@ -152,23 +167,16 @@ namespace HS2SandboxPlugin
                 "\"name\"\\s*:\\s*\"" + Regex.Escape(assetFileName) +
                 "\"[\\s\\S]{0,8000}?\"browser_download_url\"\\s*:\\s*\"(?<url>https://[^\"]+)\"";
 
-            var match = Regex.Match(
-                releasesJson,
-                pattern,
-                RegexOptions.CultureInvariant | RegexOptions.Singleline);
+            var match = RegexEx.Create(pattern).Match(releasesJson);
 
             return match.Success ? match.Groups["url"].Value : null;
         }
 
         private static Regex VersionsJsonStringRegex(string key) =>
-            new Regex(
-                "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"([^\"]+)\"",
-                RegexOptions.Compiled | RegexOptions.CultureInvariant);
+            RegexEx.Create("\"" + Regex.Escape(key) + "\"\\s*:\\s*\"([^\"]+)\"");
 
         private static Regex VersionsJsonUrlRegex(string key) =>
-            new Regex(
-                "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"(https://[^\"]+)\"",
-                RegexOptions.Compiled | RegexOptions.CultureInvariant);
+            RegexEx.Create("\"" + Regex.Escape(key) + "\"\\s*:\\s*\"(https://[^\"]+)\"");
     }
 
     internal static class PoseBrowserSemver
@@ -186,7 +194,7 @@ namespace HS2SandboxPlugin
         private static void Parse(string version, out int major, out int minor, out int patch)
         {
             major = minor = patch = 0;
-            if (string.IsNullOrWhiteSpace(version))
+            if (StringEx.IsNullOrWhiteSpace(version))
                 return;
 
             var parts = version.Trim().Split('.');

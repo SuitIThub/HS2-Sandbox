@@ -211,7 +211,7 @@ namespace HS2SandboxPlugin
                     CaptureRect.height);
 
                 var tex = PoseDataService.CaptureScreenArea(cam, flippedRect);
-                byte[] pngBytes = ImageConversion.EncodeToPNG(tex);
+                byte[] pngBytes = tex.EncodeToPNG();
                 UnityEngine.Object.Destroy(tex);
 
                 _onCaptured?.Invoke(CurrentItem, pngBytes);

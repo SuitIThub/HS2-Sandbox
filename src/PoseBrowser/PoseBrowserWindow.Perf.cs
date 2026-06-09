@@ -56,7 +56,7 @@ namespace HS2SandboxPlugin
             _cachedStudioHasSelectedCharacters = _cachedStudioSelectedChars.Count > 0;
         }
 
-        private IReadOnlyList<string> GetCachedStudioCharacterDisplayNames()
+        private IList<string> GetCachedStudioCharacterDisplayNames()
         {
             RefreshStudioSelectionCacheIfDue(force: false);
             return _cachedStudioSelectedCharNames;
@@ -68,14 +68,14 @@ namespace HS2SandboxPlugin
             return _cachedStudioHasSelectedCharacters;
         }
 
-        private IReadOnlyList<OCIChar> GetCachedStudioSelectedCharacters()
+        private IList<OCIChar> GetCachedStudioSelectedCharacters()
         {
             RefreshStudioSelectionCacheIfDue(force: false);
             return _cachedStudioSelectedChars;
         }
 
         private List<PoseBrowserGridRow> GetOrBuildGridRows(
-            IReadOnlyList<PoseBrowserDisplayEntry> visibleEntries,
+            IList<PoseBrowserDisplayEntry> visibleEntries,
             int columns)
         {
             int displayCount = _displayEntries.Count;

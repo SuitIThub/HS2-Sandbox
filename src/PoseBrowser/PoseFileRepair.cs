@@ -410,7 +410,7 @@ namespace HS2SandboxPlugin
         {
             long remaining = fs.Length - offset;
             if (remaining <= 0 || remaining > int.MaxValue)
-                return Array.Empty<byte>();
+                return new byte[0];
             var bytes = new byte[remaining];
             fs.Seek(offset, SeekOrigin.Begin);
             fs.Read(bytes, 0, bytes.Length);
@@ -574,14 +574,15 @@ namespace HS2SandboxPlugin
                 string[] dirs;
                 try
                 {
-                    files = Directory.EnumerateFiles(dir)
+                    files = Directory.GetFiles(dir)
                         .Where(f =>
                         {
                             string ext = Path.GetExtension(f);
                             return ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
                                 || ext.Equals(".dat", StringComparison.OrdinalIgnoreCase);
                         })
-                        .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
+                        .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
                     dirs = Directory.GetDirectories(dir);
                 }
                 catch

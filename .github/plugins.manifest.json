@@ -123,6 +123,21 @@
       }
     },
     {
+      "key": "posebrowserkk",
+      "displayName": "Pose Browser (KK)",
+      "projectName": "KKSandbox.PoseBrowser",
+      "versionFile": "src/PoseBrowser/PoseBrowserVersionInfo.cs",
+      "versionMatchIndex": 1,
+      "releaseArtifactPath": "targets/KK/PoseBrowser/bin/Release/KKSandbox.PoseBrowser.dll",
+      "releaseDllFileName": "KKSandbox.PoseBrowser.dll",
+      "versionsJsonKey": "poseBrowserKk",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### KK Sandbox — Pose Browser (`KKSandbox.PoseBrowser.dll`)",
+        "downloadLabel": "Pose Browser (KK)"
+      }
+    },
+    {
       "key": "allinone",
       "displayName": "All-in-one",
       "versionFile": "_deprecated/HS2SandboxPlugin.cs",

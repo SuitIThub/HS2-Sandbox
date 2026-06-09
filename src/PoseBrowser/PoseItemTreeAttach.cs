@@ -32,7 +32,7 @@ namespace HS2SandboxPlugin
 
         public static TreeNodeObject? ResolveParentTreeNode(OCIChar anchor, string? parentTreePath)
         {
-            if (string.IsNullOrWhiteSpace(parentTreePath) || anchor.treeNodeObject == null)
+            if (StringEx.IsNullOrWhiteSpace(parentTreePath) || anchor.treeNodeObject == null)
                 return null;
 
             TreeNodeObject? node = anchor.treeNodeObject;
@@ -70,7 +70,7 @@ namespace HS2SandboxPlugin
         /// <summary>Find a descendant workspace node under the character by row text (FK / body-part rows).</summary>
         public static TreeNodeObject? FindDescendantUnderCharacter(OCIChar anchor, string text)
         {
-            if (anchor.treeNodeObject == null || string.IsNullOrWhiteSpace(text))
+            if (anchor.treeNodeObject == null || StringEx.IsNullOrWhiteSpace(text))
                 return null;
 
             string key = text.Trim();
@@ -109,7 +109,7 @@ namespace HS2SandboxPlugin
             if (anchor.charInfo == null)
                 return false;
 
-            if (!string.IsNullOrWhiteSpace(parentObjectName) &&
+            if (!StringEx.IsNullOrWhiteSpace(parentObjectName) &&
                 TryFindBoneTransform(anchor, parentObjectName.Trim(), out Transform? fromName) &&
                 fromName != null &&
                 !IsCharacterRootTransform(anchor, fromName))
@@ -128,10 +128,10 @@ namespace HS2SandboxPlugin
                 return true;
             }
 
-            if (!string.IsNullOrWhiteSpace(parentTreePath) || !string.IsNullOrWhiteSpace(parentObjectName))
+            if (!StringEx.IsNullOrWhiteSpace(parentTreePath) || !StringEx.IsNullOrWhiteSpace(parentObjectName))
             {
                 TreeNodeObject? node = ResolveParentTreeNode(anchor, parentTreePath);
-                if (node == null && !string.IsNullOrWhiteSpace(parentObjectName))
+                if (node == null && !StringEx.IsNullOrWhiteSpace(parentObjectName))
                     node = FindDescendantUnderCharacter(anchor, parentObjectName!);
 
                 if (node != null &&
@@ -174,13 +174,13 @@ namespace HS2SandboxPlugin
 
         public static string? GetTreePathLeaf(string? parentTreePath)
         {
-            if (string.IsNullOrWhiteSpace(parentTreePath))
+            if (StringEx.IsNullOrWhiteSpace(parentTreePath))
                 return null;
 
             string path = parentTreePath.Trim();
             int sep = path.LastIndexOf(PathSeparator);
             string leaf = sep >= 0 ? path.Substring(sep + 1) : path;
-            return string.IsNullOrWhiteSpace(leaf) ? null : leaf.Trim();
+            return StringEx.IsNullOrWhiteSpace(leaf) ? null : leaf.Trim();
         }
 
         private static bool IsCharacterRootTransform(OCIChar anchor, Transform transform)
@@ -193,7 +193,7 @@ namespace HS2SandboxPlugin
         }
 
         public static bool IsAttachedToBodyPart(PoseAssociatedItemRecord record) =>
-            !string.IsNullOrWhiteSpace(record.ParentTreePath);
+            !StringEx.IsNullOrWhiteSpace(record.ParentTreePath);
 
         private static bool TryGetTransformForTreeNode(OCIChar anchor, TreeNodeObject node, out Transform? transform)
         {
@@ -272,7 +272,7 @@ namespace HS2SandboxPlugin
             }
 
             segments.Reverse();
-            return segments.Count == 0 ? string.Empty : string.Join(PathSeparator.ToString(), segments);
+            return segments.Count == 0 ? string.Empty : string.Join(PathSeparator.ToString(), segments.ToArray());
         }
 
         private static TreeNodeObject? FindDirectChildByText(TreeNodeObject parent, string text)

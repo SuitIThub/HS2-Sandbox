@@ -7,7 +7,7 @@ namespace HS2SandboxPlugin
     /// <summary>Suggests a shared group name from pose display names that differ only by simple variants (A/B, F/M, 1/2, etc.).</summary>
     public static class PoseGroupNameSuggest
     {
-        public static string Suggest(IReadOnlyList<string> poseNames)
+        public static string Suggest(IList<string> poseNames)
         {
             if (poseNames == null || poseNames.Count == 0)
                 return "";
@@ -102,7 +102,7 @@ namespace HS2SandboxPlugin
             if (merged.Count == 0)
                 return false;
 
-            result = CollapseSpaces(string.Join(" ", merged));
+            result = CollapseSpaces(string.Join(" ", merged.ToArray()));
             return result.Length > 0;
         }
 
@@ -130,7 +130,7 @@ namespace HS2SandboxPlugin
             return result.Length > 0;
         }
 
-        private static bool TryMergeGenderPrefixedTokens(IReadOnlyList<string> tokens, out string merged)
+        private static bool TryMergeGenderPrefixedTokens(IList<string> tokens, out string merged)
         {
             merged = "";
             if (tokens.Count < 2)
@@ -148,7 +148,7 @@ namespace HS2SandboxPlugin
             return merged.Length > 0;
         }
 
-        private static bool IsSingleLetterVariantColumn(IReadOnlyList<string> tokens)
+        private static bool IsSingleLetterVariantColumn(IList<string> tokens)
         {
             if (tokens.Count < 2)
                 return false;
@@ -175,7 +175,7 @@ namespace HS2SandboxPlugin
 
         private static bool IsAcceptableSuggestion(List<string> names, string suggested)
         {
-            if (string.IsNullOrWhiteSpace(suggested))
+            if (StringEx.IsNullOrWhiteSpace(suggested))
                 return false;
 
             suggested = suggested.Trim();
@@ -186,7 +186,7 @@ namespace HS2SandboxPlugin
         private static string[] SplitTokens(string name) =>
             name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
-        private static int CommonPrefixLength(IReadOnlyList<string> strings)
+        private static int CommonPrefixLength(IList<string> strings)
         {
             if (strings.Count == 0)
                 return 0;
@@ -206,7 +206,7 @@ namespace HS2SandboxPlugin
             return i;
         }
 
-        private static int CommonSuffixLength(IReadOnlyList<string> strings)
+        private static int CommonSuffixLength(IList<string> strings)
         {
             if (strings.Count == 0)
                 return 0;
@@ -233,7 +233,7 @@ namespace HS2SandboxPlugin
                 return text;
 
             var parts = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            return string.Join(" ", parts);
+            return string.Join(" ", parts.ToArray());
         }
     }
 }

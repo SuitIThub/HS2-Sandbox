@@ -89,7 +89,7 @@ namespace HS2SandboxPlugin
 
             _poseHistory.Undo(_dataService, selected, HistoryMaxEntries);
             _poseHistory.SaveToDiskIfDirty();
-#if !KKS
+#if HS2
             ResetHeelzOverridesForCharacters(selected);
 #endif
         }
@@ -108,12 +108,12 @@ namespace HS2SandboxPlugin
 
             _poseHistory.Redo(_dataService, selected, HistoryMaxEntries);
             _poseHistory.SaveToDiskIfDirty();
-#if !KKS
+#if HS2
             ResetHeelzOverridesForCharacters(selected);
 #endif
         }
 
-#if !KKS
+#if HS2
         private static void ResetHeelzOverridesForCharacters(IEnumerable<Studio.OCIChar> characters)
         {
             foreach (var oci in characters)
@@ -165,7 +165,7 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private void RecordPoseHistoryBeforeMultiApply(IReadOnlyList<PoseGridItem> poses, IReadOnlyList<OCIChar> chars)
+        private void RecordPoseHistoryBeforeMultiApply(IList<PoseGridItem> poses, IList<OCIChar> chars)
         {
             if (_thumbCapture.IsActive || _poseHistory.IsSuppressed || poses.Count == 0 || chars.Count == 0)
                 return;
@@ -173,11 +173,11 @@ namespace HS2SandboxPlugin
             try
             {
                 var plan = PoseBrowserCharacterApply.BuildFullPlannedPoseAssignmentPlan(_characterConfig, poses, chars);
-                var assignments = new List<(OCIChar character, string toPoseLabel)>();
-                foreach (var (pose, characters) in plan)
+                var assignments = new List<OciLabelPair>();
+                foreach (PoseCharListPair planEntry in plan)
                 {
-                    foreach (var c in characters)
-                        assignments.Add((c, pose.DisplayName));
+                    foreach (var c in planEntry.Characters)
+                        assignments.Add(new OciLabelPair(c, planEntry.Pose.DisplayName));
                 }
 
                 if (assignments.Count == 0)
@@ -192,7 +192,7 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private void RecordPoseHistoryAfterMultiApply(IReadOnlyList<PoseGridItem> poses, IReadOnlyList<OCIChar> chars)
+        private void RecordPoseHistoryAfterMultiApply(IList<PoseGridItem> poses, IList<OCIChar> chars)
         {
             if (_thumbCapture.IsActive || _poseHistory.IsSuppressed || poses.Count == 0 || chars.Count == 0)
                 return;
@@ -200,11 +200,11 @@ namespace HS2SandboxPlugin
             try
             {
                 var plan = PoseBrowserCharacterApply.BuildFullPlannedPoseAssignmentPlan(_characterConfig, poses, chars);
-                var assignments = new List<(OCIChar character, string appliedPoseLabel)>();
-                foreach (var (pose, characters) in plan)
+                var assignments = new List<OciLabelPair>();
+                foreach (PoseCharListPair planEntry in plan)
                 {
-                    foreach (var c in characters)
-                        assignments.Add((c, pose.DisplayName));
+                    foreach (var c in planEntry.Characters)
+                        assignments.Add(new OciLabelPair(c, planEntry.Pose.DisplayName));
                 }
 
                 if (assignments.Count == 0)
@@ -261,7 +261,7 @@ namespace HS2SandboxPlugin
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
         }
 
-        private void DrawHistoryTimelineForSelected(IReadOnlyList<OCIChar> selected)
+        private void DrawHistoryTimelineForSelected(IList<OCIChar> selected)
         {
             var timelines = _poseHistory.GetTimelinesForSelected(selected);
             _historyScroll = GUILayout.BeginScrollView(_historyScroll, GUILayout.ExpandHeight(true));
@@ -328,7 +328,7 @@ namespace HS2SandboxPlugin
 
         private static bool TryResolveTimelineCharacter(
             PoseBrowserCharacterTimeline tl,
-            IReadOnlyList<OCIChar> selected,
+            IList<OCIChar> selected,
             out OCIChar oci)
         {
             oci = null;

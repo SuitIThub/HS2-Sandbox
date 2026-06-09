@@ -12,6 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Memory" Version="4.6.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="$(AssetsRoot)notes-icon.png" CopyToOutputDirectory="Always" Link="notes-icon.png" />
     <EmbeddedResource Include="$(AssetsRoot)notes-icon.png">
       <LogicalName>$(AssemblyName).notes-icon.png</LogicalName>

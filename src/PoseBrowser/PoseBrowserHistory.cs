@@ -82,7 +82,7 @@ namespace HS2SandboxPlugin
         public bool IsSuppressed => _suppressDepth > 0;
 
         public static string GetDefaultPath() =>
-            Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_history.json");
+            PathEx.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_history.json");
 
         public void LoadFromDisk()
         {
@@ -125,10 +125,7 @@ namespace HS2SandboxPlugin
                 string tempPath = path + ".tmp";
                 var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
                 File.WriteAllText(tempPath, json, utf8);
-                if (File.Exists(path))
-                    File.Replace(tempPath, path, null);
-                else
-                    File.Move(tempPath, path);
+                FileEx.CommitTempFile(tempPath, path);
                 _dirty = false;
             }
             catch (Exception ex)
@@ -220,33 +217,33 @@ namespace HS2SandboxPlugin
         }
 
         public void RecordBeforePoseApplyPlan(
-            IEnumerable<(OCIChar character, string toPoseLabel)> assignments)
+            IEnumerable<OciLabelPair> assignments)
         {
             if (IsSuppressed)
                 return;
 
-            foreach (var group in assignments.GroupBy(a => a.character))
+            foreach (var group in assignments.GroupBy(a => a.Character))
             {
                 var oci = group.Key;
                 if (oci == null)
                     continue;
-                string toLabel = group.Last().toPoseLabel;
+                string toLabel = group.Last().Label;
                 RecordBeforePoseApply(new[] { oci }, toLabel);
             }
         }
 
         public void RecordAfterPoseApplyPlan(
-            IEnumerable<(OCIChar character, string appliedPoseLabel)> assignments)
+            IEnumerable<OciLabelPair> assignments)
         {
             if (IsSuppressed)
                 return;
 
-            foreach (var group in assignments.GroupBy(a => a.character))
+            foreach (var group in assignments.GroupBy(a => a.Character))
             {
                 var oci = group.Key;
                 if (oci == null)
                     continue;
-                string label = group.Last().appliedPoseLabel;
+                string label = group.Last().Label;
                 RecordAfterPoseApply(new[] { oci }, label);
             }
         }
@@ -334,7 +331,7 @@ namespace HS2SandboxPlugin
             _dirty = true;
         }
 
-        public IReadOnlyList<PoseBrowserCharacterTimeline> GetTimelinesForSelected(IEnumerable<OCIChar> selected)
+        public IList<PoseBrowserCharacterTimeline> GetTimelinesForSelected(IEnumerable<OCIChar> selected)
         {
             var list = new List<PoseBrowserCharacterTimeline>();
             var seen = new HashSet<int>();
@@ -417,7 +414,7 @@ namespace HS2SandboxPlugin
                 tl = new PoseBrowserCharacterTimeline { DicKey = dicKey, DisplayName = displayName };
                 _timelines[dicKey] = tl;
             }
-            else if (!string.IsNullOrWhiteSpace(displayName))
+            else if (!StringEx.IsNullOrWhiteSpace(displayName))
             {
                 tl.DisplayName = displayName;
             }
@@ -443,7 +440,7 @@ namespace HS2SandboxPlugin
         }
 
         private static string NormalizePoseLabel(string? label) =>
-            string.IsNullOrWhiteSpace(label) ? "(unnamed pose)" : label.Trim();
+            StringEx.IsNullOrWhiteSpace(label) ? "(unnamed pose)" : label.Trim();
 
         private string BuildJsonV1()
         {
@@ -505,7 +502,7 @@ namespace HS2SandboxPlugin
         private static bool TryParseV1(string json, out List<PoseBrowserCharacterTimeline> timelines)
         {
             timelines = new List<PoseBrowserCharacterTimeline>();
-            if (string.IsNullOrWhiteSpace(json))
+            if (StringEx.IsNullOrWhiteSpace(json))
                 return false;
 
             if (!TryReadIntField(json, "\"version\"", out int version) || version != FormatVersion)

@@ -12,8 +12,9 @@
 [![Notebook](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Notebook&query=%24.notebook&style=flat-square&color=8b5cf6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Notebook/NotebookModulePlugin.cs)
 [![Pose Browser (HS2)](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser+(HS2)&query=%24.poseBrowser&style=flat-square&color=0d9488)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/PoseBrowser/PoseBrowserModulePlugin.cs)
 [![Pose Browser (KKS)](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser+(KKS)&query=%24.poseBrowserKks&style=flat-square&color=14b8a6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/targets/KKS/PoseBrowser/Plugin.cs)
+[![Pose Browser (KK)](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Pose+Browser+(KK)&query=%24.poseBrowserKk&style=flat-square&color=0f766e)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/targets/KK/PoseBrowser/Plugin.cs)
 
-BepInEx plugins for **Honey Select 2** and **Koikatsu Sunshine** that add quality-of-life tools to **StudioNeoV2** / **Chara Studio**: automation helpers, a pose library, notes, search bars on long lists, and finer control over character scaling.
+BepInEx plugins for **Honey Select 2**, **Koikatsu Sunshine**, and **Koikatsu** that add quality-of-life tools to **StudioNeoV2** / **Chara Studio**: automation helpers, a pose library, notes, search bars on long lists, and finer control over character scaling.
 
 ---
 
@@ -28,6 +29,7 @@ BepInEx plugins for **Honey Select 2** and **Koikatsu Sunshine** that add qualit
   - [Notebook](#hs2-sandbox--notebook-hs2sandboxnotebookdll)
   - [Pose Browser (HS2)](#hs2-sandbox--pose-browser-hs2sandboxposebrowserdll)
   - [Pose Browser (KKS)](#kks-sandbox--pose-browser-kkssandboxposebrowserdll)
+  - [Pose Browser (KK)](#kk-sandbox--pose-browser-kksandboxposebrowserdll)
 - [All-in-one build](#all-in-one-build)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -106,6 +108,13 @@ Same pose library browser for **Koikatsu Sunshine** **Chara Studio**. Uses your 
 
 **Typical use:** install **`KKSSandbox.PoseBrowser.dll`** (and `pose-icon.png` beside it) under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.PoseBrowser.dll`**—they are separate game builds. The in-game update check reads **`poseBrowserKks`** / **`poseBrowserKksDownload`** from [`versions.json`](versions.json).
 
+### KK Sandbox — Pose Browser (`KKSandbox.PoseBrowser.dll`)
+[Download Pose Browser (KK)](https://github.com/SuitIThub/HS2-Sandbox/releases/latest/download/KKSandbox.PoseBrowser.dll)
+
+Same pose library browser for original **Koikatsu** **Chara Studio** (Unity 5.6 / .NET 3.5). Uses your game’s **`UserData/studio/pose`** folder with the same tagging, favorites, and file tools as the HS2/KKS builds.
+
+**Typical use:** install **`KKSandbox.PoseBrowser.dll`** (and `pose-icon.png` beside it) under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`poseBrowserKk`** / **`poseBrowserKkDownload`** from [`versions.json`](versions.json).
+
 ---
 
 ## All-in-one build
@@ -182,6 +191,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`) with a stable GUID.
 | Notebook | `com.hs2.sandbox.notebook` | None | Do not load with all-in-one. |
 | Pose Browser (HS2) | `com.hs2.sandbox.posebrowser` | None | ZIP exchange format: [`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`](Modules/PoseBrowser/POSE_ZIP_FORMAT.md). |
 | Pose Browser (KKS) | `com.kks.sandbox.posebrowser` | None | Same shared code; built with `KKS` define from `targets/KKS/PoseBrowser`. |
+| Pose Browser (KK) | `com.kk.sandbox.posebrowser` | None | Same shared code; built with `KK` define from `targets/KK/PoseBrowser` (net35). |
 
 ### Building from source
 
@@ -198,6 +208,7 @@ Each split module is its own BepInEx plugin (`BepInPlugin`) with a stable GUID.
    - All-in-one: `bin/Release/HS2SandboxPlugin.dll`
    - HS2 modules: `targets/HS2/<Name>/bin/Release/HS2Sandbox.<Name>.dll`
    - KKS Pose Browser: `targets/KKS/PoseBrowser/bin/Release/KKSSandbox.PoseBrowser.dll`
+   - KK Pose Browser: `targets/KK/PoseBrowser/bin/Release/KKSandbox.PoseBrowser.dll`
 
 Restore may show **NU1603** warnings; builds usually still succeed.
 

@@ -1,7 +1,6 @@
 <Project>
   <!-- Shared MSBuild settings for all plugin/module projects (all game targets) -->
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -24,8 +23,6 @@
     <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.4.21" />
     <PackageReference Include="BepInEx.PluginInfoProps" Version="1.1.0" />
-    <PackageReference Include="IronPython" Version="3.4.2" />
-    <PackageReference Include="System.Memory" Version="4.6.3" />
     <PackageReference Include="IllusionLibs.BepInEx.Harmony" Version="2.9.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>compile</IncludeAssets>

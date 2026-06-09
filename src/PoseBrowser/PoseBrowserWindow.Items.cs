@@ -29,7 +29,7 @@ namespace HS2SandboxPlugin
         private readonly List<OCIChar> _itemPaneCachedChars = new List<OCIChar>();
         private readonly List<OCIItem> _itemPaneCachedStudioItems = new List<OCIItem>();
         private bool _itemPaneCachedPoseMismatch;
-        private IReadOnlyList<PoseAssociatedItemRecord> _itemPaneCachedRecords = Array.Empty<PoseAssociatedItemRecord>();
+        private IList<PoseAssociatedItemRecord> _itemPaneCachedRecords = new PoseAssociatedItemRecord[0];
 
         private bool _itemLoadPosition = true;
         private bool _itemLoadRotation = true;
@@ -83,7 +83,7 @@ namespace HS2SandboxPlugin
             _itemAssociationCachedPoseFileInfoValid = false;
             _itemPaneCachedChars.Clear();
             _itemPaneCachedStudioItems.Clear();
-            _itemPaneCachedRecords = Array.Empty<PoseAssociatedItemRecord>();
+            _itemPaneCachedRecords = new PoseAssociatedItemRecord[0];
             _itemRenameIndex = -1;
             _itemPaneDeferredGuiAction = null;
         }
@@ -272,7 +272,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
         }
 
-        private void DrawItemAssociationAddSection(IReadOnlyList<OCIChar> chars, IReadOnlyList<OCIItem> studioItems)
+        private void DrawItemAssociationAddSection(IList<OCIChar> chars, IList<OCIItem> studioItems)
         {
             GUILayout.Label(BuildAddCandidatesLabel(chars, studioItems));
             bool canAdd = _itemAssociationPose != null && chars.Count == 1 && studioItems.Count > 0;
@@ -287,7 +287,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(4f);
         }
 
-        private static string BuildAddCandidatesLabel(IReadOnlyList<OCIChar> chars, IReadOnlyList<OCIItem> studioItems)
+        private static string BuildAddCandidatesLabel(IList<OCIChar> chars, IList<OCIItem> studioItems)
         {
             if (chars.Count != 1)
                 return "Select exactly one character in Studio to add items.";
@@ -311,7 +311,7 @@ namespace HS2SandboxPlugin
             return sb.ToString();
         }
 
-        private void DrawItemAssociationStoredRow(IReadOnlyList<PoseAssociatedItemRecord> records, int index)
+        private void DrawItemAssociationStoredRow(IList<PoseAssociatedItemRecord> records, int index)
         {
             var record = records[index];
             bool isCandidate = _itemAssociationCandidateKeys.Contains(record.CatalogKey);
@@ -326,7 +326,7 @@ namespace HS2SandboxPlugin
                 GUIContent.none,
                 GUILayout.Width(ItemPaneCheckboxWidth));
 
-            string displayName = string.IsNullOrWhiteSpace(record.DisplayName) ? "Item" : record.DisplayName.Trim();
+            string displayName = StringEx.IsNullOrWhiteSpace(record.DisplayName) ? "Item" : record.DisplayName.Trim();
             var nameStyle = isCandidate
                 ? _itemPaneStoredNameSelectedButtonStyle!
                 : _itemPaneStoredNameButtonStyle!;
@@ -377,7 +377,7 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
         }
 
-        private void DrawItemRenamePopup(IReadOnlyList<PoseAssociatedItemRecord> records)
+        private void DrawItemRenamePopup(IList<PoseAssociatedItemRecord> records)
         {
             if (_itemRenameIndex < 0 || _itemAssociationPose == null || _itemRenameIndex >= records.Count)
                 return;
@@ -396,7 +396,7 @@ namespace HS2SandboxPlugin
             GUILayout.EndVertical();
         }
 
-        private void AddSelectedWorkspaceItemsToPose(OCIChar anchor, IReadOnlyList<OCIItem> studioItems)
+        private void AddSelectedWorkspaceItemsToPose(OCIChar anchor, IList<OCIItem> studioItems)
         {
             if (_itemAssociationPose == null) return;
 
@@ -428,8 +428,8 @@ namespace HS2SandboxPlugin
         }
 
         private void DrawItemAssociationBulkLoadButtons(
-            IReadOnlyList<PoseAssociatedItemRecord> records,
-            IReadOnlyList<OCIChar> chars)
+            IList<PoseAssociatedItemRecord> records,
+            IList<OCIChar> chars)
         {
             bool canLoad = chars.Count == 1;
             GUI.enabled = canLoad;

@@ -93,7 +93,7 @@ namespace HS2SandboxPlugin
 
         private void DrawGroupEntityActionBar(
             PoseGroup group,
-            IReadOnlyList<PoseGridItem> members,
+            IList<PoseGridItem> members,
             float barBtnH,
             float barBtnMinW,
             float wrapWidth)
@@ -264,7 +264,7 @@ namespace HS2SandboxPlugin
 
         private void DrawGroupThumbnailCaptureButton(
             PoseGroup group,
-            IReadOnlyList<PoseGridItem> members,
+            IList<PoseGridItem> members,
             float barBtnH,
             float barBtnMinW,
             ActionBarWrapLayout wrap)
@@ -281,7 +281,7 @@ namespace HS2SandboxPlugin
 
         private bool CanCaptureGroupThumbnails(
             PoseGroup group,
-            IReadOnlyList<PoseGridItem> members,
+            IList<PoseGridItem> members,
             out string? disableReason)
         {
             disableReason = null;
@@ -303,6 +303,9 @@ namespace HS2SandboxPlugin
                 return false;
             }
 
+            foreach (var pose in members)
+                _tagDb.ApplyToItem(pose);
+
             var chars = _dataService.GetSelectedCharacters().ToList();
             if (chars.Count != members.Count)
             {
@@ -311,7 +314,7 @@ namespace HS2SandboxPlugin
                 return false;
             }
 
-            var poses = GetGroupMemberItemsInDisplayOrder(group.Id);
+            var poses = GetGroupMemberItems(group.Id);
             if (!PoseBrowserCharacterApply.CanApplyPosesOneToOne(_characterConfig, poses, chars))
             {
                 disableReason =
@@ -324,7 +327,7 @@ namespace HS2SandboxPlugin
 
         private void StartGroupThumbnailCapture(PoseGroup group)
         {
-            var members = GetGroupMemberItemsInDisplayOrder(group.Id);
+            var members = GetGroupMemberItems(group.Id);
             if (!CanCaptureGroupThumbnails(group, members, out string? reason))
             {
                 SandboxServices.Log.LogMessage($"PoseBrowser: Cannot capture group thumbnails — {reason}");
@@ -344,7 +347,7 @@ namespace HS2SandboxPlugin
             _thumbCapture.StartGroupCapture(
                 this,
                 members,
-                onGroupSetup: () => ApplyPosesListToSelectedCharacters(members, group.Id),
+                onGroupSetup: () => ApplyGroupMembersToSelectedCharacters(group.Id),
                 onGroupFocusIndex: focusIndex =>
                     PoseBrowserCharacterSimpleColor.ApplyGroupThumbnailFocus(assignmentList, focusIndex),
                 onGroupCleanup: () => PoseBrowserCharacterSimpleColor.RestoreAll(assignmentList),
@@ -354,7 +357,7 @@ namespace HS2SandboxPlugin
 
         private void DrawSaveGroupRelativePositionsButton(
             PoseGroup group,
-            IReadOnlyList<PoseGridItem> members,
+            IList<PoseGridItem> members,
             float barBtnH,
             float barBtnMinW,
             ActionBarWrapLayout? wrap = null)
@@ -385,7 +388,7 @@ namespace HS2SandboxPlugin
 
         private bool CanSaveGroupRelativePositions(
             PoseGroup group,
-            IReadOnlyList<PoseGridItem> members,
+            IList<PoseGridItem> members,
             out string? disableReason)
         {
             disableReason = null;
@@ -415,7 +418,7 @@ namespace HS2SandboxPlugin
                 return false;
             }
 
-            var poses = GetGroupMemberItemsInDisplayOrder(group.Id);
+            var poses = GetGroupMemberItems(group.Id);
             if (!PoseBrowserCharacterApply.CanApplyPosesOneToOne(_characterConfig, poses, chars))
             {
                 disableReason =
@@ -426,7 +429,7 @@ namespace HS2SandboxPlugin
             return true;
         }
 
-        private void SaveGroupRelativePositions(PoseGroup group, IReadOnlyList<PoseGridItem> members)
+        private void SaveGroupRelativePositions(PoseGroup group, IList<PoseGridItem> members)
         {
             if (!CanSaveGroupRelativePositions(group, members, out string? reason))
             {
@@ -434,7 +437,7 @@ namespace HS2SandboxPlugin
                 return;
             }
 
-            var poses = GetGroupMemberItemsInDisplayOrder(group.Id);
+            var poses = GetGroupMemberItems(group.Id);
             var chars = _dataService.GetSelectedCharacters().ToList();
             if (!PoseBrowserCharacterApply.TryBuildPoseCharacterAssignments(
                     _characterConfig, poses, chars, out var assignments) ||
@@ -444,13 +447,13 @@ namespace HS2SandboxPlugin
                 return;
             }
 
-            if (!PoseDataService.TryGetCharacterWorldPosition(assignments[0].character, out Vector3 anchorPos))
+            if (!PoseDataService.TryGetCharacterWorldPosition(assignments[0].Character, out Vector3 anchorPos))
             {
                 SandboxServices.Log.LogMessage("PoseBrowser: Cannot read anchor character world position.");
                 return;
             }
 
-            if (!PoseDataService.TryGetCharacterWorldRotation(assignments[0].character, out Quaternion anchorRot))
+            if (!PoseDataService.TryGetCharacterWorldRotation(assignments[0].Character, out Quaternion anchorRot))
             {
                 SandboxServices.Log.LogMessage("PoseBrowser: Cannot read anchor character rotation.");
                 return;
@@ -460,40 +463,40 @@ namespace HS2SandboxPlugin
             var heights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             var scales = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             var rotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
-            string anchorRel = assignments[0].pose.RelativePath(_dataService.PoseRootPath);
+            string anchorRel = assignments[0].Pose.RelativePath(_dataService.PoseRootPath);
             if (!string.IsNullOrEmpty(anchorRel) &&
-                PoseDataService.TryGetCharacterBodyHeight(assignments[0].character, out float anchorH))
+                PoseDataService.TryGetCharacterBodyHeight(assignments[0].Character, out float anchorH))
                 heights[anchorRel] = anchorH;
             if (!string.IsNullOrEmpty(anchorRel) &&
-                PoseDataService.TryGetCharacterObjectScale(assignments[0].character, out Vector3 anchorScale))
+                PoseDataService.TryGetCharacterObjectScale(assignments[0].Character, out Vector3 anchorScale))
                 scales[anchorRel] = anchorScale;
 
             for (int i = 1; i < assignments.Count; i++)
             {
-                if (!PoseDataService.TryGetCharacterWorldPosition(assignments[i].character, out Vector3 pos))
+                if (!PoseDataService.TryGetCharacterWorldPosition(assignments[i].Character, out Vector3 pos))
                 {
                     SandboxServices.Log.LogMessage(
-                        $"PoseBrowser: Cannot read world position for {PoseDataService.GetOCICharDisplayName(assignments[i].character)}.");
+                        $"PoseBrowser: Cannot read world position for {PoseDataService.GetOCICharDisplayName(assignments[i].Character)}.");
                     return;
                 }
 
-                if (!PoseDataService.TryGetCharacterWorldRotation(assignments[i].character, out Quaternion memberRot))
+                if (!PoseDataService.TryGetCharacterWorldRotation(assignments[i].Character, out Quaternion memberRot))
                 {
                     SandboxServices.Log.LogMessage(
-                        $"PoseBrowser: Cannot read rotation for {PoseDataService.GetOCICharDisplayName(assignments[i].character)}.");
+                        $"PoseBrowser: Cannot read rotation for {PoseDataService.GetOCICharDisplayName(assignments[i].Character)}.");
                     return;
                 }
 
-                string rel = assignments[i].pose.RelativePath(_dataService.PoseRootPath);
+                string rel = assignments[i].Pose.RelativePath(_dataService.PoseRootPath);
                 if (string.IsNullOrEmpty(rel))
                     continue;
                 offsets[rel] = PoseBrowserCharacterApply.RelativePositionOffset(anchorRot, anchorPos, pos);
                 Quaternion relativeRot = PoseBrowserCharacterApply.RelativeRotation(anchorRot, memberRot);
                 if (!PoseBrowserCharacterApply.IsNearIdentityRelativeRotation(relativeRot))
                     rotations[rel] = relativeRot;
-                if (PoseDataService.TryGetCharacterBodyHeight(assignments[i].character, out float h))
+                if (PoseDataService.TryGetCharacterBodyHeight(assignments[i].Character, out float h))
                     heights[rel] = h;
-                if (PoseDataService.TryGetCharacterObjectScale(assignments[i].character, out Vector3 s))
+                if (PoseDataService.TryGetCharacterObjectScale(assignments[i].Character, out Vector3 s))
                     scales[rel] = s;
             }
 
@@ -513,7 +516,7 @@ namespace HS2SandboxPlugin
             _anyPoseAppliedSinceLastGroupApply = true;
         }
 
-        private bool TryGetGroupIdForExactPoseList(IReadOnlyList<PoseGridItem> poses, out string? groupId)
+        private bool TryGetGroupIdForExactPoseList(IList<PoseGridItem> poses, out string? groupId)
         {
             groupId = null;
             if (poses.Count == 0)
@@ -529,7 +532,7 @@ namespace HS2SandboxPlugin
                     return false;
             }
 
-            var ordered = GetGroupMemberItemsInDisplayOrder(gid);
+            var ordered = GetGroupMemberItems(gid);
             if (ordered.Count != poses.Count)
                 return false;
 
@@ -635,7 +638,7 @@ namespace HS2SandboxPlugin
         }
 
         private void DrawPoseGroupingActions(
-            IReadOnlyList<PoseGridItem> librarySelected,
+            IList<PoseGridItem> librarySelected,
             float barBtnH,
             float barBtnMinW,
             bool hideUngroup,
@@ -1083,8 +1086,8 @@ namespace HS2SandboxPlugin
                 var group = new PoseGroup
                 {
                     Id = groupId,
-                    Name = string.IsNullOrWhiteSpace(pg.Name) ? "Group" : pg.Name.Trim(),
-                    Tags = new HashSet<string>(pg.Tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
+                    Name = StringEx.IsNullOrWhiteSpace(pg.Name) ? "Group" : pg.Name.Trim(),
+                    Tags = new HashSet<string>(pg.Tags ?? new string[0], StringComparer.OrdinalIgnoreCase)
                 };
 
                 foreach (var zipPath in pg.MemberZipPaths)
@@ -1170,7 +1173,7 @@ namespace HS2SandboxPlugin
 
         private int CountDisplayPoses() => _displayEntries.Count;
 
-        private bool SelectionIsExactlyOneFullGroup(IReadOnlyList<PoseGridItem> selected, out PoseGroup? group)
+        private bool SelectionIsExactlyOneFullGroup(IList<PoseGridItem> selected, out PoseGroup? group)
         {
             group = null;
             if (selected.Count == 0) return false;
@@ -1188,7 +1191,7 @@ namespace HS2SandboxPlugin
             return true;
         }
 
-        private bool CanMoveCopyAsWholeGroup(IReadOnlyList<PoseGridItem> librarySelected, out PoseGroup? group)
+        private bool CanMoveCopyAsWholeGroup(IList<PoseGridItem> librarySelected, out PoseGroup? group)
         {
             group = null;
             if (librarySelected.Count == 0 && _selectedGroupIds.Count > 0)
@@ -1198,7 +1201,7 @@ namespace HS2SandboxPlugin
             return SelectionIsExactlyOneFullGroup(librarySelected, out group);
         }
 
-        private void MoveCopyGroupsById(IReadOnlyList<string> groupIds, string destFolder, bool copy)
+        private void MoveCopyGroupsById(IList<string> groupIds, string destFolder, bool copy)
         {
             foreach (var gid in groupIds)
             {
@@ -1211,12 +1214,12 @@ namespace HS2SandboxPlugin
             }
         }
 
-        private bool SelectionHasGroupedPose(IReadOnlyList<PoseGridItem> selected)
+        private bool SelectionHasGroupedPose(IList<PoseGridItem> selected)
         {
             return selected.Any(s => !string.IsNullOrEmpty(s.GroupId));
         }
 
-        private void UngroupSelected(IReadOnlyList<PoseGridItem> selected)
+        private void UngroupSelected(IList<PoseGridItem> selected)
         {
             var ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (var it in selected)
@@ -1246,7 +1249,7 @@ namespace HS2SandboxPlugin
             RebuildDisplayList();
         }
 
-        private void RemoveSelectedFromGroups(IReadOnlyList<PoseGridItem> selected)
+        private void RemoveSelectedFromGroups(IList<PoseGridItem> selected)
         {
             foreach (var it in selected)
             {
@@ -1309,8 +1312,8 @@ namespace HS2SandboxPlugin
         }
 
         private List<PosePackExchange.PoseZipGroupJson> BuildExportGroupsForItems(
-            IReadOnlyList<PoseGridItem> items,
-            IReadOnlyDictionary<string, string> relToZipPath)
+            IList<PoseGridItem> items,
+            IDictionary<string, string> relToZipPath)
         {
             var relToZipNorm = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var kvp in relToZipPath)
@@ -1460,8 +1463,8 @@ namespace HS2SandboxPlugin
         }
 
         private void ImportGroupsFromPack(
-            IReadOnlyList<PosePackExchange.PosePackReadGroup> packGroups,
-            IReadOnlyDictionary<string, string> zipPathToNewRel)
+            IList<PosePackExchange.PosePackReadGroup> packGroups,
+            IDictionary<string, string> zipPathToNewRel)
         {
             var zipToRelNorm = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var kvp in zipPathToNewRel)
@@ -1489,7 +1492,7 @@ namespace HS2SandboxPlugin
                 {
                     Id = string.IsNullOrEmpty(pg.Id) ? Guid.NewGuid().ToString("N") : pg.Id,
                     Name = pg.Name,
-                    Tags = new HashSet<string>(pg.Tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase)
+                    Tags = new HashSet<string>(pg.Tags ?? new string[0], StringComparer.OrdinalIgnoreCase)
                 };
                 _groupDb.ImportGroup(group, oldToNew, pg.MemberRelativeOffsets, pg.MemberBodyHeights, pg.MemberRelativeRotations, pg.MemberObjectScales);
             }
@@ -1535,8 +1538,8 @@ namespace HS2SandboxPlugin
 
         private void CopyGroupRelativeOffsets(
             PoseGroup sourceGroup,
-            IReadOnlyList<PoseGridItem> sourceMembers,
-            IReadOnlyList<PoseGridItem> copyMembers,
+            IList<PoseGridItem> sourceMembers,
+            IList<PoseGridItem> copyMembers,
             PoseGroup destGroup)
         {
             if ((sourceGroup.MemberRelativeOffsets.Count == 0 &&
@@ -1552,8 +1555,10 @@ namespace HS2SandboxPlugin
             var rotations = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < copyMembers.Count; i++)
             {
-                string oldRel = sourceMembers[i].RelativePath(_dataService.PoseRootPath);
-                string newRel = copyMembers[i].RelativePath(_dataService.PoseRootPath);
+                string oldRel = PoseGroupDatabase.NormalizeMemberPath(
+                    sourceMembers[i].RelativePath(_dataService.PoseRootPath));
+                string newRel = PoseGroupDatabase.NormalizeMemberPath(
+                    copyMembers[i].RelativePath(_dataService.PoseRootPath));
                 if (string.IsNullOrEmpty(newRel))
                     continue;
 
@@ -1574,7 +1579,7 @@ namespace HS2SandboxPlugin
                 _groupDb.SetMemberRelativeLayout(destGroup.Id, offsets, heights, rotations, scales);
         }
 
-        private void ApplyTagToGroups(IReadOnlyList<PoseGroup> groups, string tag, bool add)
+        private void ApplyTagToGroups(IList<PoseGroup> groups, string tag, bool add)
         {
             if (groups.Count == 0) return;
             foreach (var g in groups)
@@ -1691,9 +1696,9 @@ namespace HS2SandboxPlugin
             GUILayout.EndScrollView();
         }
 
-        private List<(int start, int end)> BuildGroupSpansInDisplay()
+        private List<IntRangePair> BuildGroupSpansInDisplay()
         {
-            var spans = new List<(int start, int end)>();
+            var spans = new List<IntRangePair>();
             int i = 0;
             while (i < _displayEntries.Count)
             {
@@ -1707,7 +1712,7 @@ namespace HS2SandboxPlugin
                 int start = i;
                 while (i < _displayEntries.Count && _displayEntries[i].Item.GroupId == gid)
                     i++;
-                spans.Add((start, i - 1));
+                spans.Add(new IntRangePair(start, i - 1));
             }
 
             return spans;
@@ -1836,7 +1841,7 @@ namespace HS2SandboxPlugin
                         GUILayout.ExpandWidth(false));
                     if (segment.GroupTags.Count > 0 && Event.current.type == EventType.Repaint)
                     {
-                        string tagStr = string.Join(" · ", segment.GroupTags);
+                        string tagStr = string.Join(" · ", segment.GroupTags.ToArray());
                         GUI.Label(tagRect, tagStr, _tagWrapStyle!);
                     }
                 }

@@ -21,8 +21,8 @@ namespace HS2SandboxPlugin
         public static int ApplyPosesToSelectedCharacters(
             PoseDataService dataService,
             PoseBrowserCharacterConfig config,
-            IReadOnlyList<PoseGridItem> poses,
-            IReadOnlyList<OCIChar> studioSelection,
+            IList<PoseGridItem> poses,
+            IList<OCIChar> studioSelection,
             Action<PoseGridItem>? onPoseApplied = null)
         {
             if (poses.Count == 0 || studioSelection.Count == 0)
@@ -102,8 +102,8 @@ namespace HS2SandboxPlugin
         /// </summary>
         public static bool CanApplyPosesOneToOne(
             PoseBrowserCharacterConfig config,
-            IReadOnlyList<PoseGridItem> poses,
-            IReadOnlyList<OCIChar> studioSelection)
+            IList<PoseGridItem> poses,
+            IList<OCIChar> studioSelection)
         {
             return TryBuildPoseCharacterAssignments(config, poses, studioSelection, out _);
         }
@@ -111,12 +111,12 @@ namespace HS2SandboxPlugin
         /// <summary>
         /// Planned first-pass pose-to-character mapping (one character per pose).
         /// </summary>
-        public static List<(PoseGridItem pose, OCIChar? character)> BuildPlannedPoseAssignments(
+        public static List<PoseOciNullablePair> BuildPlannedPoseAssignments(
             PoseBrowserCharacterConfig config,
-            IReadOnlyList<PoseGridItem> poses,
-            IReadOnlyList<OCIChar> studioSelection)
+            IList<PoseGridItem> poses,
+            IList<OCIChar> studioSelection)
         {
-            var result = new List<(PoseGridItem, OCIChar?)>(poses.Count);
+            var result = new List<PoseOciNullablePair>(poses.Count);
             if (poses.Count == 0 || studioSelection.Count == 0)
                 return result;
 
@@ -137,7 +137,7 @@ namespace HS2SandboxPlugin
                         out var target) &&
                     target != null)
                     posed.Add(target);
-                result.Add((pose, target));
+                result.Add(new PoseOciNullablePair(pose, target));
             }
 
             return result;
@@ -146,10 +146,10 @@ namespace HS2SandboxPlugin
         /// <summary>
         /// Full planned apply (first pass + second pass), grouped by pose display order.
         /// </summary>
-        public static List<(PoseGridItem pose, List<OCIChar> characters)> BuildFullPlannedPoseAssignmentPlan(
+        public static List<PoseCharListPair> BuildFullPlannedPoseAssignmentPlan(
             PoseBrowserCharacterConfig config,
-            IReadOnlyList<PoseGridItem> poses,
-            IReadOnlyList<OCIChar> studioSelection)
+            IList<PoseGridItem> poses,
+            IList<OCIChar> studioSelection)
         {
             var charsPerPose = new List<OCIChar>[poses.Count];
             for (int i = 0; i < poses.Count; i++)
@@ -157,9 +157,9 @@ namespace HS2SandboxPlugin
 
             if (poses.Count == 0 || studioSelection.Count == 0)
             {
-                var empty = new List<(PoseGridItem, List<OCIChar>)>(poses.Count);
+                var empty = new List<PoseCharListPair>(poses.Count);
                 foreach (var pose in poses)
-                    empty.Add((pose, new List<OCIChar>()));
+                    empty.Add(new PoseCharListPair(pose, new List<OCIChar>()));
                 return empty;
             }
 
@@ -200,9 +200,9 @@ namespace HS2SandboxPlugin
                 charsPerPose[pi].Add(oci);
             }
 
-            var result = new List<(PoseGridItem, List<OCIChar>)>(poses.Count);
+            var result = new List<PoseCharListPair>(poses.Count);
             for (int i = 0; i < poses.Count; i++)
-                result.Add((poses[i], charsPerPose[i]));
+                result.Add(new PoseCharListPair(poses[i], charsPerPose[i]));
             return result;
         }
 
@@ -250,19 +250,27 @@ namespace HS2SandboxPlugin
         /// </summary>
         public static bool TryBuildPoseCharacterAssignments(
             PoseBrowserCharacterConfig config,
-            IReadOnlyList<PoseGridItem> poses,
-            IReadOnlyList<OCIChar> studioSelection,
-            out List<(PoseGridItem pose, OCIChar character)>? assignments)
+            IList<PoseGridItem> poses,
+            IList<OCIChar> studioSelection,
+            out List<PoseOciPair>? assignments)
         {
             assignments = null;
             if (poses.Count == 0 || studioSelection.Count != poses.Count)
                 return false;
 
             var planned = BuildPlannedPoseAssignments(config, poses, studioSelection);
-            if (planned.Count != poses.Count || planned.Any(p => p.character == null))
+            if (planned.Count != poses.Count)
                 return false;
 
-            assignments = planned.Select(p => (p.pose, p.character!)).ToList();
+            assignments = new List<PoseOciPair>(poses.Count);
+            for (int i = 0; i < planned.Count; i++)
+            {
+                OCIChar? character = planned[i].Character;
+                if (character == null)
+                    return false;
+                assignments.Add(new PoseOciPair(planned[i].Pose, character));
+            }
+
             return true;
         }
 
@@ -275,8 +283,8 @@ namespace HS2SandboxPlugin
         public static int ApplyGroupRelativePositions(
             PoseGroup group,
             PoseBrowserCharacterConfig config,
-            IReadOnlyList<PoseGridItem> poses,
-            IReadOnlyList<OCIChar> studioSelection,
+            IList<PoseGridItem> poses,
+            IList<OCIChar> studioSelection,
             string poseRootPath,
             bool adjustForBodyHeight = false,
             bool adjustForObjectScale = false)
@@ -286,14 +294,14 @@ namespace HS2SandboxPlugin
                 return 0;
 
             var plan = BuildFullPlannedPoseAssignmentPlan(config, poses, studioSelection);
-            if (plan.Count == 0 || plan[0].characters.Count == 0)
+            if (plan.Count == 0 || plan[0].Characters.Count == 0)
                 return 0;
 
-            OCIChar anchorChar = plan[0].characters[0];
+            OCIChar anchorChar = plan[0].Characters[0];
             bool haveAnchorPos = PoseDataService.TryGetCharacterWorldPosition(anchorChar, out Vector3 anchorPos);
             bool haveAnchorRot = PoseDataService.TryGetCharacterWorldRotation(anchorChar, out Quaternion anchorRot);
 
-            string anchorRel = PoseGroupDatabase.NormalizeMemberPath(plan[0].pose.RelativePath(poseRootPath));
+            string anchorRel = PoseGroupDatabase.NormalizeMemberPath(plan[0].Pose.RelativePath(poseRootPath));
             float savedAnchorH = 0f;
             float currentAnchorH = 0f;
             bool useHeights = adjustForBodyHeight &&
@@ -313,7 +321,9 @@ namespace HS2SandboxPlugin
             int moved = 0;
             for (int pi = 1; pi < plan.Count; pi++)
             {
-                var (pose, characters) = plan[pi];
+                PoseCharListPair planEntry = plan[pi];
+                PoseGridItem pose = planEntry.Pose;
+                List<OCIChar> characters = planEntry.Characters;
                 if (characters.Count == 0)
                     continue;
 
@@ -407,7 +417,7 @@ namespace HS2SandboxPlugin
 
         public static List<OCIChar> BuildEligiblePoolForApply(
             PoseGridItem pose,
-            IReadOnlyList<OCIChar> studioSelection,
+            IList<OCIChar> studioSelection,
             PoseBrowserCharacterConfig config)
         {
             return BuildOrderedSelectedCharacters(
@@ -417,7 +427,7 @@ namespace HS2SandboxPlugin
         private static bool IsCharacterEligibleForPose(
             OCIChar oci,
             PoseGridItem pose,
-            IReadOnlyList<OCIChar> studioSelection,
+            IList<OCIChar> studioSelection,
             PoseBrowserCharacterConfig config)
         {
             var pool = BuildOrderedSelectedCharacters(
@@ -426,7 +436,7 @@ namespace HS2SandboxPlugin
         }
 
         private static List<OCIChar> BuildOrderedSelectedCharacters(
-            IReadOnlyList<OCIChar> studioSelection,
+            IList<OCIChar> studioSelection,
             PoseBrowserCharacterConfig config,
             PoseGenderTag tagFilter,
             bool appendUnlisted)
@@ -519,7 +529,7 @@ namespace HS2SandboxPlugin
         /// Next eligible character in pool order, skipping anyone already posed in this apply batch.
         /// </summary>
         private static OCIChar? PickNextUnposedCharacter(
-            IReadOnlyList<OCIChar> pool,
+            IList<OCIChar> pool,
             HashSet<OCIChar> posed,
             ref int cursor)
         {

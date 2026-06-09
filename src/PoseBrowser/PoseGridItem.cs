@@ -59,7 +59,7 @@ namespace HS2SandboxPlugin
             }
 
             CachedTagString = string.Join(" · ",
-                Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+                Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray());
             CachedTagCount = Tags.Count;
             return CachedTagString;
         }
@@ -79,14 +79,14 @@ namespace HS2SandboxPlugin
                     if (i < full.Length && (full[i] == System.IO.Path.DirectorySeparatorChar ||
                                             full[i] == System.IO.Path.AltDirectorySeparatorChar))
                         i++;
-                    return full.Substring(i);
+                    return PoseGroupDatabase.NormalizeMemberPath(full.Substring(i));
                 }
 
-                return full;
+                return PoseGroupDatabase.NormalizeMemberPath(full);
             }
             catch
             {
-                return FilePath;
+                return PoseGroupDatabase.NormalizeMemberPath(FilePath);
             }
         }
     }

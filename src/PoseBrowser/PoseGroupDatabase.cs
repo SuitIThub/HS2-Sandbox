@@ -39,7 +39,7 @@ namespace HS2SandboxPlugin
 
         public void ForceSave() => SaveToDisk();
 
-        public IReadOnlyDictionary<string, PoseGroup> GroupsById => _groupsById;
+        public IDictionary<string, PoseGroup> GroupsById => _groupsById;
 
         public string? GetGroupIdForItem(PoseGridItem item)
         {
@@ -80,13 +80,13 @@ namespace HS2SandboxPlugin
 
             var group = new PoseGroup
             {
-                Name = string.IsNullOrWhiteSpace(name) ? "Group" : name.Trim()
+                Name = StringEx.IsNullOrWhiteSpace(name) ? "Group" : name.Trim()
             };
             if (tags != null)
             {
                 foreach (var t in tags)
                 {
-                    if (!string.IsNullOrWhiteSpace(t))
+                    if (!StringEx.IsNullOrWhiteSpace(t))
                         group.Tags.Add(t.Trim());
                 }
             }
@@ -198,7 +198,7 @@ namespace HS2SandboxPlugin
         public void SetGroupName(string groupId, string name)
         {
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
-            group.Name = string.IsNullOrWhiteSpace(name) ? "Group" : name.Trim();
+            group.Name = StringEx.IsNullOrWhiteSpace(name) ? "Group" : name.Trim();
             MarkDirty();
         }
 
@@ -206,20 +206,20 @@ namespace HS2SandboxPlugin
         {
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
             group.Tags = new HashSet<string>(
-                tags.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()),
+                tags.Where(t => !StringEx.IsNullOrWhiteSpace(t)).Select(t => t.Trim()),
                 StringComparer.OrdinalIgnoreCase);
             MarkDirty();
         }
 
-        public void SetMemberRelativeOffsets(string groupId, IReadOnlyDictionary<string, Vector3> offsetsByMemberPath) =>
+        public void SetMemberRelativeOffsets(string groupId, IDictionary<string, Vector3> offsetsByMemberPath) =>
             SetMemberRelativeLayout(groupId, offsetsByMemberPath, null, null);
 
         public void SetMemberRelativeLayout(
             string groupId,
-            IReadOnlyDictionary<string, Vector3> offsetsByMemberPath,
-            IReadOnlyDictionary<string, float>? bodyHeightsByMemberPath,
-            IReadOnlyDictionary<string, Quaternion>? rotationsByMemberPath = null,
-            IReadOnlyDictionary<string, Vector3>? objectScalesByMemberPath = null)
+            IDictionary<string, Vector3> offsetsByMemberPath,
+            IDictionary<string, float>? bodyHeightsByMemberPath,
+            IDictionary<string, Quaternion>? rotationsByMemberPath = null,
+            IDictionary<string, Vector3>? objectScalesByMemberPath = null)
         {
             if (!_groupsById.TryGetValue(groupId, out var group)) return;
             group.MemberRelativeOffsets.Clear();
@@ -322,7 +322,7 @@ namespace HS2SandboxPlugin
                 group.MemberRelativeRotations.Remove(k);
         }
 
-        public List<PoseGroup> GetGroupsFullyContainedIn(IReadOnlyCollection<string> relativePaths)
+        public List<PoseGroup> GetGroupsFullyContainedIn(ICollection<string> relativePaths)
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var rel in relativePaths)
@@ -345,7 +345,7 @@ namespace HS2SandboxPlugin
 
         public void ImportGroup(
             PoseGroup group,
-            IReadOnlyDictionary<string, string> oldMemberRelToNewRel,
+            IDictionary<string, string> oldMemberRelToNewRel,
             Vector3[]? memberRelativeOffsets = null,
             float[]? memberBodyHeights = null,
             Quaternion[]? memberRelativeRotations = null,
@@ -500,11 +500,18 @@ namespace HS2SandboxPlugin
         /// <summary>Canonical relative path key (forward slashes, no leading slash).</summary>
         public static string NormalizeMemberPath(string rel)
         {
-            if (string.IsNullOrWhiteSpace(rel)) return "";
+            if (StringEx.IsNullOrWhiteSpace(rel)) return "";
             return rel.Replace('\\', '/').TrimStart('/');
         }
 
         private static string NormalizeStorageKey(string rel) => NormalizeMemberPath(rel);
+
+        private static string EscapeTsvCell(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "";
+            return value.Replace("\t", " ").Replace("\r", " ").Replace("\n", " ");
+        }
 
         private void LoadFromDisk()
         {
@@ -536,7 +543,7 @@ namespace HS2SandboxPlugin
             imported = 0;
             try
             {
-                foreach (string rawLine in File.ReadLines(path, Encoding.UTF8))
+                foreach (string rawLine in File.ReadAllLines(path, Encoding.UTF8))
                 {
                     string line = rawLine.TrimStart('\uFEFF').TrimEnd('\r');
                     if (line.Length == 0) continue;
@@ -614,12 +621,12 @@ namespace HS2SandboxPlugin
         private static List<string> ParseDelimited(string? col, char delimiter)
         {
             if (string.IsNullOrEmpty(col)) return new List<string>();
-            return col.Split(delimiter).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToList();
+            return col.Split(delimiter).Where(s => !StringEx.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToList();
         }
 
         private static Dictionary<string, Vector3> ParseMemberOffsetsColumn(
             string? col,
-            IReadOnlyList<string> memberPaths)
+            IList<string> memberPaths)
         {
             var result = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
@@ -661,7 +668,7 @@ namespace HS2SandboxPlugin
 
         private static Dictionary<string, float> ParseMemberBodyHeightsColumn(
             string? col,
-            IReadOnlyList<string> memberPaths)
+            IList<string> memberPaths)
         {
             var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
@@ -701,12 +708,12 @@ namespace HS2SandboxPlugin
                 parts.Add(h.ToString("R", inv));
             }
 
-            return string.Join(OffsetDelimiter.ToString(), parts);
+            return string.Join(OffsetDelimiter.ToString(), parts.ToArray());
         }
 
         private static Dictionary<string, Vector3> ParseMemberObjectScalesColumn(
             string? col,
-            IReadOnlyList<string> memberPaths)
+            IList<string> memberPaths)
         {
             var result = new Dictionary<string, Vector3>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
@@ -742,15 +749,20 @@ namespace HS2SandboxPlugin
                     continue;
                 }
 
-                parts.Add(string.Join(",", scale.x.ToString("R", inv), scale.y.ToString("R", inv), scale.z.ToString("R", inv)));
+                parts.Add(string.Join(",", new[]
+                {
+                    scale.x.ToString("R", inv),
+                    scale.y.ToString("R", inv),
+                    scale.z.ToString("R", inv)
+                }));
             }
 
-            return string.Join(OffsetDelimiter.ToString(), parts);
+            return string.Join(OffsetDelimiter.ToString(), parts.ToArray());
         }
 
         private static Dictionary<string, Quaternion> ParseMemberRelativeRotationsColumn(
             string? col,
-            IReadOnlyList<string> memberPaths)
+            IList<string> memberPaths)
         {
             var result = new Dictionary<string, Quaternion>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrEmpty(col) || memberPaths.Count == 0)
@@ -829,7 +841,7 @@ namespace HS2SandboxPlugin
                 parts.Add(string.Format(inv, "{0:R},{1:R},{2:R},{3:R}", rot.x, rot.y, rot.z, rot.w));
             }
 
-            return string.Join(OffsetDelimiter.ToString(), parts);
+            return string.Join(OffsetDelimiter.ToString(), parts.ToArray());
         }
 
         private static string FormatMemberOffsetsColumn(PoseGroup group)
@@ -857,7 +869,7 @@ namespace HS2SandboxPlugin
                 parts.Add(string.Format(inv, "{0:R},{1:R},{2:R}", offset.x, offset.y, offset.z));
             }
 
-            return string.Join(OffsetDelimiter.ToString(), parts);
+            return string.Join(OffsetDelimiter.ToString(), parts.ToArray());
         }
 
         private bool TryLoadLegacyJson(string path, out int imported)
@@ -877,8 +889,8 @@ namespace HS2SandboxPlugin
                     {
                         Id = e.id,
                         Name = e.name ?? "",
-                        Tags = new HashSet<string>(e.tags ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase),
-                        MemberRelativePaths = (e.members ?? Array.Empty<string>())
+                        Tags = new HashSet<string>(e.tags ?? new string[0], StringComparer.OrdinalIgnoreCase),
+                        MemberRelativePaths = (e.members ?? new string[0])
                             .Select(NormalizeStorageKey)
                             .Where(p => !string.IsNullOrEmpty(p))
                             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -923,22 +935,20 @@ namespace HS2SandboxPlugin
                     {
                         string tagsCol = group.Tags.Count == 0
                             ? ""
-                            : string.Join(TagDelimiter.ToString(), group.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+                            : string.Join(TagDelimiter.ToString(), group.Tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray());
                         string membersCol = string.Join(
                             MemberDelimiter.ToString(),
-                            group.MemberRelativePaths);
+                            group.MemberRelativePaths.ToArray());
                         string offsetsCol = FormatMemberOffsetsColumn(group);
                         string heightsCol = FormatMemberBodyHeightsColumn(group);
                         string rotationsCol = FormatMemberRelativeRotationsColumn(group);
                         string scalesCol = FormatMemberObjectScalesColumn(group);
-                        sw.WriteLine($"group\t{group.Id}\t{group.Name}\t{tagsCol}\t{membersCol}\t{offsetsCol}\t{heightsCol}\t{rotationsCol}\t{scalesCol}");
+                        sw.WriteLine(
+                            $"group\t{group.Id}\t{EscapeTsvCell(group.Name)}\t{tagsCol}\t{membersCol}\t{offsetsCol}\t{heightsCol}\t{rotationsCol}\t{scalesCol}");
                     }
                 }
 
-                if (File.Exists(_storagePath))
-                    File.Replace(tempPath, _storagePath, null);
-                else
-                    File.Move(tempPath, _storagePath);
+                FileEx.CommitTempFile(tempPath, _storagePath);
 
                 try
                 {

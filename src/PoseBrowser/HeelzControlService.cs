@@ -1,4 +1,4 @@
-#if !KKS
+#if HS2
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -66,8 +66,8 @@ namespace HS2SandboxPlugin
         private static string _cachedOnTagLabel = "";
 
         public static bool IsHeelzDetected => _heelzDetected;
-        public static IReadOnlyCollection<string> HeelsOffTags => _heelsOffTags;
-        public static IReadOnlyCollection<string> HeelsOnTags => _heelsOnTags;
+        public static ICollection<string> HeelsOffTags => _heelsOffTags;
+        public static ICollection<string> HeelsOnTags => _heelsOnTags;
         public static string CachedOffTagLabel => _cachedOffTagLabel;
         public static string CachedOnTagLabel => _cachedOnTagLabel;
 
@@ -124,7 +124,7 @@ namespace HS2SandboxPlugin
         {
             _heelsOffTags = new HashSet<string>(tags, StringComparer.OrdinalIgnoreCase);
             if (HeelsOffTagsEntry != null)
-                HeelsOffTagsEntry.Value = string.Join(",", _heelsOffTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+                HeelsOffTagsEntry.Value = string.Join(",", _heelsOffTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray());
             RebuildCachedLabels();
         }
 
@@ -132,7 +132,7 @@ namespace HS2SandboxPlugin
         {
             _heelsOnTags = new HashSet<string>(tags, StringComparer.OrdinalIgnoreCase);
             if (HeelsOnTagsEntry != null)
-                HeelsOnTagsEntry.Value = string.Join(",", _heelsOnTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+                HeelsOnTagsEntry.Value = string.Join(",", _heelsOnTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray());
             RebuildCachedLabels();
         }
 
@@ -223,8 +223,8 @@ namespace HS2SandboxPlugin
 
         /// <summary>Apply tag rules to all chars using union of tags from multiple poses (used after multi-apply).</summary>
         public static void ApplyTagRulesForMultiApply(
-            IReadOnlyList<OCIChar> characters,
-            IReadOnlyList<PoseGridItem> poses)
+            IList<OCIChar> characters,
+            IList<PoseGridItem> poses)
         {
             if (_heelsOffTags.Count == 0 && _heelsOnTags.Count == 0) return;
             if (characters.Count == 0 || poses.Count == 0) return;
@@ -492,7 +492,7 @@ namespace HS2SandboxPlugin
         private static HashSet<string> ParseTagList(string? csv)
         {
             var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(csv)) return set;
+            if (StringEx.IsNullOrWhiteSpace(csv)) return set;
             foreach (string part in csv!.Split(','))
             {
                 string tag = part.Trim();
@@ -505,10 +505,10 @@ namespace HS2SandboxPlugin
         private static void RebuildCachedLabels()
         {
             _cachedOffTagLabel = _heelsOffTags.Count > 0
-                ? string.Join(" \u00b7 ", _heelsOffTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase))
+                ? string.Join(" \u00b7 ", _heelsOffTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray())
                 : "";
             _cachedOnTagLabel = _heelsOnTags.Count > 0
-                ? string.Join(" \u00b7 ", _heelsOnTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase))
+                ? string.Join(" \u00b7 ", _heelsOnTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray())
                 : "";
         }
 

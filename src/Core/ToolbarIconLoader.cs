@@ -39,8 +39,11 @@ namespace HS2SandboxPlugin
             {
                 if (stream != null)
                 {
-                    using var ms = new MemoryStream();
-                    stream.CopyTo(ms);
+                    var ms = new MemoryStream();
+                    var buffer = new byte[4096];
+                    int read;
+                    while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                        ms.Write(buffer, 0, read);
                     var tex = CreateTexture(ms.ToArray());
                     if (tex.width > 2 || tex.height > 2)
                         return tex;

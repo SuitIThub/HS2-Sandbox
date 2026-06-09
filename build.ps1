@@ -79,6 +79,12 @@ $gameConfig = @{
         StudioProcessNames = @("CharaStudio", "KoikatsuSunshine")
         StudioLabel = "CharaStudio"
     }
+    KK = @{
+        DeployDir = "D:\Games\Koikatsu BetterRepack RX21\BepInEx\plugins\KK-Sandbox"
+        StudioExe = "D:\Games\Koikatsu BetterRepack RX21\CharaStudio.exe"
+        StudioProcessNames = @("CharaStudio", "Koikatsu")
+        StudioLabel = "CharaStudio"
+    }
 }
 
 function Read-MultiChoice {
@@ -205,6 +211,15 @@ $targets = @(
         BuiltDllRelPath = "targets\KKS\PoseBrowser\bin\Release\KKSSandbox.PoseBrowser.dll"
         DeployFileName = "KKSSandbox.PoseBrowser.dll"
         DeactivatedFileName = "KKSSandbox.PoseBrowser.dl_"
+    },
+    @{
+        Key = "PoseBrowser-KK"
+        Game = "KK"
+        DisplayName = "[KK] PoseBrowser (KKSandbox.PoseBrowser.dll)"
+        BuildPath = "targets\KK\PoseBrowser\KKSandbox.PoseBrowser.csproj"
+        BuiltDllRelPath = "targets\KK\PoseBrowser\bin\Release\KKSandbox.PoseBrowser.dll"
+        DeployFileName = "KKSandbox.PoseBrowser.dll"
+        DeactivatedFileName = "KKSandbox.PoseBrowser.dl_"
     }
 )
 

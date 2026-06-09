@@ -22,8 +22,8 @@ namespace HS2SandboxPlugin
     internal sealed class PoseBrowserCharacterConfigFileV2
     {
         public int version = 2;
-        public PoseBrowserCharacterSlotPersisted[] male = Array.Empty<PoseBrowserCharacterSlotPersisted>();
-        public PoseBrowserCharacterSlotPersisted[] female = Array.Empty<PoseBrowserCharacterSlotPersisted>();
+        public PoseBrowserCharacterSlotPersisted[] male = new PoseBrowserCharacterSlotPersisted[0];
+        public PoseBrowserCharacterSlotPersisted[] female = new PoseBrowserCharacterSlotPersisted[0];
         public bool untaggedInterleaveFemaleFirst;
     }
 
@@ -36,20 +36,25 @@ namespace HS2SandboxPlugin
         public static bool TryResolveInScene(PoseBrowserCharacterSlot slot, out OCIChar oci)
         {
             oci = null;
+            if (StringEx.IsNullOrWhiteSpace(slot.DisplayName) && slot.DicKey == 0)
+                return false;
+
             try
             {
                 if (Singleton<Studio.Studio>.Instance.dicObjectCtrl.TryGetValue(slot.DicKey, out var info) &&
-                    info is OCIChar byKey)
+                    info is OCIChar byKey &&
+                    NamesMatch(slot, byKey))
                 {
                     oci = byKey;
                     return true;
                 }
 
+                if (StringEx.IsNullOrWhiteSpace(slot.DisplayName))
+                    return false;
+
                 foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
                 {
-                    if (kvp.Value is OCIChar c &&
-                        string.Equals(PoseDataService.GetOCICharDisplayName(c), slot.DisplayName,
-                            StringComparison.OrdinalIgnoreCase))
+                    if (kvp.Value is OCIChar c && NamesMatch(slot, c))
                     {
                         oci = c;
                         return true;
@@ -62,6 +67,26 @@ namespace HS2SandboxPlugin
             }
 
             return false;
+        }
+
+        private static bool NamesMatch(PoseBrowserCharacterSlot slot, OCIChar oci) =>
+            string.Equals(
+                slot.DisplayName,
+                PoseDataService.GetOCICharDisplayName(oci),
+                StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Updates stored dicKey/name when the slot still tracks the same character in the scene.</summary>
+        public static bool RefreshIdentityFromScene(PoseBrowserCharacterSlot slot, OCIChar oci, int dicKey)
+        {
+            string name = PoseDataService.GetOCICharDisplayName(oci);
+            bool changed = slot.DicKey != dicKey ||
+                           !string.Equals(slot.DisplayName, name, StringComparison.OrdinalIgnoreCase);
+            if (!changed)
+                return false;
+
+            slot.DicKey = dicKey;
+            slot.DisplayName = name;
+            return true;
         }
 
         public static PoseBrowserCharacterSlot FromScene(OCIChar oci, int dicKey) =>
@@ -94,11 +119,11 @@ namespace HS2SandboxPlugin
         private const int CurrentVersion = 3;
 
         private static string StoragePath =>
-            Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_character_config.json");
+            PathEx.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_character_config.json");
 
         private readonly List<PoseBrowserCharacterSlot> _priority = new List<PoseBrowserCharacterSlot>();
 
-        public IReadOnlyList<PoseBrowserCharacterSlot> Priority => _priority;
+        public IList<PoseBrowserCharacterSlot> Priority => _priority;
 
         public PoseBrowserCharacterConfig()
         {
@@ -134,7 +159,10 @@ namespace HS2SandboxPlugin
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-                File.WriteAllText(StoragePath, BuildJsonV3(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                FileEx.WriteAllTextAtomic(
+                    StoragePath,
+                    BuildJsonV3(),
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             }
             catch (Exception ex)
             {
@@ -142,15 +170,29 @@ namespace HS2SandboxPlugin
             }
         }
 
-        public bool ContainsDicKey(int dicKey) => _priority.Any(s => s.DicKey == dicKey);
-
-        public void LoadNewFromScene(IEnumerable<(OCIChar oci, int dicKey)> sceneCharacters)
+        public void LoadNewFromScene(IEnumerable<OciDicKeyPair> sceneCharacters)
         {
             bool changed = false;
-            foreach (var (oci, dicKey) in sceneCharacters)
+            var claimedInScene = new HashSet<OCIChar>();
+
+            foreach (PoseBrowserCharacterSlot slot in _priority)
             {
-                if (ContainsDicKey(dicKey)) continue;
-                _priority.Add(PoseBrowserCharacterSlot.FromScene(oci, dicKey));
+                if (!PoseBrowserCharacterSlot.TryResolveInScene(slot, out OCIChar oci))
+                    continue;
+                if (!claimedInScene.Add(oci))
+                    continue;
+                if (PoseDataService.TryGetDicKey(oci, out int dicKey) &&
+                    PoseBrowserCharacterSlot.RefreshIdentityFromScene(slot, oci, dicKey))
+                    changed = true;
+            }
+
+            foreach (OciDicKeyPair pair in sceneCharacters)
+            {
+                if (claimedInScene.Contains(pair.Oci))
+                    continue;
+
+                _priority.Add(PoseBrowserCharacterSlot.FromScene(pair.Oci, pair.DicKey));
+                claimedInScene.Add(pair.Oci);
                 changed = true;
             }
 
@@ -259,8 +301,8 @@ namespace HS2SandboxPlugin
         private void ImportLegacyV2(PoseBrowserCharacterConfigFileV2 data)
         {
             _priority.Clear();
-            var male = data.male ?? Array.Empty<PoseBrowserCharacterSlotPersisted>();
-            var female = data.female ?? Array.Empty<PoseBrowserCharacterSlotPersisted>();
+            var male = data.male ?? new PoseBrowserCharacterSlotPersisted[0];
+            var female = data.female ?? new PoseBrowserCharacterSlotPersisted[0];
             int maxRank = Math.Max(male.Length, female.Length);
             for (int r = 0; r < maxRank; r++)
             {

@@ -14,4 +14,9 @@
   <ItemGroup>
     <Content Include="$(AssetsRoot)copy-icon.png" CopyToOutputDirectory="Always" Link="copy-icon.png" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IronPython" Version="3.4.2" />
+    <PackageReference Include="System.Memory" Version="4.6.3" />
+  </ItemGroup>
 </Project>

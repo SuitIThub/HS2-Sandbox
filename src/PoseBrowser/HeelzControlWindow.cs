@@ -1,4 +1,4 @@
-#if !KKS
+#if HS2
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +14,7 @@ namespace HS2SandboxPlugin
         private const int TagPickerWindowId = 204901;
 
         // Cached character list + states (rebuilt on timer, not per frame)
-        private readonly List<(OCIChar oci, HeelzCharacterState state)> _cachedChars = new();
+        private readonly List<OciHeelzStatePair> _cachedChars = new();
         private float _nextCharRefresh;
 
         // Tag picker state
@@ -128,7 +128,7 @@ namespace HS2SandboxPlugin
                 foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
                 {
                     if (kvp.Value is OCIChar oci)
-                        _cachedChars.Add((oci, HeelzControlService.GetCharacterState(oci)));
+                        _cachedChars.Add(new OciHeelzStatePair(oci, HeelzControlService.GetCharacterState(oci)));
                 }
             }
             catch { }
@@ -144,7 +144,9 @@ namespace HS2SandboxPlugin
 
             for (int i = 0; i < _cachedChars.Count; i++)
             {
-                var (oci, state) = _cachedChars[i];
+                OciHeelzStatePair entry = _cachedChars[i];
+                OCIChar oci = entry.Oci;
+                HeelzCharacterState state = entry.State;
                 if (oci == null || oci.charInfo == null) continue;
 
                 // Row 1: name + [On] [Off] + Auto checkbox
@@ -206,9 +208,9 @@ namespace HS2SandboxPlugin
         {
             if (index >= 0 && index < _cachedChars.Count)
             {
-                var (oci, _) = _cachedChars[index];
+                OCIChar oci = _cachedChars[index].Oci;
                 if (oci != null)
-                    _cachedChars[index] = (oci, HeelzControlService.GetCharacterState(oci));
+                    _cachedChars[index] = new OciHeelzStatePair(oci, HeelzControlService.GetCharacterState(oci));
             }
         }
 

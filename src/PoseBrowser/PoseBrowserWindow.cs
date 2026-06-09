@@ -380,7 +380,7 @@ namespace HS2SandboxPlugin
             windowTitle = $"Pose Browser v{PoseBrowserVersionInfo.Version}";
             windowRect = new Rect(200f, 80f, 900f, 620f);
 
-            string poseRoot = Path.Combine(UserData.Path, "studio", "pose");
+            string poseRoot = PathEx.Combine(UserData.Path, "studio", "pose");
             _dataService = new PoseDataService(poseRoot);
             _tagDb = new PoseTagDatabase(poseRoot);
             _groupDb = new PoseGroupDatabase(poseRoot);
@@ -831,7 +831,7 @@ namespace HS2SandboxPlugin
             {
                 PruneSelectedGroups();
                 var ids = _selectedGroupIds.OrderBy(id => id, StringComparer.Ordinal).ToList();
-                string newKey = "g:" + string.Join("|", ids);
+                string newKey = "g:" + string.Join("|", ids.ToArray());
                 if (newKey == _tagWindowTargetKey)
                     return;
 
@@ -850,7 +850,7 @@ namespace HS2SandboxPlugin
                 .ToList();
             if (selected.Count > 0)
             {
-                string pathsKey = string.Join("|", selected.Select(i => i.FilePath).OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
+                string pathsKey = string.Join("|", selected.Select(i => i.FilePath).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray());
                 string newKey = "p:" + pathsKey;
                 if (newKey == _tagWindowTargetKey)
                     return;
@@ -962,7 +962,7 @@ namespace HS2SandboxPlugin
             _tagDb.RecordLastUsed(item);
             _dataService.ApplyPoseToSelected(item);
             RecordPoseHistoryAfterSingleApply(item);
-#if !KKS
+#if HS2
             HeelzControlService.ApplyTagRulesForSelectedCharacters(
                 _dataService.GetSelectedCharacters(), item.Tags);
 #endif
@@ -975,7 +975,7 @@ namespace HS2SandboxPlugin
 
         private bool HasActivePoseContentFilters() =>
             _showFavoritesOnly
-            || !string.IsNullOrWhiteSpace(_searchText)
+            || !StringEx.IsNullOrWhiteSpace(_searchText)
             || _tagFiltersInclude.Count > 0
             || _tagFiltersExclude.Count > 0;
 
@@ -1197,7 +1197,7 @@ namespace HS2SandboxPlugin
                 SetVisible(false);
         }
 
-#if !KKS
+#if HS2
         private void ToggleHeelzControlWindow()
         {
             var gui = FindObjectOfType<SandboxGUI>();
@@ -2075,7 +2075,7 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), GUILayout.Width(110f), GUILayout.Height(24f)))
                 CycleLayoutTier();
 
-#if !KKS
+#if HS2
             if (GUILayout.Button("Heelz", GUILayout.Width(52f), GUILayout.Height(24f)))
                 ToggleHeelzControlWindow();
 #endif
@@ -2131,7 +2131,7 @@ namespace HS2SandboxPlugin
             else
             {
                 GUILayout.Label(
-                    new GUIContent($"Character: {names.Count} selected", string.Join("\n", names)),
+                    new GUIContent($"Character: {names.Count} selected", string.Join("\n", names.ToArray())),
                     style,
                     labelOpts);
             }
@@ -2250,7 +2250,7 @@ namespace HS2SandboxPlugin
         }
 
         private bool HasSaveableFilterState() =>
-            !string.IsNullOrWhiteSpace(_searchText)
+            !StringEx.IsNullOrWhiteSpace(_searchText)
             || _tagFiltersInclude.Count > 0
             || _tagFiltersExclude.Count > 0;
 
@@ -2334,7 +2334,7 @@ namespace HS2SandboxPlugin
             {
                 foreach (var t in preset.includeTags)
                 {
-                    if (!string.IsNullOrWhiteSpace(t))
+                    if (!StringEx.IsNullOrWhiteSpace(t))
                         _tagFiltersInclude.Add(t);
                 }
             }
@@ -2343,7 +2343,7 @@ namespace HS2SandboxPlugin
             {
                 foreach (var t in preset.excludeTags)
                 {
-                    if (!string.IsNullOrWhiteSpace(t))
+                    if (!StringEx.IsNullOrWhiteSpace(t))
                         _tagFiltersExclude.Add(t);
                 }
             }
@@ -2516,16 +2516,16 @@ namespace HS2SandboxPlugin
         {
             var lines = new List<string> { "Active filter window settings:" };
             if (_tagFiltersInclude.Count > 0)
-                lines.Add("Include: " + string.Join(", ", _tagFiltersInclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)));
+                lines.Add("Include: " + string.Join(", ", _tagFiltersInclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray()));
             if (_tagFiltersExclude.Count > 0)
-                lines.Add("Exclude: " + string.Join(", ", _tagFiltersExclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)));
+                lines.Add("Exclude: " + string.Join(", ", _tagFiltersExclude.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray()));
             if (_tagFilterGroupsMode != PoseDisplayFilterMode.Off)
                 lines.Add(DisplayFilterModeSummary("Grouped poses", _tagFilterGroupsMode));
             if (_tagFilterThumbnailMode != PoseDisplayFilterMode.Off)
                 lines.Add(DisplayFilterModeSummary("Thumbnails", _tagFilterThumbnailMode));
             if (_tagFiltersInclude.Count > 0 || _tagFiltersExclude.Count > 0)
                 lines.Add("Include match: " + (_tagFilterAndMode ? "AND" : "OR"));
-            return string.Join("\n", lines);
+            return string.Join("\n", lines.ToArray());
         }
 
         private enum TagFilterRole { Neutral, Include, Exclude }
@@ -2713,7 +2713,7 @@ namespace HS2SandboxPlugin
 
         private enum TagCoverage { None, Some, All }
 
-        private static TagCoverage GetTagCoverage(IReadOnlyList<PoseGridItem> selected, string tag)
+        private static TagCoverage GetTagCoverage(IList<PoseGridItem> selected, string tag)
         {
             if (selected.Count == 0) return TagCoverage.None;
             int n = selected.Count;
@@ -2727,7 +2727,7 @@ namespace HS2SandboxPlugin
             return TagCoverage.Some;
         }
 
-        private void ApplyTagToAllSelected(IReadOnlyList<PoseGridItem> selected, string tag, bool add)
+        private void ApplyTagToAllSelected(IList<PoseGridItem> selected, string tag, bool add)
         {
             if (selected.Count == 0) return;
             if (add)
@@ -2755,7 +2755,7 @@ namespace HS2SandboxPlugin
                 foreach (var t in group.Tags)
                     set.Add(t);
             }
-#if !KKS
+#if HS2
             foreach (var t in HeelzControlService.GetAllRuleTags())
                 set.Add(t);
 #endif
@@ -3349,12 +3349,12 @@ namespace HS2SandboxPlugin
         {
             if (tags == null || !tags.Any())
                 return;
-            string tagStr = string.Join(" · ", tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+            string tagStr = string.Join(" · ", tags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToArray());
             maxTagH = Mathf.Max(maxTagH, MeasureTagBlockHeight(tagStr, _tagWrapStyle!, width));
         }
 
         private void ComputeUniformGridRowMetrics(
-            IReadOnlyList<PoseBrowserGridRow> gridRows,
+            IList<PoseBrowserGridRow> gridRows,
             float cellInnerW)
         {
             InitStyles();
@@ -3442,7 +3442,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>If rows are wider than the scroll area, add columns (smaller cards) until they fit.</summary>
-        private void RefineGridLayoutForRows(IReadOnlyList<PoseBrowserGridRow> gridRows)
+        private void RefineGridLayoutForRows(IList<PoseBrowserGridRow> gridRows)
         {
             if (gridRows.Count == 0)
                 return;
@@ -3976,7 +3976,7 @@ namespace HS2SandboxPlugin
                     parts.Add(escaped);
             }
 
-            return string.Join(" · ", parts);
+            return string.Join(" · ", parts.ToArray());
         }
 
         private static string EscapeRichTextForLabel(string text)
@@ -4729,7 +4729,7 @@ namespace HS2SandboxPlugin
             ExportItemsToDisk(sel);
         }
 
-        private void ExportItemsToDisk(IReadOnlyList<PoseGridItem> items, string? saveDialogTitle = null)
+        private void ExportItemsToDisk(IList<PoseGridItem> items, string? saveDialogTitle = null)
         {
             if (items.Count == 0)
                 return;
@@ -5012,19 +5012,19 @@ namespace HS2SandboxPlugin
                 return;
 
             int toEvict = loadedCount - ThumbnailLruMaxLoaded + ThumbnailLruEvictBatch;
-            var candidates = new List<(PoseGridItem item, int frame)>(loadedCount);
+            var candidates = new List<PoseItemFramePair>(loadedCount);
             foreach (var item in _allItems)
             {
                 if (item.Thumbnail != null)
-                    candidates.Add((item, item.ThumbnailLastUsedFrame));
+                    candidates.Add(new PoseItemFramePair(item, item.ThumbnailLastUsedFrame));
             }
 
-            candidates.Sort((a, b) => a.frame.CompareTo(b.frame));
+            candidates.Sort((a, b) => a.Frame.CompareTo(b.Frame));
 
             int evicted = 0;
             for (int i = 0; i < candidates.Count && evicted < toEvict; i++)
             {
-                var item = candidates[i].item;
+                var item = candidates[i].Item;
                 if (item.ThumbnailLastUsedFrame >= Time.frameCount - 2)
                     continue;
                 Destroy(item.Thumbnail);
@@ -5127,7 +5127,7 @@ namespace HS2SandboxPlugin
 
         private void DoSavePose()
         {
-            if (string.IsNullOrWhiteSpace(_savePoseName)) return;
+            if (StringEx.IsNullOrWhiteSpace(_savePoseName)) return;
             var chars = _dataService.GetSelectedCharacters().ToList();
             if (chars.Count == 0)
             {
@@ -5563,7 +5563,7 @@ namespace HS2SandboxPlugin
                 rich);
 
 
-#if !KKS
+#if HS2
             GUILayout.Space(8f);
             GUILayout.Label("<b>Heelz Control</b>", rich);
             GUILayout.Label(
@@ -5578,7 +5578,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Options panel</b>", rich);
             GUILayout.Label(
-#if !KKS
+#if HS2
                 "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle Heelz Control; toggle undocked pose stash; no text field focused).\n" +
 #else
                 "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash; no text field focused).\n" +
@@ -5887,7 +5887,7 @@ namespace HS2SandboxPlugin
         }
 
         private static string PersistedOptionsPath =>
-            Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_options.json");
+            PathEx.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_browser_options.json");
 
         private void LoadPersistedOptions()
         {
@@ -6090,7 +6090,10 @@ namespace HS2SandboxPlugin
                     stashFloatingY = _savedStashFloatingY,
                     stashPreferUndocked = _stashPreferUndocked
                 };
-                File.WriteAllText(path, JsonUtility.ToJson(data, true), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                FileEx.WriteAllTextAtomic(
+                    path,
+                    JsonUtility.ToJson(data, true),
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 SyncPoseBrowserConfigFromFile();
             }
             catch (Exception ex)
@@ -6401,7 +6404,7 @@ namespace HS2SandboxPlugin
                 return "Not assigned";
 
             string text = shortcut.ToString();
-            if (string.IsNullOrWhiteSpace(text) ||
+            if (StringEx.IsNullOrWhiteSpace(text) ||
                 string.Equals(text, "Not set", StringComparison.OrdinalIgnoreCase))
                 return "Not assigned";
 

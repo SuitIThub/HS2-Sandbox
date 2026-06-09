@@ -68,7 +68,13 @@ on:
         required: false
         default: false
         type: boolean
+      rerelease_posebrowserkk:
+        description: "Rerelease — Pose Browser (KK)"
+        required: false
+        default: false
+        type: boolean
 # >> rerelease-inputs:end
+
 
 
 permissions:

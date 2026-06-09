@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using Studio;
 
@@ -9,10 +10,10 @@ namespace HS2SandboxPlugin
     {
         public static bool TryCapture(OCIItem item, out byte[] blob, out string versionText, out int kind, out int[] kinds)
         {
-            blob = Array.Empty<byte>();
+            blob = new byte[0];
             versionText = string.Empty;
             kind = 0;
-            kinds = Array.Empty<int>();
+            kinds = new int[0];
 
             if (item?.itemInfo == null)
                 return false;
@@ -23,7 +24,7 @@ namespace HS2SandboxPlugin
                 Version version = studio.sceneInfo.version;
                 OIItemInfo info = item.itemInfo;
                 kind = info.kind;
-                kinds = info.kinds ?? Array.Empty<int>();
+                kinds = info.kinds ?? new int[0];
 
                 using var ms = new MemoryStream();
                 using var bw = new BinaryWriter(ms);
@@ -69,11 +70,11 @@ namespace HS2SandboxPlugin
 
         public static Version? TryParseVersion(string? text)
         {
-            if (string.IsNullOrWhiteSpace(text))
+            if (StringEx.IsNullOrWhiteSpace(text))
                 return null;
             try
             {
-                return Version.Parse(text.Trim());
+                return new Version(text.Trim());
             }
             catch
             {
@@ -85,13 +86,13 @@ namespace HS2SandboxPlugin
         {
             if (kinds == null || kinds.Length == 0)
                 return string.Empty;
-            return string.Join(",", kinds);
+            return string.Join(",", Array.ConvertAll(kinds, i => i.ToString(CultureInfo.InvariantCulture)));
         }
 
         public static int[] ParseKinds(string? text)
         {
-            if (string.IsNullOrWhiteSpace(text))
-                return Array.Empty<int>();
+            if (StringEx.IsNullOrWhiteSpace(text))
+                return new int[0];
 
             string[] parts = text.Split(',');
             var list = new int[parts.Length];

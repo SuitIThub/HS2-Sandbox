@@ -115,7 +115,7 @@ namespace HS2SandboxPlugin
                     }
                     catch
                     {
-                        return Array.Empty<Type>();
+                        return new Type[0];
                     }
                 })
                 .FirstOrDefault(t => t != null && t.FullName == fullName);

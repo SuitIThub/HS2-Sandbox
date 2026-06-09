@@ -35,16 +35,16 @@ namespace HS2SandboxPlugin
 
         public void ForceSave() => SaveToDisk();
 
-        public IReadOnlyList<PoseAssociatedItemRecord> GetItems(PoseGridItem pose)
+        public IList<PoseAssociatedItemRecord> GetItems(PoseGridItem pose)
         {
             string key = GetKey(pose);
-            if (string.IsNullOrEmpty(key)) return Array.Empty<PoseAssociatedItemRecord>();
+            if (string.IsNullOrEmpty(key)) return new PoseAssociatedItemRecord[0];
             return _byPosePath.TryGetValue(key, out var list)
                 ? list
-                : Array.Empty<PoseAssociatedItemRecord>();
+                : new PoseAssociatedItemRecord[0];
         }
 
-        public void SetItems(PoseGridItem pose, IReadOnlyList<PoseAssociatedItemRecord> records)
+        public void SetItems(PoseGridItem pose, IList<PoseAssociatedItemRecord> records)
         {
             string key = GetKey(pose);
             if (string.IsNullOrEmpty(key)) return;
@@ -146,7 +146,7 @@ namespace HS2SandboxPlugin
             ItemCategory = r.ItemCategory,
             ItemNo = r.ItemNo,
             ItemKind = r.ItemKind,
-            ItemKinds = r.ItemKinds?.ToArray() ?? Array.Empty<int>(),
+            ItemKinds = r.ItemKinds?.ToArray() ?? new int[0],
             ItemInfoBlob = r.ItemInfoBlob != null ? (byte[])r.ItemInfoBlob.Clone() : null,
             ItemInfoVersion = r.ItemInfoVersion,
             BundlePath = r.BundlePath,
@@ -156,8 +156,8 @@ namespace HS2SandboxPlugin
             LocalPosition = r.LocalPosition,
             LocalRotation = r.LocalRotation,
             ItemScale = r.ItemScale,
-            ParentObjectName = string.IsNullOrWhiteSpace(r.ParentObjectName) ? null : r.ParentObjectName.Trim(),
-            ParentTreePath = string.IsNullOrWhiteSpace(r.ParentTreePath) ? null : r.ParentTreePath.Trim(),
+            ParentObjectName = StringEx.IsNullOrWhiteSpace(r.ParentObjectName) ? null : r.ParentObjectName.Trim(),
+            ParentTreePath = StringEx.IsNullOrWhiteSpace(r.ParentTreePath) ? null : r.ParentTreePath.Trim(),
             SavedAnchorBodyHeight = r.SavedAnchorBodyHeight,
             SavedAnchorObjectScale = r.SavedAnchorObjectScale,
             HasAttachChangeAmount = r.HasAttachChangeAmount,
@@ -184,10 +184,7 @@ namespace HS2SandboxPlugin
                     }
                 }
 
-                if (File.Exists(_storagePath))
-                    File.Replace(tempPath, _storagePath, null);
-                else
-                    File.Move(tempPath, _storagePath);
+                FileEx.CommitTempFile(tempPath, _storagePath);
             }
             catch (Exception ex)
             {
@@ -304,7 +301,7 @@ namespace HS2SandboxPlugin
             var temp = new Dictionary<string, List<PoseAssociatedItemRecord>>(StringComparer.OrdinalIgnoreCase);
             var inv = CultureInfo.InvariantCulture;
 
-            foreach (string rawLine in File.ReadLines(path, Encoding.UTF8))
+            foreach (string rawLine in File.ReadAllLines(path, Encoding.UTF8))
             {
                 string line = rawLine.TrimStart('\uFEFF').TrimEnd('\r');
                 if (line.Length == 0) continue;
@@ -330,7 +327,7 @@ namespace HS2SandboxPlugin
                     LocalPosition = ParseVec3(cols, 5, inv),
                     LocalRotation = ParseQuat(cols, 8, inv),
                     ItemScale = ParseVec3(cols, 12, inv),
-                    ParentObjectName = string.IsNullOrWhiteSpace(cols[15]) ? null : cols[15].Trim(),
+                    ParentObjectName = StringEx.IsNullOrWhiteSpace(cols[15]) ? null : cols[15].Trim(),
                     SavedAnchorBodyHeight = ParseFloat(cols, 16, inv),
                     SavedAnchorObjectScale = ParseVec3(cols, 17, inv)
                 };
@@ -341,7 +338,7 @@ namespace HS2SandboxPlugin
                     record.ItemKind = kind;
                     record.ItemKinds = PoseItemInfoSnapshot.ParseKinds(cols[21]);
                     record.ItemInfoBlob = TryParseBlob(cols[22]);
-                    record.ItemInfoVersion = string.IsNullOrWhiteSpace(cols[23]) ? null : cols[23].Trim();
+                    record.ItemInfoVersion = StringEx.IsNullOrWhiteSpace(cols[23]) ? null : cols[23].Trim();
                 }
 
                 if (cols.Length >= ColumnCountV3)
@@ -352,7 +349,7 @@ namespace HS2SandboxPlugin
                 }
 
                 if (cols.Length >= ColumnCountV4)
-                    record.ParentTreePath = string.IsNullOrWhiteSpace(cols[27]) ? null : cols[27].Trim();
+                    record.ParentTreePath = StringEx.IsNullOrWhiteSpace(cols[27]) ? null : cols[27].Trim();
 
                 if (cols.Length >= ColumnCount)
                 {
@@ -412,7 +409,7 @@ namespace HS2SandboxPlugin
 
         private static byte[]? TryParseBlob(string cell)
         {
-            if (string.IsNullOrWhiteSpace(cell))
+            if (StringEx.IsNullOrWhiteSpace(cell))
                 return null;
             try
             {

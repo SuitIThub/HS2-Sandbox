@@ -24,7 +24,7 @@ namespace HS2SandboxPlugin
             TimestampUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
 
         public string ListLabel =>
-            string.IsNullOrWhiteSpace(CharacterDisplayName)
+            StringEx.IsNullOrWhiteSpace(CharacterDisplayName)
                 ? FormatTimestampLocal()
                 : $"{CharacterDisplayName}  {FormatTimestampLocal()}";
     }
@@ -53,10 +53,10 @@ namespace HS2SandboxPlugin
 
         private bool _autoDeleteAfterApply;
 
-        public IReadOnlyList<PoseBrowserStashEntry> Entries => _entries;
+        public IList<PoseBrowserStashEntry> Entries => _entries;
 
         public static string GetDefaultPath() =>
-            Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_stash.json");
+            PathEx.Combine(Paths.ConfigPath, "com.hs2.sandbox", "pose_stash.json");
 
         public void LoadFromDisk()
         {
@@ -101,10 +101,7 @@ namespace HS2SandboxPlugin
                 string tempPath = path + ".tmp";
                 var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
                 File.WriteAllText(tempPath, json, utf8);
-                if (File.Exists(path))
-                    File.Replace(tempPath, path, null);
-                else
-                    File.Move(tempPath, path);
+                FileEx.CommitTempFile(tempPath, path);
                 _dirty = false;
             }
             catch (Exception ex)
@@ -203,7 +200,7 @@ namespace HS2SandboxPlugin
         {
             autoDeleteAfterApply = false;
             entries = new List<PoseBrowserStashEntry>();
-            if (string.IsNullOrWhiteSpace(json))
+            if (StringEx.IsNullOrWhiteSpace(json))
                 return false;
 
             if (!TryReadIntField(json, "\"version\"", out int version) || version != FormatVersion)

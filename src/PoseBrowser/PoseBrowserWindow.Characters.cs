@@ -61,7 +61,9 @@ namespace HS2SandboxPlugin
                 if (GUILayout.Button(genderLabel, GUILayout.Width(24f), GUILayout.Height(22f)))
                     _characterConfig.ToggleSlotGender(i);
 
-                string label = $"{i + 1}. {slot.DisplayName}";
+                string label = inScene
+                    ? $"{i + 1}. {slot.DisplayName}"
+                    : $"{i + 1}. {slot.DisplayName} (missing)";
                 if (GUILayout.Toggle(rowOn, label, GUI.skin.button, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
                     _selectedSlotIndex = i;
                 else if (rowOn)
@@ -132,7 +134,7 @@ namespace HS2SandboxPlugin
             bool groupOnly = TryGetSingleSelectedGroup(out var group) &&
                 !_filteredItems.Any(i => i.IsSelected && string.IsNullOrEmpty(i.ImportPackEntryId));
             if (groupOnly && group != null)
-                return GetGroupMemberItemsInDisplayOrder(group.Id);
+                return GetGroupMemberItems(group.Id);
 
             var list = new List<PoseGridItem>();
             foreach (var e in _displayEntries)
@@ -144,23 +146,11 @@ namespace HS2SandboxPlugin
             return list;
         }
 
-        private List<PoseGridItem> GetGroupMemberItemsInDisplayOrder(string groupId)
-        {
-            var list = new List<PoseGridItem>();
-            foreach (var e in _displayEntries)
-            {
-                if (e.Item.GroupId == groupId)
-                    list.Add(e.Item);
-            }
-
-            return list;
-        }
-
         private void ApplyPosesToCharactersMulti()
         {
             if (TryGetSingleSelectedGroup(out var group))
             {
-                ApplyPosesListToSelectedCharacters(GetGroupMemberItemsInDisplayOrder(group!.Id), group.Id);
+                ApplyPosesListToSelectedCharacters(GetGroupMemberItems(group!.Id), group.Id);
                 return;
             }
 
@@ -169,10 +159,10 @@ namespace HS2SandboxPlugin
 
         private void ApplyGroupMembersToSelectedCharacters(string groupId)
         {
-            ApplyPosesListToSelectedCharacters(GetGroupMemberItemsInDisplayOrder(groupId), groupId);
+            ApplyPosesListToSelectedCharacters(GetGroupMemberItems(groupId), groupId);
         }
 
-        private void ApplyPosesListToSelectedCharacters(IReadOnlyList<PoseGridItem> poses, string? knownGroupId = null)
+        private void ApplyPosesListToSelectedCharacters(IList<PoseGridItem> poses, string? knownGroupId = null)
         {
             PoseGroup? layoutGroup = null;
             if (!string.IsNullOrEmpty(knownGroupId))
@@ -215,7 +205,7 @@ namespace HS2SandboxPlugin
                     _tagDb.RecordLastUsed(pose);
                 });
 
-#if !KKS
+#if HS2
             HeelzControlService.ApplyTagRulesForMultiApply(chars, poses);
 #endif
 
@@ -292,7 +282,7 @@ namespace HS2SandboxPlugin
 
         private string? BuildGroupApplyAssignmentTooltip(string groupId)
         {
-            var poses = GetGroupMemberItemsInDisplayOrder(groupId);
+            var poses = GetGroupMemberItems(groupId);
             if (poses.Count == 0)
                 return null;
 
@@ -304,7 +294,9 @@ namespace HS2SandboxPlugin
             var sb = new StringBuilder(poses.Count * 40);
             for (int i = 0; i < plan.Count; i++)
             {
-                var (pose, characters) = plan[i];
+                PoseCharListPair planEntry = plan[i];
+                PoseGridItem pose = planEntry.Pose;
+                List<OCIChar> characters = planEntry.Characters;
                 if (i > 0)
                     sb.Append('\n');
                 string poseLabel = GetPoseLabelForTooltip(pose);
@@ -327,7 +319,7 @@ namespace HS2SandboxPlugin
 
         private string GetPoseLabelForTooltip(PoseGridItem pose)
         {
-            if (!string.IsNullOrWhiteSpace(pose.DisplayName))
+            if (!StringEx.IsNullOrWhiteSpace(pose.DisplayName))
                 return pose.DisplayName.Trim();
             string rel = pose.RelativePath(_dataService.PoseRootPath);
             if (!string.IsNullOrEmpty(rel))

@@ -21,7 +21,7 @@ namespace HS2SandboxPlugin
         public int ItemKind { get; set; }
 
         /// <summary>Category path indices from the item list UI.</summary>
-        public int[] ItemKinds { get; set; } = Array.Empty<int>();
+        public int[] ItemKinds { get; set; } = new int[0];
 
         /// <summary>Studio <see cref="OIItemInfo"/> binary from <see cref="OIItemInfo.Save"/>.</summary>
         public byte[]? ItemInfoBlob { get; set; }

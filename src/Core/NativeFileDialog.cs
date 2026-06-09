@@ -88,7 +88,7 @@ namespace HS2SandboxPlugin
                 Marshal.Copy(initBytes, 0, filePtr, bufferSize);
                 var ofn = new OpenFileNameW
                 {
-                    lStructSize = Marshal.SizeOf<OpenFileNameW>(),
+                    lStructSize = Marshal.SizeOf(typeof(OpenFileNameW)),
                     hwndOwner = IntPtr.Zero,
                     lpstrFilter = filter ?? "All files (*.*)\0*.*\0",
                     nFilterIndex = 1,
@@ -153,7 +153,7 @@ namespace HS2SandboxPlugin
                 Marshal.Copy(initBytes, 0, filePtr, bufferSize);
                 var ofn = new OpenFileNameW
                 {
-                    lStructSize = Marshal.SizeOf<OpenFileNameW>(),
+                    lStructSize = Marshal.SizeOf(typeof(OpenFileNameW)),
                     hwndOwner = IntPtr.Zero,
                     lpstrFilter = filter ?? "All files (*.*)\0*.*\0",
                     nFilterIndex = 1,

@@ -41,7 +41,7 @@ namespace HS2SandboxPlugin
     internal sealed class PoseGroupsPersistedFile
     {
         public int version = 1;
-        public PoseGroupPersistedEntry[] groups = Array.Empty<PoseGroupPersistedEntry>();
+        public PoseGroupPersistedEntry[] groups = new PoseGroupPersistedEntry[0];
     }
 
     [Serializable]
@@ -49,7 +49,7 @@ namespace HS2SandboxPlugin
     {
         public string id = "";
         public string name = "";
-        public string[] tags = Array.Empty<string>();
-        public string[] members = Array.Empty<string>();
+        public string[] tags = new string[0];
+        public string[] members = new string[0];
     }
 }
