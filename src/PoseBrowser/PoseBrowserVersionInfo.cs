@@ -8,19 +8,19 @@ namespace HS2SandboxPlugin
     public static class PoseBrowserVersionInfo
     {
 #if KKS
-        public const string Version = "2.4.0";
+        public const string Version = "2.5.0";
         public const string StandaloneDllAssetName = "KKSSandbox.PoseBrowser.dll";
         public const string VersionsJsonVersionKey = "poseBrowserKks";
         public const string VersionsJsonDownloadKey = "poseBrowserKksDownload";
         public const string UpdateCheckUserAgent = "KKSSandbox-PoseBrowser-UpdateCheck";
 #elif KK
-        public const string Version = "1.0.0";
+        public const string Version = "1.1.0";
         public const string StandaloneDllAssetName = "KKSandbox.PoseBrowser.dll";
         public const string VersionsJsonVersionKey = "poseBrowserKk";
         public const string VersionsJsonDownloadKey = "poseBrowserKkDownload";
         public const string UpdateCheckUserAgent = "KKSandbox-PoseBrowser-UpdateCheck";
 #else
-        public const string Version = "5.5.0";
+        public const string Version = "5.6.0";
         public const string StandaloneDllAssetName = "HS2Sandbox.PoseBrowser.dll";
         public const string VersionsJsonVersionKey = "poseBrowser";
         public const string VersionsJsonDownloadKey = "poseBrowserDownload";
