@@ -12,12 +12,12 @@
   "workspaceTreeLockDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.WorkspaceTreeLock.dll",
   "notebook": "1.0.1",
   "notebookDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Notebook.dll",
-  "poseBrowser": "5.5.0",
-  "poseBrowserDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.PoseBrowser.dll",
-  "poseBrowserKks": "2.4.0",
-  "poseBrowserKksDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/KKSSandbox.PoseBrowser.dll",
-  "poseBrowserKk": "1.0.0",
-  "poseBrowserKkDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/KKSandbox.PoseBrowser.dll",
+  "poseBrowser": "5.6.0",
+  "poseBrowserDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-5.6.0%2B1.1.0%2B2.5.0/HS2Sandbox.PoseBrowser.dll",
+  "poseBrowserKks": "2.5.0",
+  "poseBrowserKksDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-5.6.0%2B1.1.0%2B2.5.0/KKSSandbox.PoseBrowser.dll",
+  "poseBrowserKk": "1.1.0",
+  "poseBrowserKkDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-5.6.0%2B1.1.0%2B2.5.0/KKSandbox.PoseBrowser.dll",
   "allInOne": "2.0.0",
   "allInOneDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-posebrowser-4.3.2/HS2SandboxPlugin.dll"
 }
