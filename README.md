@@ -51,14 +51,14 @@ You can install **one DLL that includes everything**, or pick **individual modul
 Each module below has a **Download** link to the latest release build.
 
 ### HS2 Sandbox — CopyScript (`HS2Sandbox.CopyScript.dll`)
-[Download CopyScript](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-copyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B4.3.2%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.CopyScript.dll)
+[Download CopyScript](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.CopyScript.dll)
 
 Connects Studio to an external **CopyScript** service on your PC. From the **CopyScript Control** window you can work with tracked files, counters, lists, and batch rules without leaving the game.
 
 **Typical use:** run your CopyScript server, open the window from the sidebar, and point it at the correct host/port. If nothing connects, check firewall settings and that the server is actually running.
 
 ### HS2 Sandbox — Timeline (`HS2Sandbox.Timeline.dll`)
-[Download Timeline](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-copyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B4.3.2%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Timeline.dll)
+[Download Timeline](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Timeline.dll)
 
 An **action timeline** for Studio: ordered steps (waits, screenshots, Studio actions, CopyScript calls, variables, and more), with run / pause / stop. Handy for repeatable scene setup or light automation.
 
@@ -67,49 +67,49 @@ Many timeline commands that talk to **other plugins** (for example VNGE, Fashion
 **Typical use:** build a timeline in the window, then play it when you want the sequence to run. Stick to Studio-native steps unless you already have the matching modified plugins installed.
 
 ### HS2 Sandbox — SearchBarManager (`HS2Sandbox.SearchBarManager.dll`)
-[Download SearchBarManager](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-copyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B4.3.2%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SearchBarManager.dll)
+[Download SearchBarManager](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SearchBarManager.dll)
 
 Adds **search fields** on long Studio lists (for example wear/custom categories) so you can filter items quickly instead of scrolling forever.
 
 **Typical use:** install this module if you only want search bars, or use the all-in-one build. There is no separate sidebar button—the bars appear on the panels they attach to.
 
 ### HS2 Sandbox — Son scale (`HS2Sandbox.SonScale.dll`)
-[Download Son scale](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-copyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B4.3.2%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SonScale.dll)
+[Download Son scale](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SonScale.dll)
 
 **Separate sliders** for overall size, length, and girth on the selected character’s Son (member), under **Manipulate → Chara → State**. Works with or without **Studio Better Penetration**; with BP installed, length scaling integrates more cleanly.
 
 **Typical use:** select a character in the workspace, open **Son scale** from the sidebar, enable split scaling, then adjust sliders in the Manipulate panel.
 
 ### HS2 Sandbox — Workspace tree lock (`HS2Sandbox.WorkspaceTreeLock.dll`)
-[Download Workspace tree lock](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-copyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B4.3.2%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.WorkspaceTreeLock.dll)
+[Download Workspace tree lock](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.WorkspaceTreeLock.dll)
 
 In the Studio **object list**, **middle-click** a nested row to **pin** it. Pinned rows stay visible when you collapse parent groups (they get a cyan border). Middle-click again to unpin.
 
 **Typical use:** pin deep items you need to reach often so collapsing the tree does not hide them.
 
 ### HS2 Sandbox — Notebook (`HS2Sandbox.Notebook.dll`)
-[Download Notebook](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-copyscript%2Bnotebook%2Bposebrowser%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B4.3.2%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Notebook.dll)
+[Download Notebook](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Notebook.dll)
 
 A simple **in-game notepad** for ideas, shot lists, and reminders—opened from the sidebar. Notes are saved automatically to `BepInEx/config/com.hs2.sandbox/notebook.json` and restored the next time you start Studio.
 
 **Typical use:** keep the window open while you work; edits are debounced to disk (~0.5s) and flushed when you close the window or exit the game.
 
 ### HS2 Sandbox — Pose Browser (`HS2Sandbox.PoseBrowser.dll`)
-[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-1.0.0%2B1.0.0%2B2.4.0/HS2Sandbox.PoseBrowser.dll)
+[Download Pose Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.PoseBrowser.dll)
 
 Browse, tag, favorite, save, and apply poses from your **`UserData/studio/pose`** folder. Folder tree, thumbnails, search, and file operations (move, copy, delete with backup) from one window.
 
 **Typical use:** open from the sidebar, pick a folder, filter or tag poses, apply to selected characters. Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** adds extra help on **F3** when installed. More detail: [`docs/PoseBrowser-HS2Wiki-Manual.md`](docs/PoseBrowser-HS2Wiki-Manual.md).
 
 ### KKS Sandbox — Pose Browser (`KKSSandbox.PoseBrowser.dll`)
-[Download Pose Browser (KKS)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-1.0.0%2B1.0.0%2B2.4.0/KKSSandbox.PoseBrowser.dll)
+[Download Pose Browser (KKS)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/KKSSandbox.PoseBrowser.dll)
 
 Same pose library browser for **Koikatsu Sunshine** **Chara Studio**. Uses your game’s **`UserData/studio/pose`** folder, with the same tagging, favorites, compact layouts, and file tools as the HS2 build.
 
 **Typical use:** install **`KKSSandbox.PoseBrowser.dll`** (and `pose-icon.png` beside it) under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.PoseBrowser.dll`**—they are separate game builds. The in-game update check reads **`poseBrowserKks`** / **`poseBrowserKksDownload`** from [`versions.json`](versions.json).
 
 ### KK Sandbox — Pose Browser (`KKSandbox.PoseBrowser.dll`)
-[Download Pose Browser (KK)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-1.0.0%2B1.0.0%2B2.4.0/KKSandbox.PoseBrowser.dll)
+[Download Pose Browser (KK)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/KKSandbox.PoseBrowser.dll)
 
 Same pose library browser for original **Koikatsu** **Chara Studio** (Unity 5.6 / .NET 3.5). Uses your game’s **`UserData/studio/pose`** folder with the same tagging, favorites, and file tools as the HS2/KKS builds.
 
