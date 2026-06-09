@@ -97,7 +97,7 @@
       "displayName": "Pose Browser (HS2)",
       "projectName": "HS2Sandbox.PoseBrowser",
       "versionFile": "src/PoseBrowser/PoseBrowserVersionInfo.cs",
-      "versionMatchIndex": 1,
+      "versionMatchIndex": 2,
       "releaseArtifactPath": "targets/HS2/PoseBrowser/bin/Release/HS2Sandbox.PoseBrowser.dll",
       "releaseDllFileName": "HS2Sandbox.PoseBrowser.dll",
       "versionsJsonKey": "poseBrowser",

@@ -1,6 +1,10 @@
 namespace HS2SandboxPlugin
 {
-    /// <summary>Pose Browser module version (<c>versions.json</c> keys are updated by CI after each release).</summary>
+    /// <summary>
+    /// Pose Browser module version (<c>versions.json</c> keys are updated by CI after each release).
+    /// CI reads all <c>Version = "…"</c> lines in this file by index (see <c>.github/plugins.manifest.json</c>):
+    /// 0 = KKS, 1 = KK, 2 = HS2 (#else).
+    /// </summary>
     public static class PoseBrowserVersionInfo
     {
 #if KKS
