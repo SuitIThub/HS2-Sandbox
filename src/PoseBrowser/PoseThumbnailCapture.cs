@@ -259,12 +259,12 @@ namespace HS2SandboxPlugin
             GUI.color = oldColor;
 
             const float gap = 6f;
-            const float btnH = 26f;
-            const float btnGap = 4f;
-            float labelH = 20f;
-            float padV = 7f;
+            float btnH = PoseBrowserScale.Px(26f);
+            float btnGap = PoseBrowserScale.Px(4f);
+            float labelH = PoseBrowserScale.Px(20f);
+            float padV = PoseBrowserScale.Px(7f);
             float panelH = padV + labelH + btnH + padV;
-            float panelW = Mathf.Min(Mode == CaptureMode.Manual ? 420f : 300f, Screen.width - 16f);
+            float panelW = Mathf.Min(PoseBrowserScale.Px(Mode == CaptureMode.Manual ? 420f : 300f), Screen.width - 16f);
 
             float panelX = CaptureRect.center.x - panelW * 0.5f;
             panelX = Mathf.Clamp(panelX, 8f, Mathf.Max(8f, Screen.width - panelW - 8f));
@@ -290,10 +290,10 @@ namespace HS2SandboxPlugin
             GUILayout.BeginHorizontal();
             if (Mode == CaptureMode.Manual)
             {
-                if (GUILayout.Button("Capture", GUILayout.Height(btnH), GUILayout.Width(86f)))
+                if (GUILayout.Button("Capture", GUILayout.Height(btnH), PoseBrowserScale.W(86f)))
                     ConfirmCapture();
                 GUILayout.Space(btnGap);
-                if (GUILayout.Button("Skip", GUILayout.Height(btnH), GUILayout.Width(72f)))
+                if (GUILayout.Button("Skip", GUILayout.Height(btnH), PoseBrowserScale.W(72f)))
                     SkipCurrent();
                 GUILayout.Space(btnGap);
                 bool canAuto = CurrentIndex < TotalCount;
@@ -301,12 +301,12 @@ namespace HS2SandboxPlugin
                 if (GUILayout.Button(
                         new GUIContent("Auto-capture", "Capture this pose, then capture all remaining poses automatically"),
                         GUILayout.Height(btnH),
-                        GUILayout.Width(104f)))
+                        PoseBrowserScale.W(104f)))
                     StartAutoCaptureChain();
                 GUI.enabled = true;
                 GUILayout.Space(btnGap);
             }
-            if (GUILayout.Button("Cancel", GUILayout.Height(btnH), GUILayout.Width(78f)))
+            if (GUILayout.Button("Cancel", GUILayout.Height(btnH), PoseBrowserScale.W(78f)))
                 Cancel();
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();

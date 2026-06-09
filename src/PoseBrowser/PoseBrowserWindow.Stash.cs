@@ -9,7 +9,8 @@ namespace HS2SandboxPlugin
     {
         private const int StashWindowId = 2029;
         private const int StashUndockedWindowId = 2030;
-        private const float StashPaneDefaultWidth = 360f;
+        private const float StashPaneDefaultWidthBase = 360f;
+        private float StashPaneDefaultWidth => PoseBrowserScale.Px(StashPaneDefaultWidthBase);
         private const float StashFloatingMinWidth = 220f;
         private const float StashFloatingMinHeight = 180f;
         private const float StashFloatingMaxWidth = 720f;
@@ -108,8 +109,8 @@ namespace HS2SandboxPlugin
         {
             if (GUILayout.Button(
                     IsAnyStashVisible ? "Stash ▶" : "Stash",
-                    GUILayout.Width(width),
-                    GUILayout.Height(height)))
+                    PoseBrowserScale.W(width),
+                    PoseBrowserScale.H(height)))
                 ToggleStashFromMainWindow();
         }
 
@@ -356,8 +357,8 @@ namespace HS2SandboxPlugin
             if (showUndockButton &&
                 GUILayout.Button(
                     new GUIContent("Float", "Undock this panel — move and resize it independently."),
-                    GUILayout.Width(44f),
-                    GUILayout.Height(22f)))
+                    PoseBrowserScale.W(44f),
+                    PoseBrowserScale.H(22f)))
             {
                 UndockStashPane();
             }
@@ -365,8 +366,8 @@ namespace HS2SandboxPlugin
             if (showDockButton &&
                 GUILayout.Button(
                     new GUIContent("Dock", "Dock this panel beside the Pose Browser window."),
-                    GUILayout.Width(44f),
-                    GUILayout.Height(22f)))
+                    PoseBrowserScale.W(44f),
+                    PoseBrowserScale.H(22f)))
             {
                 DockStashPane();
             }
@@ -375,7 +376,7 @@ namespace HS2SandboxPlugin
                 GUILayout.Button(
                     new GUIContent("×", "Close the stash window."),
                     GUILayout.Width(WindowChromeButtonWidth),
-                    GUILayout.Height(22f)))
+                    PoseBrowserScale.H(22f)))
             {
                 CloseUndockedStash();
             }
@@ -389,7 +390,7 @@ namespace HS2SandboxPlugin
                 "Stash the FK/IK pose from one selected character, then apply it to any Studio selection.",
                 GUI.skin.label);
 
-            if (GUILayout.Button("Stash selected character", GUILayout.Height(28f)))
+            if (GUILayout.Button("Stash selected character", PoseBrowserScale.H(28f)))
                 PerformStashSelectedCharacter();
 
             GUILayout.Space(6f);
@@ -417,7 +418,7 @@ namespace HS2SandboxPlugin
             if (!undocked)
             {
                 GUILayout.Space(6f);
-                if (GUILayout.Button("Close panel", GUILayout.Height(26f)))
+                if (GUILayout.Button("Close panel", PoseBrowserScale.H(26f)))
                     CloseDockedStash();
             }
         }
@@ -501,9 +502,9 @@ namespace HS2SandboxPlugin
                     new GUIContent(entry.ListLabel, "Confirm delete for this stashed pose."),
                     GetStashEntryButtonStyle(),
                     GUILayout.ExpandWidth(true));
-                if (GUILayout.Button("Yes", GUILayout.Width(32f), GUILayout.Height(22f)))
+                if (GUILayout.Button("Yes", PoseBrowserScale.W(32f), PoseBrowserScale.H(22f)))
                     ConfirmDeleteStashEntry(entry.Id);
-                if (GUILayout.Button("No", GUILayout.Width(32f), GUILayout.Height(22f)))
+                if (GUILayout.Button("No", PoseBrowserScale.W(32f), PoseBrowserScale.H(22f)))
                     _pendingDeleteStashEntryId = null;
             }
             else
@@ -518,8 +519,8 @@ namespace HS2SandboxPlugin
 
                 if (GUILayout.Button(
                              new GUIContent("x", "Delete this stashed pose (confirmation required)."),
-                             GUILayout.Width(22f),
-                             GUILayout.Height(22f)))
+                             PoseBrowserScale.W(22f),
+                             PoseBrowserScale.H(22f)))
                 {
                     _pendingDeleteStashEntryId = entry.Id;
                     _showClearStashConfirm = false;
@@ -536,16 +537,16 @@ namespace HS2SandboxPlugin
             {
                 GUILayout.Label("Delete all stashed poses? This cannot be undone.", GUI.skin.label);
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Confirm delete", GUILayout.Height(26f), GUILayout.MinWidth(120f)))
+                if (GUILayout.Button("Confirm delete", PoseBrowserScale.H(26f), PoseBrowserScale.MinW(120f)))
                     ConfirmClearEntireStash();
-                if (GUILayout.Button("Cancel", GUILayout.Height(26f), GUILayout.MinWidth(80f)))
+                if (GUILayout.Button("Cancel", PoseBrowserScale.H(26f), PoseBrowserScale.MinW(80f)))
                     _showClearStashConfirm = false;
                 GUILayout.EndHorizontal();
             }
             else
             {
                 GUI.enabled = _poseStash.Entries.Count > 0;
-                if (GUILayout.Button("Clear entire stash", GUILayout.Height(26f)))
+                if (GUILayout.Button("Clear entire stash", PoseBrowserScale.H(26f)))
                 {
                     _showClearStashConfirm = true;
                     _pendingDeleteStashEntryId = null;

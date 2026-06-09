@@ -1,0 +1,115 @@
+---
+description: Cross-game Pose Browser compatibility (HS2 / KKS / KK net35) — shared src and targets
+globs: src/PoseBrowser/**,src/Core/**,targets/**
+alwaysApply: false
+---
+
+# Cross-game Pose Browser (HS2 / KKS / KK)
+
+Shared code under `src/PoseBrowser/` and `src/Core/` compiles for **three** runtimes:
+
+| Game | TFM | Unity | Compile symbol |
+|------|-----|-------|----------------|
+| HS2 | net472 | 2018.4 | `HS2` |
+| KKS | net472 | 2019.4 | `KKS` |
+| KK | **net35** | 5.6.2 | `KK` |
+
+KK uses stock Unity Mono (.NET 3.5 profile). **Every change in shared `src/` must stay net35-safe** and build on all three targets. See `docs/KK-PoseBrowser-Port-Plan.md` for full context.
+
+## Architecture
+
+- **Shared:** `src/PoseBrowser/`, `src/Core/` — one implementation, no game forks.
+- **Per-game:** `targets/<GAME>/<Module>/` — only `*.csproj`, `Plugin.cs`, props; compile shared sources via `$(SrcRoot)`.
+- **Game refs / TFM / `DefineConstants`:** `targets/<GAME>/Directory.Build.props`.
+- **Do not** put `IronPython` or `System.Memory` on PoseBrowser; they are scoped to Timeline/Notebook/CopyScript only.
+
+## BCL — forbidden in shared code (net4+ only)
+
+Never introduce these in `src/PoseBrowser/` or shared `src/Core/`:
+
+| API | Use instead |
+|-----|-------------|
+| `Array.Empty<T>()` | `new T[0]` (compiler may emit `Array.Empty` if you build against net472 refs only — shared code must use explicit `new T[0]`) |
+| `string.IsNullOrWhiteSpace` | `StringEx.IsNullOrWhiteSpace` (`Net35Compat.cs`) |
+| `Enum.HasFlag` | `(x & y) == y` |
+| `IReadOnlyList/Collection/Dictionary` | `IList` / `ICollection` / `IDictionary` |
+| Value tuples `(a, b)` | Named structs in `PoseBrowserPairs.cs` (`PoseOciPair`, etc.) |
+| `File.ReadLines` | `File.ReadAllLines(path, Encoding.UTF8)` |
+| `Directory.EnumerateFiles` | `Directory.GetFiles` |
+| `string.Join(sep, IEnumerable)` | `string.Join(sep, list.ToArray())` or `new[] { ... }` |
+| `Path.Combine` with 4+ args | `PathEx.Combine(a, b, c)` or nested `Path.Combine` |
+| `System.IO.InvalidDataException` | `PackFormatException` (`Net35Compat.cs`) |
+| `Lazy<T>` | Eager init or nullable cache fields |
+
+**Atomic config writes:** use `FileEx.WriteAllTextAtomic` / `FileEx.CommitTempFile` — not bare `File.Replace` without fallback (Mono/locked files).
+
+**UTF-8 files:** `new UTF8Encoding(false)` or `encoderShouldEmitUTF8Identifier: false` — both OK; prefer `false` ctor on hot paths.
+
+## Helpers — reuse, do not duplicate
+
+- `StringEx`, `PathEx`, `FileEx`, `PackFormatException` — `src/Core/Net35Compat.cs`
+- `RegexEx.Create(pattern)` — KK must not use `RegexOptions.Compiled` / `CultureInvariant` (use lazy fields, not static ctor that builds regex)
+- Path keys for poses/tags/groups: `PoseGroupDatabase.NormalizeMemberPath` / `PoseGridItem.RelativePath` (already normalized)
+
+## `#if` game symbols
+
+Use **three-way** symbols, not `!KKS`:
+
+| Feature | Guard |
+|---------|--------|
+| Heelz, `AIChara`, HS2-only APIs | `#if HS2` |
+| Guide / thumbnail workarounds (KKS + KK) | `#if KKS \|\| KK` |
+| KK-only monocolor body (`ChaControl.ChangeSimpleBody*`) | `#if KKS \|\| KK` in `PoseBrowserCharacterSimpleColor.cs` |
+| Per-game version / update keys | `#if KKS` / `#elif KK` / `#else` in `PoseBrowserVersionInfo.cs` |
+
+Never `#if !KKS` for HS2-only code — KK is not KKS.
+
+## Runtime pitfalls (KK)
+
+- **Types:** Do not throw/catch BCL types missing on net35 (`InvalidDataException`, etc.) — `TypeLoadException` at JIT even if never thrown.
+- **KK female monocolor:** `OCIChar` simple-color APIs alone are insufficient — also call `oci.charInfo.ChangeSimpleBodyColor` + `ChangeSimpleBodyDraw`.
+- **Pose files:** KK poses are not interchangeable with HS2/KKS binaries — expected, not a bug.
+
+## Version & CI
+
+`PoseBrowserVersionInfo.cs` has **three** `Version = "…"` lines (preprocessor order). `.github/plugins.manifest.json` `versionMatchIndex` must match:
+
+- **0** = KKS  
+- **1** = KK  
+- **2** = HS2 (`#else`)
+
+Adding a fourth game branch requires updating **both** the source file comment and manifest indices.
+
+## Persistence
+
+Follow `no-jsonutility` rule for new save/load. Match existing patterns: TSV (`PoseTagDatabase`, `PoseGroupDatabase`), hand-written JSON (`NotebookPersistence`, `PoseBrowserCharacterConfig` v3 parser), `FileEx` for atomic writes.
+
+## Before finishing
+
+1. Build **all three** PoseBrowser targets (`targets/HS2`, `targets/KKS`, `targets/KK`).
+2. Prefer extending `Net35Compat` / `PoseBrowserPairs` over game-specific copies in `src/`.
+3. If an API “works on HS2”, grep whether it exists on net35 before using it in shared code.
+
+```csharp
+// BAD — net4+ join overload; fails KK runtime
+string.Join("|", someList);
+
+// GOOD
+string.Join("|", someList.ToArray());
+
+// BAD — missing on KK; TypeLoadException when method is JIT'd
+throw new InvalidDataException("bad zip");
+
+// GOOD
+throw new PackFormatException("bad zip");
+
+// BAD — HS2-only guard
+#if !KKS
+HeelzControlService.Apply(...);
+#endif
+
+// GOOD
+#if HS2
+HeelzControlService.Apply(...);
+#endif
+```

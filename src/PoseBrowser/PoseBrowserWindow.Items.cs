@@ -9,10 +9,13 @@ namespace HS2SandboxPlugin
 {
     public partial class PoseBrowserWindow
     {
-        private const float ItemAssociationPaneDefaultWidth = 340f;
+        private const float ItemAssociationPaneDefaultWidthBase = 340f;
+        private float ItemAssociationPaneDefaultWidth => PoseBrowserScale.Px(ItemAssociationPaneDefaultWidthBase);
         private const float ItemPaneLiveStateRefreshSeconds = 0.25f;
-        private const float ItemPaneIconButtonWidth = 22f;
-        private const float ItemPaneCheckboxWidth = 20f;
+        private const float ItemPaneIconButtonWidthBase = 22f;
+        private float ItemPaneIconButtonWidth => PoseBrowserScale.Px(ItemPaneIconButtonWidthBase);
+        private const float ItemPaneCheckboxWidthBase = 20f;
+        private float ItemPaneCheckboxWidth => PoseBrowserScale.Px(ItemPaneCheckboxWidthBase);
 
         private PoseItemDatabase _itemDb = null!;
         private bool _showItemAssociationPane;
@@ -277,7 +280,7 @@ namespace HS2SandboxPlugin
             GUILayout.Label(BuildAddCandidatesLabel(chars, studioItems));
             bool canAdd = _itemAssociationPose != null && chars.Count == 1 && studioItems.Count > 0;
             GUI.enabled = canAdd;
-            if (GUILayout.Button("Add selected item(s)", GUILayout.Height(26f)) && canAdd)
+            if (GUILayout.Button("Add selected item(s)", PoseBrowserScale.H(26f)) && canAdd)
             {
                 OCIChar anchor = chars[0];
                 var itemsCopy = studioItems.ToList();
@@ -330,7 +333,7 @@ namespace HS2SandboxPlugin
             var nameStyle = isCandidate
                 ? _itemPaneStoredNameSelectedButtonStyle!
                 : _itemPaneStoredNameButtonStyle!;
-            if (GUILayout.Button(displayName, nameStyle, GUILayout.MinWidth(60f), GUILayout.ExpandWidth(true)))
+            if (GUILayout.Button(displayName, nameStyle, PoseBrowserScale.MinW(60f), GUILayout.ExpandWidth(true)))
             {
                 int loadIndex = index;
                 ScheduleItemPaneGuiAction(() =>
@@ -345,7 +348,7 @@ namespace HS2SandboxPlugin
                     GUI.color = new Color(1f, 0.55f, 0.1f);
                 GUILayout.Label(
                     showWarn ? new GUIContent("⚠", warn) : GUIContent.none,
-                    GUILayout.Width(16f));
+                    PoseBrowserScale.W(16f));
                 GUI.color = prev;
             }
 
@@ -353,7 +356,7 @@ namespace HS2SandboxPlugin
                     new GUIContent("✎", "Rename item label"),
                     _itemPaneIconButtonStyle!,
                     GUILayout.Width(ItemPaneIconButtonWidth),
-                    GUILayout.Height(20f)))
+                    PoseBrowserScale.H(20f)))
             {
                 int renameIndex = index;
                 string renameText = displayName;
@@ -368,7 +371,7 @@ namespace HS2SandboxPlugin
                     new GUIContent("X", "Remove from pose"),
                     _itemPaneIconButtonStyle!,
                     GUILayout.Width(ItemPaneIconButtonWidth),
-                    GUILayout.Height(20f)))
+                    PoseBrowserScale.H(20f)))
             {
                 int removeIndex = index;
                 ScheduleItemPaneGuiAction(() => RemoveStoredItemAt(removeIndex));
@@ -387,10 +390,10 @@ namespace HS2SandboxPlugin
             GUILayout.Label("Rename item");
             _itemRenameText = GUILayout.TextField(_itemRenameText);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("OK", GUILayout.Height(22f)))
+            if (GUILayout.Button("OK", PoseBrowserScale.H(22f)))
                 ScheduleItemPaneGuiAction(CommitItemRename);
 
-            if (GUILayout.Button("Cancel", GUILayout.Height(22f)))
+            if (GUILayout.Button("Cancel", PoseBrowserScale.H(22f)))
                 ScheduleItemPaneGuiAction(() => _itemRenameIndex = -1);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
@@ -435,7 +438,7 @@ namespace HS2SandboxPlugin
             GUI.enabled = canLoad;
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Load Selection", GUILayout.Height(26f)) && canLoad)
+            if (GUILayout.Button("Load Selection", PoseBrowserScale.H(26f)) && canLoad)
             {
                 var indices = new List<int>();
                 for (int i = 0; i < records.Count; i++)
@@ -449,7 +452,7 @@ namespace HS2SandboxPlugin
                     LoadAssociatedItems(_itemAssociationPose!, copy, ignoreCheckboxes: false));
             }
 
-            if (GUILayout.Button("Load All", GUILayout.Height(26f)) && canLoad)
+            if (GUILayout.Button("Load All", PoseBrowserScale.H(26f)) && canLoad)
             {
                 int count = records.Count;
                 ScheduleItemPaneGuiAction(() =>

@@ -11,6 +11,7 @@ namespace HS2SandboxPlugin
         /// <summary>Config section used for <see cref="KeyboardShortcut"/> entries (ConfigurationManager key picker).</summary>
         public const string KeyboardSection = "Pose Browser · Keyboard shortcuts";
 
+        public static ConfigEntry<float>? UiScale;
         public static ConfigEntry<float>? CardColumnWidth;
         public static ConfigEntry<int>? ItemsPerPage;
         public static ConfigEntry<float>? AutoCaptureDelaySeconds;
@@ -31,6 +32,14 @@ namespace HS2SandboxPlugin
         {
             if (CardColumnWidth != null)
                 return;
+
+            UiScale = cfg.Bind(
+                "Pose Browser",
+                "UI scale",
+                PoseBrowserScale.DefaultFactor,
+                new ConfigDescription(
+                    "Scales the entire Pose Browser UI (text, buttons, panels, cards). Useful on high-DPI / 4K displays where controls feel too small. Editable in Pose Browser → Options.",
+                    new AcceptableValueRange<float>(PoseBrowserScale.MinFactor, PoseBrowserScale.MaxFactor)));
 
             CardColumnWidth = cfg.Bind(
                 "Pose Browser",

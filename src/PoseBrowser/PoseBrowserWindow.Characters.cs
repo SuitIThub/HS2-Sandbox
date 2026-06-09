@@ -20,16 +20,16 @@ namespace HS2SandboxPlugin
             GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label(
                 "Priority list for multi-character pose apply. Top = highest priority.",
-                GUILayout.Height(32f));
+                PoseBrowserScale.H(32f));
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Load characters", GUILayout.Height(26f)))
+            if (GUILayout.Button("Load characters", PoseBrowserScale.H(26f)))
             {
                 _characterConfig.LoadNewFromScene(_dataService.GetSceneCharacters());
                 _selectedSlotIndex = -1;
             }
 
-            if (GUILayout.Button("Remove missing", GUILayout.Height(26f)))
+            if (GUILayout.Button("Remove missing", PoseBrowserScale.H(26f)))
             {
                 int removed = _characterConfig.RemoveSlotsNotInScene();
                 if (removed > 0)
@@ -58,21 +58,21 @@ namespace HS2SandboxPlugin
 
                 GUILayout.BeginHorizontal();
                 string genderLabel = slot.IsFemale ? "f" : "m";
-                if (GUILayout.Button(genderLabel, GUILayout.Width(24f), GUILayout.Height(22f)))
+                if (GUILayout.Button(genderLabel, PoseBrowserScale.W(24f), PoseBrowserScale.H(22f)))
                     _characterConfig.ToggleSlotGender(i);
 
                 string label = inScene
                     ? $"{i + 1}. {slot.DisplayName}"
                     : $"{i + 1}. {slot.DisplayName} (missing)";
-                if (GUILayout.Toggle(rowOn, label, GUI.skin.button, GUILayout.Height(22f), GUILayout.ExpandWidth(true)))
+                if (GUILayout.Toggle(rowOn, label, GUI.skin.button, PoseBrowserScale.H(22f), GUILayout.ExpandWidth(true)))
                     _selectedSlotIndex = i;
                 else if (rowOn)
                     _selectedSlotIndex = -1;
 
                 if (GUILayout.Button(
                         new GUIContent("✕", "Remove this character from the priority list."),
-                        GUILayout.Width(28f),
-                        GUILayout.Height(22f)))
+                        PoseBrowserScale.W(28f),
+                        PoseBrowserScale.H(22f)))
                 {
                     _characterConfig.RemoveSlot(slotIndex);
                     if (_selectedSlotIndex == slotIndex)
@@ -89,19 +89,19 @@ namespace HS2SandboxPlugin
 
             GUI.enabled = _selectedSlotIndex >= 0 && _selectedSlotIndex < slots.Count;
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("↑", GUILayout.Width(28f), GUILayout.Height(22f)))
+            if (GUILayout.Button("↑", PoseBrowserScale.W(28f), PoseBrowserScale.H(22f)))
             {
                 _characterConfig.MoveSlot(_selectedSlotIndex, -1);
                 _selectedSlotIndex = Math.Max(0, _selectedSlotIndex - 1);
             }
 
-            if (GUILayout.Button("↓", GUILayout.Width(28f), GUILayout.Height(22f)))
+            if (GUILayout.Button("↓", PoseBrowserScale.W(28f), PoseBrowserScale.H(22f)))
             {
                 _characterConfig.MoveSlot(_selectedSlotIndex, 1);
                 _selectedSlotIndex = Math.Min(slots.Count - 1, _selectedSlotIndex + 1);
             }
 
-            if (GUILayout.Button("✕", GUILayout.Width(28f), GUILayout.Height(22f)))
+            if (GUILayout.Button("✕", PoseBrowserScale.W(28f), PoseBrowserScale.H(22f)))
             {
                 _characterConfig.RemoveSlot(_selectedSlotIndex);
                 _selectedSlotIndex = -1;
@@ -111,7 +111,7 @@ namespace HS2SandboxPlugin
             GUI.enabled = true;
 
             GUILayout.Space(6f);
-            if (GUILayout.Button("Close", GUILayout.Height(26f)))
+            if (GUILayout.Button("Close", PoseBrowserScale.H(26f)))
                 _showCharacterConfigPane = false;
 
             GUILayout.EndVertical();

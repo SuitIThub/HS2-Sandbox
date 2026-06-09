@@ -79,7 +79,7 @@ namespace HS2SandboxPlugin
         {
             InitGroupStyles();
             GUILayout.Space(5f);
-            GUILayout.Box(GUIContent.none, _actionBarSeparatorStyle!, GUILayout.ExpandWidth(true), GUILayout.Height(2f));
+            GUILayout.Box(GUIContent.none, _actionBarSeparatorStyle!, GUILayout.ExpandWidth(true), PoseBrowserScale.H(2f));
             GUILayout.Space(5f);
         }
 
@@ -87,7 +87,7 @@ namespace HS2SandboxPlugin
         {
             InitGroupStyles();
             GUILayout.Space(8f);
-            GUILayout.Box(GUIContent.none, _actionBarSeparatorStyle!, GUILayout.Width(2f), GUILayout.Height(height));
+            GUILayout.Box(GUIContent.none, _actionBarSeparatorStyle!, PoseBrowserScale.W(2f), GUILayout.Height(height));
             GUILayout.Space(8f);
         }
 
@@ -1299,9 +1299,9 @@ namespace HS2SandboxPlugin
             }
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("OK", GUILayout.Width(80f)))
+            if (GUILayout.Button("OK", PoseBrowserScale.W(80f)))
                 ConfirmGroupNamePopup();
-            if (GUILayout.Button("Cancel", GUILayout.Width(80f)))
+            if (GUILayout.Button("Cancel", PoseBrowserScale.W(80f)))
             {
                 _showGroupNamePopup = false;
                 _groupNamePopupMode = GroupNamePopupMode.None;
@@ -1615,14 +1615,14 @@ namespace HS2SandboxPlugin
             GUILayout.Label(
                 $"Groups: {groups.Count} — toggling a tag updates every selected group.",
                 hintStyle,
-                GUILayout.Height(36f));
+                PoseBrowserScale.H(36f));
 
             if (!string.IsNullOrEmpty(searchNormFold))
             {
                 bool alreadyKnown = GetAllLibraryTagNames().Any(t =>
                     string.Equals(t, searchNormFold, StringComparison.OrdinalIgnoreCase));
                 if (!alreadyKnown &&
-                    GUILayout.Button($"Add new tag \"{searchNormFold}\" to all selected groups", GUILayout.Height(26f)))
+                    GUILayout.Button($"Add new tag \"{searchNormFold}\" to all selected groups", PoseBrowserScale.H(26f)))
                 {
                     ApplyTagToGroups(groups, searchNormFold, add: true);
                 }
@@ -1646,7 +1646,7 @@ namespace HS2SandboxPlugin
                 int withTag = groups.Count(g => g.Tags.Contains(tag));
                 bool allOn = withTag == groups.Count;
                 bool mixed = withTag > 0 && !allOn;
-                bool nv = GUILayout.Toggle(allOn, mixed ? $"◪ {tag}" : tag, GUILayout.Height(22f));
+                bool nv = GUILayout.Toggle(allOn, mixed ? $"◪ {tag}" : tag, PoseBrowserScale.H(22f));
                 if (nv == allOn && !mixed)
                     continue;
 
@@ -1658,7 +1658,7 @@ namespace HS2SandboxPlugin
 
         private void DrawTagWindowAssignGroupBody(PoseGroup group, string searchNormFold)
         {
-            GUILayout.Label($"Group: {group.Name}", GUILayout.Height(20f));
+            GUILayout.Label($"Group: {group.Name}", PoseBrowserScale.H(20f));
 
             var groups = new List<PoseGroup> { group };
             if (!string.IsNullOrEmpty(searchNormFold))
@@ -1666,7 +1666,7 @@ namespace HS2SandboxPlugin
                 bool alreadyKnown = GetAllLibraryTagNames().Any(t =>
                     string.Equals(t, searchNormFold, StringComparison.OrdinalIgnoreCase));
                 if (!alreadyKnown &&
-                    GUILayout.Button($"Add new tag \"{searchNormFold}\" to group", GUILayout.Height(26f)))
+                    GUILayout.Button($"Add new tag \"{searchNormFold}\" to group", PoseBrowserScale.H(26f)))
                 {
                     ApplyTagToGroups(groups, searchNormFold, add: true);
                 }
@@ -1688,7 +1688,7 @@ namespace HS2SandboxPlugin
             foreach (var tag in visible)
             {
                 bool has = group.Tags.Contains(tag);
-                bool nv = GUILayout.Toggle(has, tag, GUILayout.Height(22f));
+                bool nv = GUILayout.Toggle(has, tag, PoseBrowserScale.H(22f));
                 if (nv != has)
                     ApplyTagToGroups(groups, tag, add: nv);
             }

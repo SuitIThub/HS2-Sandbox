@@ -9,7 +9,8 @@ namespace HS2SandboxPlugin
     public partial class PoseBrowserWindow
     {
         private const int HistoryWindowId = 2027;
-        private const float HistoryPaneDefaultWidth = 400f;
+        private const float HistoryPaneDefaultWidthBase = 400f;
+        private float HistoryPaneDefaultWidth => PoseBrowserScale.Px(HistoryPaneDefaultWidthBase);
 
         private readonly PoseBrowserHistory _poseHistory = new PoseBrowserHistory();
         private bool _showHistoryPane;
@@ -39,14 +40,14 @@ namespace HS2SandboxPlugin
             GUI.enabled = _poseHistory.CanUndo(selected);
             if (GUILayout.Button(
                     new GUIContent("Undo", "Undo last pose change for Studio-selected characters"),
-                    GUILayout.Width(buttonWidth),
-                    GUILayout.Height(height)))
+                    PoseBrowserScale.W(buttonWidth),
+                    PoseBrowserScale.H(height)))
                 PerformPoseHistoryUndo();
             GUI.enabled = _poseHistory.CanRedo(selected);
             if (GUILayout.Button(
                     new GUIContent("Redo", "Redo pose change for Studio-selected characters"),
-                    GUILayout.Width(buttonWidth),
-                    GUILayout.Height(height)))
+                    PoseBrowserScale.W(buttonWidth),
+                    PoseBrowserScale.H(height)))
                 PerformPoseHistoryRedo();
             GUI.enabled = true;
         }
@@ -55,8 +56,8 @@ namespace HS2SandboxPlugin
         {
             if (GUILayout.Button(
                     _showHistoryPane ? "History ▶" : "History",
-                    GUILayout.Width(width),
-                    GUILayout.Height(height)))
+                    PoseBrowserScale.W(width),
+                    PoseBrowserScale.H(height)))
                 _showHistoryPane = !_showHistoryPane;
         }
 
@@ -229,10 +230,10 @@ namespace HS2SandboxPlugin
 
             GUILayout.BeginHorizontal();
             GUI.enabled = _poseHistory.CanUndo(selected);
-            if (GUILayout.Button("Undo", GUILayout.Width(64f), GUILayout.Height(24f)))
+            if (GUILayout.Button("Undo", PoseBrowserScale.W(64f), PoseBrowserScale.H(24f)))
                 PerformPoseHistoryUndo();
             GUI.enabled = _poseHistory.CanRedo(selected);
-            if (GUILayout.Button("Redo", GUILayout.Width(64f), GUILayout.Height(24f)))
+            if (GUILayout.Button("Redo", PoseBrowserScale.W(64f), PoseBrowserScale.H(24f)))
                 PerformPoseHistoryRedo();
             GUI.enabled = true;
             GUILayout.FlexibleSpace();
@@ -255,7 +256,7 @@ namespace HS2SandboxPlugin
             }
 
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Close panel", GUILayout.Height(26f)))
+            if (GUILayout.Button("Close panel", PoseBrowserScale.H(26f)))
                 _showHistoryPane = false;
 
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
