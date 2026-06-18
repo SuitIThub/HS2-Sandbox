@@ -428,12 +428,14 @@ namespace HS2SandboxPlugin
                     groupInfo != null &&
                     groupInfo.dicCategory != null)
                 {
+#if HS2
                     if (groupInfo.dicCategory.TryGetValue(categoryId, out Info.CategoryInfo? categoryInfo) &&
                         categoryInfo != null &&
                         !string.IsNullOrEmpty(categoryInfo.name))
                     {
                         return categoryInfo.name;
                     }
+#endif
 
                     var idict = groupInfo.dicCategory as System.Collections.IDictionary;
                     if (idict != null && idict.Contains(categoryId))

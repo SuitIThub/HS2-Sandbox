@@ -74,6 +74,19 @@ namespace HS2SandboxPlugin
         }
     }
 
+    /// <summary>Category id + display name pair for subcategory merge bucket keys (net35-safe; no value tuples).</summary>
+    internal struct AnimCategorySiblingEntry
+    {
+        public int CategoryId;
+        public string Name;
+
+        public AnimCategorySiblingEntry(int categoryId, string name)
+        {
+            CategoryId = categoryId;
+            Name = name;
+        }
+    }
+
     /// <summary>Persisted role assignment of one animation inside a display group.</summary>
     internal sealed class AnimGroupMemberData
     {

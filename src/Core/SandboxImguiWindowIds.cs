@@ -54,6 +54,7 @@ namespace HS2SandboxPlugin
             public const int GroupReview = 2053;
             public const int Options = 2054;
             public const int ControlsUndocked = 2055;
+            public const int Help = 2056;
         }
 
         internal static class HeelzControl

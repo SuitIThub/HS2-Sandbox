@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Studio;
 using UnityEngine;
 
@@ -17,6 +18,9 @@ namespace HS2SandboxPlugin
         private readonly HashSet<string> _selectedGroupIds = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> _collapsedNodeIds = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<string, AnimPhase> _activePhaseByGroupId = new Dictionary<string, AnimPhase>(StringComparer.Ordinal);
+        /// <summary>Per group+phase+gender stream: next slot offset when more slots than matching characters.</summary>
+        private readonly Dictionary<string, int> _groupApplyStreamOffset = new Dictionary<string, int>(StringComparer.Ordinal);
+        private string _groupApplySelectionKey = string.Empty;
         private bool _pendingUngroupConfirm;
 
         // Review docked window state.
@@ -24,19 +28,14 @@ namespace HS2SandboxPlugin
         private Rect _reviewWindowRect;
         private Vector2 _reviewScroll;
         private readonly List<AnimDisplayGroupData> _reviewGroups = new List<AnimDisplayGroupData>();
-        private AnimTreeMergeRule? _pendingMergeRule;
-        private bool _pendingMergeRuleAlreadyStored;
-        private readonly List<AnimCatalogRef> _pendingMergeReinclude = new List<AnimCatalogRef>();
-        private bool _pendingMgcBucketMerge;
-        private string _pendingMgcBucketMergeRuleId = string.Empty;
-        private string _pendingMgcBucketMergeTargetKey = string.Empty;
-        private readonly List<string> _pendingMgcBucketMergeAliasKeys = new List<string>();
+        private readonly AnimMergeReviewTransaction _mergeTx = new AnimMergeReviewTransaction();
         private string _reviewHeading = string.Empty;
+        private GUIContent _reviewHeadingContent = GUIContent.none;
         private readonly List<ReviewSectionLayout> _reviewSections = new List<ReviewSectionLayout>();
         private bool _reviewSectionsDirty = true;
         private readonly List<ReviewGroupRowCache> _reviewGroupCaches = new List<ReviewGroupRowCache>();
         private readonly List<ReviewVirtualBlock> _reviewVirtualBlocks = new List<ReviewVirtualBlock>();
-        private string[] _reviewSectionHeadings = Array.Empty<string>();
+        private string[] _reviewSectionHeadings = new string[0];
         private bool _reviewDisplayCachesDirty = true;
         private bool _reviewVirtualBlocksDirty = true;
         private float _reviewScrollViewportH;
@@ -51,7 +50,12 @@ namespace HS2SandboxPlugin
             "As singles",
             "Do not group these animations, but show them separately inside the merged category.");
         private static readonly GUIContent GcReviewRestoreGroup = new GUIContent("Restore group", "Include this proposal in the merge again as a grouped card.");
+        private static readonly GUIContent GcReviewPaneHint = new GUIContent(
+            "Click section headers to collapse. Skip keeps an animation at its original category. " +
+            "As singles moves animations into the merged category without grouping them. " +
+            "Gender button: slot number → m → f. Phase button: none → in → loop → out.");
 
+        private const float ReviewPaneInnerPadBase = 12f;
         private const float ReviewSectionHeaderHBase = 26f;
         private const float ReviewGroupHeaderHBase = 54f;
         private const float ReviewGroupActionRowHBase = 24f;
@@ -164,10 +168,13 @@ namespace HS2SandboxPlugin
 
         // ---- Tree action bar ------------------------------------------------
 
+        private readonly List<AnimViewNode> _treeActionNonGroupScratch = new List<AnimViewNode>();
+
         private void DrawTreeActionBar()
         {
-            int categoryCount = 0;
-            int groupCount = 0;
+            _treeActionNonGroupScratch.Clear();
+            int rawGroupCount = 0;
+            int mergedGroupCount = 0;
             int selectedTreeCount = 0;
             bool anyMerged = false;
             for (int i = 0; i < _flatTreeNodes.Count; i++)
@@ -181,18 +188,20 @@ namespace HS2SandboxPlugin
                 if (node.IsGroup)
                 {
                     if (node.RawGroupId >= 0)
-                        groupCount++;
+                        rawGroupCount++;
+                    else if (node.IsMerged && node.MergeRuleId.Length > 0)
+                        mergedGroupCount++;
                 }
                 else
                 {
-                    categoryCount++;
+                    _treeActionNonGroupScratch.Add(node);
                 }
             }
 
-            bool canMergeCategories = categoryCount >= 2;
-            bool canMergeGroups = groupCount >= 2;
+            AnimTreeMergeAvailability categoryMerge = ResolveCategoryMergeAvailability(_treeActionNonGroupScratch);
+            AnimTreeMergeAvailability groupMerge = ResolveGroupMergeAvailability(mergedGroupCount, rawGroupCount);
             bool canRenameTree = selectedTreeCount == 1;
-            if (!canMergeCategories && !canMergeGroups && !anyMerged && !canRenameTree && !_treeRenameActive)
+            if (!categoryMerge.Visible && !groupMerge.Visible && !anyMerged && !canRenameTree && !_treeRenameActive)
                 return;
 
             GUILayout.Space(3f);
@@ -212,18 +221,27 @@ namespace HS2SandboxPlugin
             {
                 BeginTreeRename();
             }
-            if (canMergeCategories &&
-                GUILayout.Button(new GUIContent(
-                    "Merge categories…",
-                    "Combine the selected sub-categories into one node (including already-merged categories)."),
-                    GUILayout.Height(btnH)))
+            if (categoryMerge.Visible)
             {
-                BeginTreeMerge(AnimTreeMergeKind.Category);
+                bool prevEnabled = GUI.enabled;
+                GUI.enabled = categoryMerge.Enabled;
+                bool clicked = GUILayout.Button(
+                    new GUIContent(categoryMerge.Label, categoryMerge.Tooltip),
+                    GUILayout.Height(btnH));
+                GUI.enabled = prevEnabled;
+                if (clicked && categoryMerge.Enabled)
+                    BeginTreeMerge(AnimTreeMergeKind.Category);
             }
-            if (canMergeGroups &&
-                GUILayout.Button(new GUIContent("Merge groups…", "Combine the selected groups, matching sub-categories by name."), GUILayout.Height(btnH)))
+            if (groupMerge.Visible)
             {
-                BeginTreeMerge(AnimTreeMergeKind.Group);
+                bool prevEnabled = GUI.enabled;
+                GUI.enabled = groupMerge.Enabled;
+                bool clicked = GUILayout.Button(
+                    new GUIContent(groupMerge.Label, groupMerge.Tooltip),
+                    GUILayout.Height(btnH));
+                GUI.enabled = prevEnabled;
+                if (clicked && groupMerge.Enabled)
+                    BeginTreeMerge(AnimTreeMergeKind.Group);
             }
             if (anyMerged &&
                 GUILayout.Button(new GUIContent(
@@ -234,6 +252,14 @@ namespace HS2SandboxPlugin
                     GUILayout.Height(btnH)))
             {
                 UnmergeSelectedNodes();
+            }
+            if (TryGetSplittableBucket(out string splitRuleId, out string splitBucketKey) &&
+                GUILayout.Button(new GUIContent(
+                        "Split subcategories",
+                        "Separate the subcategory buckets that were joined here; they stay inside the merged group."),
+                    GUILayout.Height(btnH)))
+            {
+                SplitSelectedBucket(splitRuleId, splitBucketKey);
             }
         }
 
@@ -303,7 +329,7 @@ namespace HS2SandboxPlugin
                 AnimViewNode node = _flatTreeNodes[i];
                 if (!_selectedTreeNodeIds.Contains(node.Id))
                     continue;
-                if (kind == AnimTreeMergeKind.Group && (!node.IsGroup || node.RawGroupId < 0))
+                if (kind == AnimTreeMergeKind.Group && !node.IsGroup)
                     continue;
                 if (kind == AnimTreeMergeKind.Category && node.IsGroup)
                     continue;
@@ -312,9 +338,7 @@ namespace HS2SandboxPlugin
             if (sourceNodes.Count < 2)
                 return;
 
-            _pendingMergeReinclude.Clear();
-            _pendingMergeRuleAlreadyStored = false;
-            ClearPendingMgcBucketMerge();
+            _mergeTx.Reset();
 
             AnimTreeMergeRule rule;
             var items = new List<AnimGridItem>();
@@ -322,39 +346,85 @@ namespace HS2SandboxPlugin
 
             if (kind == AnimTreeMergeKind.Group)
             {
-                var groupIds = new HashSet<int>();
+                AnimViewNode? mergedGroupNode = null;
+                var rawGroupNodes = new List<AnimViewNode>();
                 for (int i = 0; i < sourceNodes.Count; i++)
-                    groupIds.Add(sourceNodes[i].RawGroupId);
-
-                AnimTreeMergeRule? existing = _groupStore.FindGroupMergeBySourceGroups(groupIds);
-                if (existing != null)
                 {
-                    rule = existing;
-                    _pendingMergeRuleAlreadyStored = true;
-                    CollectExcludedCategoriesToReinclude(existing, groupIds, _pendingMergeReinclude);
-                    if (_pendingMergeReinclude.Count == 0)
+                    AnimViewNode n = sourceNodes[i];
+                    if (n.IsMerged && n.RawGroupId < 0 && n.MergeRuleId.Length > 0)
+                        mergedGroupNode = n;
+                    else if (n.RawGroupId >= 0)
+                        rawGroupNodes.Add(n);
+                }
+
+                if (mergedGroupNode != null)
+                {
+                    // Additive group merge: add the selected raw groups to the existing merge instead
+                    // of forcing an unmerge-and-redo.
+                    AnimTreeMergeRule? target = _groupStore.FindTreeMerge(mergedGroupNode.MergeRuleId);
+                    if (target == null || target.Kind != AnimTreeMergeKind.Group || rawGroupNodes.Count == 0)
                         return;
-                    CollectItemsForCategories(_pendingMergeReinclude, items);
-                    reviewHeading = "Review re-merge: " + rule.Name;
+                    rule = target;
+                    _mergeTx.RuleAlreadyStored = true;
+
+                    var existingGroups = new HashSet<int>();
+                    for (int i = 0; i < rule.Sources.Count; i++)
+                        existingGroups.Add(rule.Sources[i].Group);
+                    var addedGroupIds = new List<int>();
+                    for (int i = 0; i < rawGroupNodes.Count; i++)
+                    {
+                        int g = rawGroupNodes[i].RawGroupId;
+                        if (existingGroups.Add(g))
+                            addedGroupIds.Add(g);
+                    }
+                    if (addedGroupIds.Count == 0)
+                        return;
+                    _mergeTx.GroupMergeAddedGroupIds = addedGroupIds;
+                    for (int i = 0; i < rawGroupNodes.Count; i++)
+                        items.AddRange(_displayCatalog.GetRawItems(rawGroupNodes[i]));
+                    reviewHeading = "Review add to merge: " + rule.Name;
                 }
                 else
                 {
-                    rule = new AnimTreeMergeRule
+                    var groupIds = new HashSet<int>();
+                    for (int i = 0; i < rawGroupNodes.Count; i++)
+                        groupIds.Add(rawGroupNodes[i].RawGroupId);
+                    if (groupIds.Count < 2)
+                        return;
+
+                    AnimTreeMergeRule? existing = _groupStore.FindGroupMergeBySourceGroups(groupIds);
+                    if (existing != null)
                     {
-                        Id = AnimGroupStore.NewId(),
-                        Kind = kind,
-                        Name = SuggestMergeName(sourceNodes)
-                    };
-                    for (int i = 0; i < sourceNodes.Count; i++)
-                        rule.Sources.Add(new AnimCatalogRef(sourceNodes[i].RawGroupId, -1, -1));
-                    for (int i = 0; i < sourceNodes.Count; i++)
-                        items.AddRange(_displayCatalog.GetRawItems(sourceNodes[i]));
-                    reviewHeading = "Review merge: " + rule.Name;
+                        rule = existing;
+                        _mergeTx.RuleAlreadyStored = true;
+                        CollectExcludedCategoriesToReinclude(existing, groupIds, _mergeTx.Reinclude);
+                        if (_mergeTx.Reinclude.Count == 0)
+                            return;
+                        CollectItemsForCategories(_mergeTx.Reinclude, items);
+                        reviewHeading = "Review re-merge: " + rule.Name;
+                    }
+                    else
+                    {
+                        rule = new AnimTreeMergeRule
+                        {
+                            Id = AnimGroupStore.NewId(),
+                            Kind = kind,
+                            Name = SuggestMergeName(rawGroupNodes)
+                        };
+                        for (int i = 0; i < rawGroupNodes.Count; i++)
+                            rule.Sources.Add(new AnimCatalogRef(rawGroupNodes[i].RawGroupId, -1, -1));
+                        for (int i = 0; i < rawGroupNodes.Count; i++)
+                            items.AddRange(_displayCatalog.GetRawItems(rawGroupNodes[i]));
+                        reviewHeading = "Review merge: " + rule.Name;
+                    }
                 }
             }
             else
             {
-                if (TryBeginGroupMergeSubcategoryMerge(sourceNodes))
+                // Subcategories that all live in one source group are a real category merge, even when
+                // they sit inside a group merge. A bucket-alias join only unifies buckets that span two
+                // or more source groups, so same-group subcategories must take the cm path instead.
+                if (!AllNodesShareOneSourceGroup(sourceNodes) && TryBeginGroupMergeSubcategoryMerge(sourceNodes))
                     return;
                 if (!TryValidateSameGroupCategoryMerge(sourceNodes, out _))
                     return;
@@ -374,15 +444,15 @@ namespace HS2SandboxPlugin
                 if (existingGroupMerge != null)
                 {
                     rule = existingGroupMerge;
-                    _pendingMergeRuleAlreadyStored = true;
+                    _mergeTx.RuleAlreadyStored = true;
                     foreach (AnimCatalogRef catRef in selectedCategories)
                     {
                         if (AnimCatalogRefUtil.ContainsCategory(rule.ExcludedSources, catRef))
-                            _pendingMergeReinclude.Add(catRef);
+                            _mergeTx.Reinclude.Add(catRef);
                     }
-                    if (_pendingMergeReinclude.Count == 0)
+                    if (_mergeTx.Reinclude.Count == 0)
                         return;
-                    CollectItemsForCategories(_pendingMergeReinclude, items);
+                    CollectItemsForCategories(_mergeTx.Reinclude, items);
                     reviewHeading = "Review re-merge: " + rule.Name;
                 }
                 else
@@ -391,11 +461,11 @@ namespace HS2SandboxPlugin
                     if (existing != null)
                     {
                         rule = existing;
-                        _pendingMergeRuleAlreadyStored = true;
-                        CollectExcludedCategoriesToReinclude(existing, selectedCategories, _pendingMergeReinclude);
-                        if (_pendingMergeReinclude.Count == 0)
+                        _mergeTx.RuleAlreadyStored = true;
+                        CollectExcludedCategoriesToReinclude(existing, selectedCategories, _mergeTx.Reinclude);
+                        if (_mergeTx.Reinclude.Count == 0)
                             return;
-                        CollectItemsForCategories(_pendingMergeReinclude, items);
+                        CollectItemsForCategories(_mergeTx.Reinclude, items);
                         reviewHeading = "Review re-merge: " + rule.Name;
                     }
                     else
@@ -404,23 +474,25 @@ namespace HS2SandboxPlugin
                         if (subset != null)
                         {
                             rule = subset;
-                            _pendingMergeRuleAlreadyStored = true;
+                            _mergeTx.RuleAlreadyStored = true;
                         }
                         else
                         {
                             rule = new AnimTreeMergeRule
                             {
                                 Id = AnimGroupStore.NewId(),
-                                Kind = kind,
-                                Name = SuggestMergeName(sourceNodes)
+                                Kind = kind
                             };
                         }
 
-                        _groupStore.ReplaceCategoryMergeSources(rule, selectedCategories);
-                        rule.Name = SuggestMergeName(sourceNodes);
+                        // Defer the source/name mutation to commit: with a reused (subset) rule this
+                        // would otherwise edit a stored rule before the user confirms (no rollback).
+                        string suggestedName = SuggestMergeName(sourceNodes);
+                        _mergeTx.CategoryMergeSources = new List<AnimCatalogRef>(selectedCategories);
+                        _mergeTx.RuleName = suggestedName;
                         for (int i = 0; i < sourceNodes.Count; i++)
                             items.AddRange(_displayCatalog.GetRawItems(sourceNodes[i]));
-                        reviewHeading = "Review merge: " + rule.Name;
+                        reviewHeading = "Review merge: " + suggestedName;
                     }
                 }
             }
@@ -476,6 +548,7 @@ namespace HS2SandboxPlugin
 
         private void BeginGridGroup()
         {
+            _mergeTx.Reset();
             var items = new List<AnimGridItem>();
             foreach (var reference in _selectedItemRefs)
             {
@@ -547,6 +620,26 @@ namespace HS2SandboxPlugin
             }
 
             PruneStaleGroupSelection();
+            _selectedTreeNodeIds.Clear();
+        }
+
+        /// <summary>True when exactly one merged subcategory bucket is selected and it carries joined-in
+        /// aliases that could be split back apart.</summary>
+        private bool TryGetSplittableBucket(out string ruleId, out string bucketKey)
+        {
+            ruleId = string.Empty;
+            bucketKey = string.Empty;
+            AnimViewNode? node = GetSingleSelectedTreeNode();
+            if (node == null || !node.Id.StartsWith("mgc:", StringComparison.Ordinal))
+                return false;
+            if (!TryParseMgcNodeId(node.Id, out ruleId, out bucketKey))
+                return false;
+            return _groupStore.HasBucketAliasesTargeting(ruleId, bucketKey);
+        }
+
+        private void SplitSelectedBucket(string ruleId, string bucketKey)
+        {
+            _groupStore.RemoveBucketAliasesTargeting(ruleId, bucketKey);
             _selectedTreeNodeIds.Clear();
         }
 
@@ -687,6 +780,9 @@ namespace HS2SandboxPlugin
                 if (existing == null || !seenGroupIds.Add(existing.Id))
                     continue;
 
+                if (existing.Members.Count < 2)
+                    continue;
+
                 bool allInScope = true;
                 for (int m = 0; m < existing.Members.Count; m++)
                 {
@@ -696,12 +792,25 @@ namespace HS2SandboxPlugin
                         break;
                     }
                 }
-                if (!allInScope || existing.Members.Count < 2)
-                    continue;
 
-                proposals.Add(CloneDisplayGroupForReview(existing, bucketKeys, pairWithinSubcategory));
-                for (int m = 0; m < existing.Members.Count; m++)
-                    preservedRefs.Add(existing.Members[m].Ref);
+                if (allInScope)
+                {
+                    // Fully in scope: surface the existing card as a proposal so the user can review it.
+                    proposals.Add(CloneDisplayGroupForReview(existing, bucketKeys, pairWithinSubcategory));
+                    for (int m = 0; m < existing.Members.Count; m++)
+                        preservedRefs.Add(existing.Members[m].Ref);
+                }
+                else
+                {
+                    // Partial overlap: leave the existing card intact and just keep its in-scope members
+                    // out of re-detection, so we never silently dissolve a straddling group.
+                    for (int m = 0; m < existing.Members.Count; m++)
+                    {
+                        AnimCatalogRef memberRef = existing.Members[m].Ref;
+                        if (scopedRefs.Contains(memberRef))
+                            preservedRefs.Add(memberRef);
+                    }
+                }
             }
 
             var ungroupedItems = new List<AnimGridItem>();
@@ -780,8 +889,9 @@ namespace HS2SandboxPlugin
         {
             _reviewGroups.Clear();
             _reviewGroups.AddRange(proposals);
-            _pendingMergeRule = mergeRule;
+            _mergeTx.Rule = mergeRule;
             _reviewHeading = heading;
+            _reviewHeadingContent = new GUIContent(heading, heading);
             _reviewScroll = Vector2.zero;
             _reviewSectionsDirty = true;
             _reviewDisplayCachesDirty = true;
@@ -882,39 +992,7 @@ namespace HS2SandboxPlugin
                 commit.Add(data);
             }
 
-            if (_pendingMergeRule != null && _reviewSkippedRefs.Count > 0)
-            {
-                foreach (var skipped in _reviewSkippedRefs)
-                {
-                    if (IsRefInSinglesInMergeGroup(skipped))
-                        continue;
-
-                    bool found = false;
-                    for (int i = 0; i < _pendingMergeRule.ExcludedAnimationRefs.Count; i++)
-                    {
-                        if (_pendingMergeRule.ExcludedAnimationRefs[i].Equals(skipped))
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found)
-                        _pendingMergeRule.ExcludedAnimationRefs.Add(skipped);
-                }
-            }
-
-            if (_pendingMergeReinclude.Count > 0 && _pendingMergeRule != null)
-                _groupStore.ReincludeCategories(_pendingMergeRule, _pendingMergeReinclude);
-
-            if (_pendingMgcBucketMerge)
-            {
-                _groupStore.MergeSubcategoryBuckets(
-                    _pendingMgcBucketMergeRuleId,
-                    _pendingMgcBucketMergeTargetKey,
-                    _pendingMgcBucketMergeAliasKeys);
-            }
-
-            _groupStore.Commit(_pendingMergeRule, commit, _pendingMergeRuleAlreadyStored);
+            _mergeTx.Apply(_groupStore, commit, _reviewSkippedRefs, IsRefInSinglesInMergeGroup);
             CloseReview();
             _selectedTreeNodeIds.Clear();
             ClearGridSelection();
@@ -923,38 +1001,37 @@ namespace HS2SandboxPlugin
         private void CloseReview()
         {
             _showReviewPane = false;
+            _reviewHeading = string.Empty;
+            _reviewHeadingContent = GUIContent.none;
             _reviewGroups.Clear();
             _reviewSections.Clear();
             _reviewGroupCaches.Clear();
             _reviewVirtualBlocks.Clear();
-            _reviewSectionHeadings = Array.Empty<string>();
+            _reviewSectionHeadings = new string[0];
             _reviewSectionsDirty = true;
             _reviewDisplayCachesDirty = true;
             _reviewVirtualBlocksDirty = true;
             _reviewCollapsedSectionKeys.Clear();
             _reviewSkippedRefs.Clear();
             _reviewSinglesInMergeGroupIds.Clear();
-            _pendingMergeRule = null;
-            _pendingMergeRuleAlreadyStored = false;
-            _pendingMergeReinclude.Clear();
-            ClearPendingMgcBucketMerge();
+            _mergeTx.Reset();
         }
 
-        private void ClearPendingMgcBucketMerge()
+        /// <summary>Classifies a tree selection as a subcategory bucket join inside one group merge:
+        /// true when every selected node resolves to the same group-merge rule. Outputs the resolved
+        /// bucket key per node and the number of distinct buckets they span. Shared by the action-bar
+        /// resolver and the executor so both agree on what the selection means.</summary>
+        private bool TryClassifyBucketJoin(
+            List<AnimViewNode> sourceNodes,
+            out AnimTreeMergeRule? groupMergeRule,
+            out List<string> resolvedBucketKeys,
+            out int distinctBucketCount)
         {
-            _pendingMgcBucketMerge = false;
-            _pendingMgcBucketMergeRuleId = string.Empty;
-            _pendingMgcBucketMergeTargetKey = string.Empty;
-            _pendingMgcBucketMergeAliasKeys.Clear();
-        }
-
-        private bool TryBeginGroupMergeSubcategoryMerge(List<AnimViewNode> sourceNodes)
-        {
+            groupMergeRule = null;
+            resolvedBucketKeys = new List<string>(sourceNodes.Count);
+            distinctBucketCount = 0;
             if (sourceNodes.Count < 2)
                 return false;
-
-            AnimTreeMergeRule? groupMergeRule = null;
-            var bucketKeys = new List<string>(sourceNodes.Count);
 
             for (int i = 0; i < sourceNodes.Count; i++)
             {
@@ -993,43 +1070,95 @@ namespace HS2SandboxPlugin
                 else if (!string.Equals(groupMergeRule.Id, nodeRule.Id, StringComparison.Ordinal))
                     return false;
 
-                bucketKeys.Add(resolvedKey);
+                resolvedBucketKeys.Add(resolvedKey);
             }
 
             var distinctKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < bucketKeys.Count; i++)
-                distinctKeys.Add(bucketKeys[i]);
-            if (distinctKeys.Count < 2)
+            for (int i = 0; i < resolvedBucketKeys.Count; i++)
+                distinctKeys.Add(resolvedBucketKeys[i]);
+            distinctBucketCount = distinctKeys.Count;
+            return true;
+        }
+
+        private bool TryBeginGroupMergeSubcategoryMerge(List<AnimViewNode> sourceNodes)
+        {
+            if (!TryClassifyBucketJoin(sourceNodes, out AnimTreeMergeRule? groupMergeRule,
+                    out List<string> bucketKeys, out int distinctBucketCount))
+                return false;
+            if (distinctBucketCount < 2 || groupMergeRule == null)
                 return false;
 
-            _pendingMgcBucketMerge = true;
-            _pendingMgcBucketMergeRuleId = groupMergeRule!.Id;
-            _pendingMgcBucketMergeTargetKey = bucketKeys[0];
-            _pendingMgcBucketMergeAliasKeys.Clear();
+            _mergeTx.BucketMerge = true;
+            _mergeTx.BucketMergeRuleId = groupMergeRule.Id;
+            _mergeTx.BucketMergeTargetKey = bucketKeys[0];
+            _mergeTx.BucketMergeAliasKeys.Clear();
             for (int i = 1; i < bucketKeys.Count; i++)
             {
                 string alias = bucketKeys[i];
-                if (string.Equals(alias, _pendingMgcBucketMergeTargetKey, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(alias, _mergeTx.BucketMergeTargetKey, StringComparison.OrdinalIgnoreCase))
                     continue;
-                if (_pendingMgcBucketMergeAliasKeys.Contains(alias))
+                if (_mergeTx.BucketMergeAliasKeys.Contains(alias))
                     continue;
-                _pendingMgcBucketMergeAliasKeys.Add(alias);
+                _mergeTx.BucketMergeAliasKeys.Add(alias);
             }
-            if (_pendingMgcBucketMergeAliasKeys.Count == 0)
+            if (_mergeTx.BucketMergeAliasKeys.Count == 0)
                 return false;
 
-            _pendingMergeRule = groupMergeRule;
-            _pendingMergeRuleAlreadyStored = true;
+            _mergeTx.Rule = groupMergeRule;
+            _mergeTx.RuleAlreadyStored = true;
 
             var items = new List<AnimGridItem>();
             for (int i = 0; i < sourceNodes.Count; i++)
                 items.AddRange(_displayCatalog.GetRawItems(sourceNodes[i]));
 
             Dictionary<AnimCatalogRef, string> bucketKeysMap = BuildSubcategoryBucketKeyMap(items);
+            // Apply the pending join so detection treats the to-be-merged buckets as one. Without this,
+            // animations that will share a bucket (e.g. a male and a female subcategory) stay in separate
+            // buckets and never pair up, leaving the review empty.
+            ApplyPendingBucketJoinToMap(bucketKeysMap);
             var proposals = new List<AnimDisplayGroupData>();
             AppendMergeReviewProposals(items, pairWithinSubcategory: true, bucketKeysMap, proposals);
             OpenReview("Review merge subcategories: " + SuggestMergeName(sourceNodes), proposals, groupMergeRule);
             return true;
+        }
+
+        /// <summary>Rewrites the subcategory bucket map so categories whose bucket is being joined point
+        /// at the pending target bucket, matching what the tree will show after the alias is committed.</summary>
+        private void ApplyPendingBucketJoinToMap(Dictionary<AnimCatalogRef, string> map)
+        {
+            if (!_mergeTx.BucketMerge ||
+                _mergeTx.BucketMergeAliasKeys.Count == 0 ||
+                string.IsNullOrEmpty(_mergeTx.BucketMergeTargetKey))
+            {
+                return;
+            }
+
+            var aliasSet = new HashSet<string>(_mergeTx.BucketMergeAliasKeys, StringComparer.OrdinalIgnoreCase);
+            var keys = new List<AnimCatalogRef>(map.Keys);
+            for (int i = 0; i < keys.Count; i++)
+            {
+                if (aliasSet.Contains(map[keys[i]]))
+                    map[keys[i]] = _mergeTx.BucketMergeTargetKey;
+            }
+        }
+
+        /// <summary>True when every selected node draws only from a single source top-level group.
+        /// Distinguishes a real same-group category merge from a cross-group bucket join.</summary>
+        private static bool AllNodesShareOneSourceGroup(IList<AnimViewNode> nodes)
+        {
+            int group = -1;
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                IList<AnimCatalogRef> src = nodes[i].SourceCategories;
+                for (int s = 0; s < src.Count; s++)
+                {
+                    if (group < 0)
+                        group = src[s].Group;
+                    else if (src[s].Group != group)
+                        return false;
+                }
+            }
+            return group >= 0;
         }
 
         private static bool TryValidateSameGroupCategoryMerge(IList<AnimViewNode> nodes, out int groupId)
@@ -1276,12 +1405,12 @@ namespace HS2SandboxPlugin
         private void DrawGroupReviewWindowContent(int id)
         {
             InitStyles();
-            GUILayout.Label(_reviewHeading, GUILayout.ExpandWidth(true));
+            float innerW = Mathf.Max(80f, _reviewWindowRect.width - AnimBrowserScale.Px(ReviewPaneInnerPadBase));
             GUILayout.Label(
-                "Click section headers to collapse. Skip keeps an animation at its original category. " +
-                "As singles moves animations into the merged category without grouping them. " +
-                "Gender button: slot number → m → f. Phase button: none → in → loop → out.",
-                _characterHintStyle ?? GUI.skin.label);
+                _reviewHeadingContent,
+                _reviewSectionTitleStyle ?? GUI.skin.label,
+                GUILayout.Width(innerW));
+            GUILayout.Label(GcReviewPaneHint, GetOptionsWrapStyle(), GUILayout.Width(innerW));
             GUILayout.Space(4f);
 
             RebuildReviewVirtualBlocksIfNeeded();
@@ -1415,7 +1544,7 @@ namespace HS2SandboxPlugin
             {
                 if (GUILayout.Button(GcReviewSkipAll, GUILayout.Height(actionBtnH)))
                     SkipReviewGroup(groupIndex);
-                if (_pendingMergeRule != null &&
+                if (_mergeTx.Rule != null &&
                     GUILayout.Button(GcReviewSinglesInMerge, GUILayout.Height(actionBtnH)))
                 {
                     SetReviewGroupSinglesInMerge(groupIndex);
@@ -1831,6 +1960,8 @@ namespace HS2SandboxPlugin
             if (selection.Count == 0)
                 return;
 
+            ResetGroupApplyRoundRobinIfSelectionChanged(selection);
+
             var maleSlots = new List<AnimGroupSlot>();
             var femaleSlots = new List<AnimGroupSlot>();
             var unknownSlots = new List<AnimGroupSlot>();
@@ -1851,8 +1982,8 @@ namespace HS2SandboxPlugin
             femaleSlots.Sort((a, b) => a.GenderOrdinal.CompareTo(b.GenderOrdinal));
 
             bool distributed = false;
-            distributed |= ApplySlotStream(maleSlots, ResolveGenderChars(selection, AnimGender.Male));
-            distributed |= ApplySlotStream(femaleSlots, ResolveGenderChars(selection, AnimGender.Female));
+            distributed |= ApplySlotStream(group, phase, AnimGender.Male, maleSlots, ResolveGenderChars(selection, AnimGender.Male));
+            distributed |= ApplySlotStream(group, phase, AnimGender.Female, femaleSlots, ResolveGenderChars(selection, AnimGender.Female));
 
             if (!distributed && unknownSlots.Count > 0)
             {
@@ -1860,7 +1991,7 @@ namespace HS2SandboxPlugin
                 if (unknownSlots.Count == 1)
                     AnimPlaybackService.ApplyAnimation(unknownSlots[0].Item, any);
                 else
-                    ApplySlotStream(unknownSlots, any);
+                    ApplySlotStream(group, phase, AnimGender.Unknown, unknownSlots, any);
             }
 
             SyncControlsFromSelectionIfChanged(force: true);
@@ -1882,15 +2013,81 @@ namespace HS2SandboxPlugin
             SyncControlsFromSelectionIfChanged(force: true);
         }
 
-        private static bool ApplySlotStream(List<AnimGroupSlot> slots, List<OCIChar> chars)
+        private bool ApplySlotStream(
+            AnimDisplayGroup group,
+            AnimPhase phase,
+            AnimGender stream,
+            List<AnimGroupSlot> slots,
+            List<OCIChar> chars)
         {
+            if (slots.Count == 0 || chars.Count == 0)
+                return false;
+
             bool any = false;
-            for (int i = 0; i < slots.Count && i < chars.Count; i++)
+            if (slots.Count > chars.Count)
             {
-                AnimPlaybackService.ApplyAnimation(slots[i].Item, new List<OCIChar> { chars[i] });
-                any = true;
+                string key = BuildGroupApplyStreamKey(group.Id, phase, stream);
+                if (!_groupApplyStreamOffset.TryGetValue(key, out int offset))
+                    offset = 0;
+
+                for (int j = 0; j < chars.Count; j++)
+                {
+                    AnimGroupSlot slot = slots[(offset + j) % slots.Count];
+                    AnimPlaybackService.ApplyAnimation(slot.Item, new List<OCIChar> { chars[j] });
+                    any = true;
+                }
+
+                _groupApplyStreamOffset[key] = (offset + 1) % slots.Count;
             }
+            else
+            {
+                for (int i = 0; i < slots.Count && i < chars.Count; i++)
+                {
+                    AnimPlaybackService.ApplyAnimation(slots[i].Item, new List<OCIChar> { chars[i] });
+                    any = true;
+                }
+            }
+
             return any;
+        }
+
+        private void ResetGroupApplyRoundRobinIfSelectionChanged(IList<OCIChar> selection)
+        {
+            string key = BuildApplySelectionKey(selection);
+            if (string.Equals(key, _groupApplySelectionKey, StringComparison.Ordinal))
+                return;
+            _groupApplySelectionKey = key;
+            _groupApplyStreamOffset.Clear();
+        }
+
+        private static string BuildGroupApplyStreamKey(string groupId, AnimPhase phase, AnimGender stream) =>
+            groupId + "\0" + ((int)phase).ToString() + "\0" + ((int)stream).ToString();
+
+        private static string BuildApplySelectionKey(IList<OCIChar> selection)
+        {
+            if (selection.Count == 0)
+                return string.Empty;
+
+            var keys = new int[selection.Count];
+            int n = 0;
+            for (int i = 0; i < selection.Count; i++)
+            {
+                if (StudioCharacterSelection.TryGetDicKey(selection[i], out int dicKey))
+                    keys[n++] = dicKey;
+            }
+
+            if (n == 0)
+                return "n:" + selection.Count.ToString();
+
+            Array.Sort(keys, 0, n);
+            var sb = new StringBuilder(n * 6);
+            for (int i = 0; i < n; i++)
+            {
+                if (i > 0)
+                    sb.Append(',');
+                sb.Append(keys[i]);
+            }
+            return sb.ToString();
         }
 
         private IList<OCIChar> GetSelectionForApply()

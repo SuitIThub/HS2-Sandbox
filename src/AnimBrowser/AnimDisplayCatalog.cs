@@ -230,7 +230,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>Subcategory bucket keys for group-merge review, respecting existing category merges.</summary>
-        public Dictionary<AnimCatalogRef, string> BuildSubcategoryBucketKeyMap(IReadOnlyCollection<int> groupIds)
+        public Dictionary<AnimCatalogRef, string> BuildSubcategoryBucketKeyMap(ICollection<int> groupIds)
         {
             var result = new Dictionary<AnimCatalogRef, string>();
             if (groupIds == null || groupIds.Count == 0)
@@ -252,7 +252,7 @@ namespace HS2SandboxPlugin
 
             IList<AnimCategoryNode> raw = _catalog.RootGroups;
             var unitScratch = new List<SubcategoryUnit>();
-            var siblingScratch = new List<(int SortCategoryId, string Name)>();
+            var siblingScratch = new List<AnimCategorySiblingEntry>();
             foreach (int groupId in groupIds)
             {
                 AnimCategoryNode? rawGroup = FindRawGroup(raw, groupId);
@@ -263,8 +263,8 @@ namespace HS2SandboxPlugin
                 CollectSubcategoryUnitsForGroup(rawGroup, categoryMerges, coveredCategories, null, unitScratch);
                 siblingScratch.Clear();
                 for (int ui = 0; ui < unitScratch.Count; ui++)
-                    siblingScratch.Add((unitScratch[ui].SortCategoryId, unitScratch[ui].BucketName));
-                siblingScratch.Sort((a, b) => CompareTranslatedCategoryNames(a.Name, b.Name, a.SortCategoryId, b.SortCategoryId));
+                    siblingScratch.Add(new AnimCategorySiblingEntry(unitScratch[ui].SortCategoryId, unitScratch[ui].BucketName));
+                siblingScratch.Sort((a, b) => CompareTranslatedCategoryNames(a.Name, b.Name, a.CategoryId, b.CategoryId));
 
                 for (int ui = 0; ui < unitScratch.Count; ui++)
                 {
@@ -310,12 +310,12 @@ namespace HS2SandboxPlugin
                 return false;
 
             var unitScratch = new List<SubcategoryUnit>();
-            var siblingScratch = new List<(int SortCategoryId, string Name)>();
+            var siblingScratch = new List<AnimCategorySiblingEntry>();
             CollectSubcategoryUnitsForGroup(rawGroup, categoryMerges, coveredCategories, groupMergeRule, unitScratch);
             siblingScratch.Clear();
             for (int ui = 0; ui < unitScratch.Count; ui++)
-                siblingScratch.Add((unitScratch[ui].SortCategoryId, unitScratch[ui].BucketName));
-            siblingScratch.Sort((a, b) => CompareTranslatedCategoryNames(a.Name, b.Name, a.SortCategoryId, b.SortCategoryId));
+                siblingScratch.Add(new AnimCategorySiblingEntry(unitScratch[ui].SortCategoryId, unitScratch[ui].BucketName));
+            siblingScratch.Sort((a, b) => CompareTranslatedCategoryNames(a.Name, b.Name, a.CategoryId, b.CategoryId));
 
             for (int ui = 0; ui < unitScratch.Count; ui++)
             {
@@ -968,6 +968,9 @@ namespace HS2SandboxPlugin
             };
             SetGroupDisplay(node, rawGroup.GroupId, rawGroup.Name);
 
+            // Defensive: a category must render under at most one category-merge node, even if two
+            // overlapping cm rules somehow reference it, so its animations never appear twice.
+            var consumedByCm = new HashSet<long>();
             foreach (var rule in categoryMerges)
             {
                 if (rule.Sources.Count == 0 || rule.Sources[0].Group != rawGroup.GroupId)
@@ -984,6 +987,9 @@ namespace HS2SandboxPlugin
                 foreach (var src in rule.Sources)
                 {
                     if (_store.IsCategoryExcludedFromRule(rule, AnimCatalogRefUtil.CategoryRef(src.Group, src.Category)))
+                        continue;
+                    long catKey = CategoryKey(src.Group, src.Category);
+                    if (!consumedByCm.Add(catKey))
                         continue;
                     merged.SourceCategories.Add(new AnimCatalogRef(src.Group, src.Category, -1));
                 }
@@ -1114,7 +1120,7 @@ namespace HS2SandboxPlugin
             var buckets = new Dictionary<string, SubcategoryBucketAccum>(StringComparer.OrdinalIgnoreCase);
             var orderedKeys = new List<string>();
             var unitScratch = new List<SubcategoryUnit>();
-            var siblingScratch = new List<(int SortCategoryId, string Name)>();
+            var siblingScratch = new List<AnimCategorySiblingEntry>();
 
             foreach (var src in rule.Sources)
             {
@@ -1126,8 +1132,8 @@ namespace HS2SandboxPlugin
                 CollectSubcategoryUnitsForGroup(rawGroup, categoryMerges, coveredCategories, rule, unitScratch);
                 siblingScratch.Clear();
                 for (int ui = 0; ui < unitScratch.Count; ui++)
-                    siblingScratch.Add((unitScratch[ui].SortCategoryId, unitScratch[ui].BucketName));
-                siblingScratch.Sort((a, b) => CompareTranslatedCategoryNames(a.Name, b.Name, a.SortCategoryId, b.SortCategoryId));
+                    siblingScratch.Add(new AnimCategorySiblingEntry(unitScratch[ui].SortCategoryId, unitScratch[ui].BucketName));
+                siblingScratch.Sort((a, b) => CompareTranslatedCategoryNames(a.Name, b.Name, a.CategoryId, b.CategoryId));
 
                 for (int ui = 0; ui < unitScratch.Count; ui++)
                 {

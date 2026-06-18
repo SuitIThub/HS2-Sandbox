@@ -27,10 +27,12 @@ namespace HS2SandboxPlugin
         public bool showControlsPane = true;
         public bool showCharacterConfigPane;
         public bool showOptionsPane;
+        public bool showHelpPane;
         public float cardCellSize = 120f;
         public float controlsPaneWidth = 280f;
         public float characterConfigPaneWidth = 300f;
         public float optionsPaneWidth = 260f;
+        public float helpPaneWidth = 380f;
         public bool controlsGroupByProximity = true;
         public bool hideNonStudioCatalogAnimations = true;
         public bool controlsPreferUndocked;
@@ -101,10 +103,12 @@ namespace HS2SandboxPlugin
             sb.Append(",\"showControlsPane\":").Append(o.showControlsPane ? "true" : "false");
             sb.Append(",\"showCharacterConfigPane\":").Append(o.showCharacterConfigPane ? "true" : "false");
             sb.Append(",\"showOptionsPane\":").Append(o.showOptionsPane ? "true" : "false");
+            sb.Append(",\"showHelpPane\":").Append(o.showHelpPane ? "true" : "false");
             sb.Append(",\"cardCellSize\":").Append(o.cardCellSize.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"controlsPaneWidth\":").Append(o.controlsPaneWidth.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"characterConfigPaneWidth\":").Append(o.characterConfigPaneWidth.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"optionsPaneWidth\":").Append(o.optionsPaneWidth.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"helpPaneWidth\":").Append(o.helpPaneWidth.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"controlsGroupByProximity\":").Append(o.controlsGroupByProximity ? "true" : "false");
             sb.Append(",\"hideNonStudioCatalogAnimations\":").Append(o.hideNonStudioCatalogAnimations ? "true" : "false");
             sb.Append(",\"controlsPreferUndocked\":").Append(o.controlsPreferUndocked ? "true" : "false");
@@ -139,10 +143,12 @@ namespace HS2SandboxPlugin
             o.showControlsPane = ReadBool(json, "showControlsPane", o.showControlsPane);
             o.showCharacterConfigPane = ReadBool(json, "showCharacterConfigPane", o.showCharacterConfigPane);
             o.showOptionsPane = ReadBool(json, "showOptionsPane", o.showOptionsPane);
+            o.showHelpPane = ReadBool(json, "showHelpPane", o.showHelpPane);
             o.cardCellSize = ReadFloat(json, "cardCellSize", o.cardCellSize);
             o.controlsPaneWidth = ReadFloat(json, "controlsPaneWidth", o.controlsPaneWidth);
             o.characterConfigPaneWidth = ReadFloat(json, "characterConfigPaneWidth", o.characterConfigPaneWidth);
             o.optionsPaneWidth = ReadFloat(json, "optionsPaneWidth", o.optionsPaneWidth);
+            o.helpPaneWidth = ReadFloat(json, "helpPaneWidth", o.helpPaneWidth);
             o.controlsGroupByProximity = ReadBool(json, "controlsGroupByProximity", o.controlsGroupByProximity);
             o.hideNonStudioCatalogAnimations = ReadBool(json, "hideNonStudioCatalogAnimations", true);
             o.controlsPreferUndocked = ReadBool(json, "controlsPreferUndocked", o.controlsPreferUndocked);

@@ -103,6 +103,8 @@ namespace HS2SandboxPlugin
                 x = PlaceDockedPane(ref _controlsWindowRect, x, ControlsPaneDefaultWidth);
             if (_showOptionsPane)
                 x = PlaceDockedPane(ref _optionsWindowRect, x, OptionsPaneDefaultWidth);
+            if (_showHelpPane)
+                x = PlaceDockedPane(ref _helpWindowRect, x, HelpPaneDefaultWidth);
             if (_showCharacterConfigPane)
                 x = PlaceDockedPane(ref _characterConfigWindowRect, x, CharacterPaneDefaultWidth);
             if (_showReviewPane)
@@ -132,6 +134,8 @@ namespace HS2SandboxPlugin
                 ShiftPaneX(ref _controlsWindowRect, -overflow);
             if (_showOptionsPane)
                 ShiftPaneX(ref _optionsWindowRect, -overflow);
+            if (_showHelpPane)
+                ShiftPaneX(ref _helpWindowRect, -overflow);
             if (_showCharacterConfigPane)
                 ShiftPaneX(ref _characterConfigWindowRect, -overflow);
             if (_showReviewPane)
@@ -156,6 +160,13 @@ namespace HS2SandboxPlugin
                 any = true;
                 minX = Mathf.Min(minX, _optionsWindowRect.x);
                 maxX = Mathf.Max(maxX, _optionsWindowRect.xMax);
+            }
+
+            if (_showHelpPane)
+            {
+                any = true;
+                minX = Mathf.Min(minX, _helpWindowRect.x);
+                maxX = Mathf.Max(maxX, _helpWindowRect.xMax);
             }
 
             if (_showCharacterConfigPane)
@@ -200,6 +211,16 @@ namespace HS2SandboxPlugin
                     DrawOptionsWindowContent,
                     "Anim Browser · Options",
                     OptionsPaneDefaultWidth);
+            }
+
+            if (_showHelpPane)
+            {
+                DrawDockedPaneWindow(
+                    SandboxImguiWindowIds.AnimBrowser.Help,
+                    ref _helpWindowRect,
+                    DrawHelpWindowContent,
+                    "Anim Browser · Help",
+                    HelpPaneDefaultWidth);
             }
 
             if (_showCharacterConfigPane)

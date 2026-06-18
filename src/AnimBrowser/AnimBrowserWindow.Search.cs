@@ -22,7 +22,7 @@ namespace HS2SandboxPlugin
         private static readonly GUIContent GcSelectSubcategory =
             new GUIContent("Select a subcategory to view animations.");
 
-        private bool IsSearchActive => !string.IsNullOrWhiteSpace(_searchText);
+        private bool IsSearchActive => !StringEx.IsNullOrWhiteSpace(_searchText);
 
         private void InvalidateSearchHitCache() => _searchHitCacheDirty = true;
 

@@ -134,7 +134,7 @@ namespace HS2SandboxPlugin
 
         private static AnimGender DetectGenderFromCatalogSegment(string segment)
         {
-            if (string.IsNullOrWhiteSpace(segment))
+            if (StringEx.IsNullOrWhiteSpace(segment))
                 return AnimGender.Unknown;
 
             string s = segment.Trim();
@@ -178,7 +178,7 @@ namespace HS2SandboxPlugin
         /// <summary>Normalized sub-category key for cross-group pairing (gender suffix stripped).</summary>
         public static string NormalizeCategoryKey(string? categoryName)
         {
-            if (string.IsNullOrWhiteSpace(categoryName))
+            if (StringEx.IsNullOrWhiteSpace(categoryName))
                 return string.Empty;
             DetectGender(categoryName!.Trim(), out string withoutGender);
             return NormalizeBase(withoutGender);
@@ -189,7 +189,7 @@ namespace HS2SandboxPlugin
         public static string BuildSubcategoryMergeBucketKey(
             int categoryId,
             string? categoryName,
-            IReadOnlyList<(int CategoryId, string Name)> categoriesInGroup)
+            IList<AnimCategorySiblingEntry> categoriesInGroup)
         {
             string norm = NormalizeCategoryKey(categoryName);
             if (norm.Length == 0)
@@ -198,7 +198,9 @@ namespace HS2SandboxPlugin
             int ordinal = 0;
             for (int i = 0; i < categoriesInGroup.Count; i++)
             {
-                (int id, string name) = categoriesInGroup[i];
+                AnimCategorySiblingEntry entry = categoriesInGroup[i];
+                int id = entry.CategoryId;
+                string name = entry.Name;
                 string siblingNorm = NormalizeCategoryKey(name);
                 if (siblingNorm.Length == 0)
                     siblingNorm = name.Trim().ToLowerInvariant();
@@ -238,13 +240,13 @@ namespace HS2SandboxPlugin
             return suffix.Length > 0 ? displayName + suffix : displayName;
         }
 
-        public static List<(int CategoryId, string Name)> BuildSortedCategorySiblingList(IList<AnimCategoryNode> children)
+        public static List<AnimCategorySiblingEntry> BuildSortedCategorySiblingList(IList<AnimCategoryNode> children)
         {
-            var list = new List<(int CategoryId, string Name)>(children.Count);
+            var list = new List<AnimCategorySiblingEntry>(children.Count);
             for (int i = 0; i < children.Count; i++)
             {
                 AnimCategoryNode child = children[i];
-                list.Add((child.CategoryId, child.Name));
+                list.Add(new AnimCategorySiblingEntry(child.CategoryId, child.Name));
             }
             list.Sort((a, b) =>
             {

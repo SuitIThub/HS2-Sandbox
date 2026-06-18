@@ -104,6 +104,7 @@ namespace HS2SandboxPlugin
             _viewMode = (AnimBrowserViewMode)Mathf.Clamp(_options.viewMode, 0, 1);
             _showCharacterConfigPane = _options.showCharacterConfigPane;
             _showOptionsPane = _options.showOptionsPane;
+            _showHelpPane = _options.showHelpPane;
             _cardCellSize = Mathf.Clamp(_options.cardCellSize, MinCardSize, MaxCardSize);
             _controlsGroupByProximity = _options.controlsGroupByProximity;
             _hideNonStudioCatalogAnimations = _options.hideNonStudioCatalogAnimations;
@@ -248,7 +249,7 @@ namespace HS2SandboxPlugin
                 windowRect.height = Mathf.Clamp(windowRect.height, minH, LayoutMaxHeight);
             }
 
-            if (IsControlsDockedVisible || _showCharacterConfigPane || _showReviewPane || _showOptionsPane)
+            if (IsControlsDockedVisible || _showCharacterConfigPane || _showReviewPane || _showOptionsPane || _showHelpPane)
             {
                 bool layoutPass = Event.current.type == EventType.Layout;
                 if (layoutPass)
@@ -305,6 +306,12 @@ namespace HS2SandboxPlugin
             {
                 _showOptionsPane = !_showOptionsPane;
                 _options.showOptionsPane = _showOptionsPane;
+                SavePersistedOptions();
+            }
+            if (GUILayout.Button(_showHelpPane ? GcHelpOn : GcHelpOff, AnimBrowserScale.W(64f), AnimBrowserScale.H(controlH)))
+            {
+                _showHelpPane = !_showHelpPane;
+                _options.showHelpPane = _showHelpPane;
                 SavePersistedOptions();
             }
             GUILayout.FlexibleSpace();
@@ -998,6 +1005,8 @@ namespace HS2SandboxPlugin
             _options.controlsPaneWidth = _controlsWindowRect.width;
             _options.characterConfigPaneWidth = _characterConfigWindowRect.width;
             _options.optionsPaneWidth = _optionsWindowRect.width;
+            if (_helpWindowRect.width > 10f)
+                _options.helpPaneWidth = _helpWindowRect.width;
             _options.optionsVersion = AnimBrowserConfig.OptionsJsonVersion;
             // Legacy single-rect fields mirror the active view mode for older builds.
             _options.windowX = windowRect.x;
@@ -1088,6 +1097,11 @@ namespace HS2SandboxPlugin
                 windowRect.y,
                 _options.optionsPaneWidth > 10f ? _options.optionsPaneWidth : OptionsPaneDefaultWidth,
                 windowRect.height);
+            _helpWindowRect = new Rect(
+                windowRect.xMax + DockedPaneGap,
+                windowRect.y,
+                _options.helpPaneWidth > 10f ? _options.helpPaneWidth : HelpPaneDefaultWidth,
+                windowRect.height);
         }
 
         private void SavePersistedOptions()
@@ -1103,6 +1117,7 @@ namespace HS2SandboxPlugin
             string title,
             float minWidth)
         {
+            float widthBefore = paneRect.width;
             paneRect = GUILayout.Window(
                 paneId,
                 paneRect,
@@ -1110,6 +1125,8 @@ namespace HS2SandboxPlugin
                 title,
                 GUILayout.MinWidth(minWidth),
                 AnimBrowserScale.MinH(120f));
+            if (widthBefore > 1f && paneRect.width > widthBefore + 0.5f)
+                paneRect.width = widthBefore;
             paneRect.x = Mathf.Clamp(paneRect.x, 4f, Mathf.Max(4f, Screen.width - paneRect.width - 4f));
             paneRect.y = Mathf.Clamp(paneRect.y, 4f, Mathf.Max(4f, Screen.height - paneRect.height - 4f));
             IMGUIUtils.EatInputInRect(paneRect);

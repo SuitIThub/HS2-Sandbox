@@ -41,6 +41,8 @@ namespace HS2SandboxPlugin
                 if (key == SandboxWindowKeys.AnimBrowser && _toolbarToggle != null)
                     _toolbarToggle.Value = visible;
             };
+
+            AnimBrowserWikiRegistration.TryRegister(Logger);
         }
     }
 }

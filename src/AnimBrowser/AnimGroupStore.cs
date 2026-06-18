@@ -20,6 +20,47 @@ namespace HS2SandboxPlugin
         /// <summary>Raised whenever the store mutates so views/persistence can react.</summary>
         public event Action? Changed;
 
+        private int _batchDepth;
+        private bool _batchPending;
+
+        /// <summary>Coalesces all <see cref="Save"/>/<see cref="Changed"/> notifications until the scope
+        /// is disposed, so a multi-step apply persists and rebuilds the tree exactly once (atomic commit).</summary>
+        public BatchScope BeginBatch()
+        {
+            _batchDepth++;
+            return new BatchScope(this);
+        }
+
+        private void EndBatch()
+        {
+            if (_batchDepth == 0)
+                return;
+            if (--_batchDepth == 0 && _batchPending)
+            {
+                _batchPending = false;
+                Save();
+                Changed?.Invoke();
+            }
+        }
+
+        private void NotifyChanged()
+        {
+            if (_batchDepth > 0)
+            {
+                _batchPending = true;
+                return;
+            }
+            Save();
+            Changed?.Invoke();
+        }
+
+        public readonly struct BatchScope : IDisposable
+        {
+            private readonly AnimGroupStore _store;
+            internal BatchScope(AnimGroupStore store) => _store = store;
+            public void Dispose() => _store.EndBatch();
+        }
+
         public void Load()
         {
             _treeMerges.Clear();
@@ -222,7 +263,7 @@ namespace HS2SandboxPlugin
         public bool ContainsTreeMerge(string id) => FindTreeMerge(id) != null;
 
         /// <summary>Finds a group merge whose source top-level groups match <paramref name="groupIds"/> exactly.</summary>
-        public AnimTreeMergeRule? FindGroupMergeBySourceGroups(IReadOnlyCollection<int> groupIds)
+        public AnimTreeMergeRule? FindGroupMergeBySourceGroups(ICollection<int> groupIds)
         {
             if (groupIds == null || groupIds.Count == 0)
                 return null;
@@ -242,7 +283,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>Finds a category merge whose source categories match <paramref name="categoryRefs"/> exactly.</summary>
-        public AnimTreeMergeRule? FindCategoryMergeBySources(IReadOnlyCollection<AnimCatalogRef> categoryRefs)
+        public AnimTreeMergeRule? FindCategoryMergeBySources(ICollection<AnimCatalogRef> categoryRefs)
         {
             if (categoryRefs == null || categoryRefs.Count == 0)
                 return null;
@@ -265,7 +306,7 @@ namespace HS2SandboxPlugin
         }
 
         /// <summary>Largest existing category merge whose sources are all contained in <paramref name="categoryRefs"/>.</summary>
-        public AnimTreeMergeRule? FindCategoryMergeSubsetOf(IReadOnlyCollection<AnimCatalogRef> categoryRefs)
+        public AnimTreeMergeRule? FindCategoryMergeSubsetOf(ICollection<AnimCatalogRef> categoryRefs)
         {
             if (categoryRefs == null || categoryRefs.Count == 0)
                 return null;
@@ -320,13 +361,10 @@ namespace HS2SandboxPlugin
             }) > 0;
 
             if (removed)
-            {
-                Save();
-                Changed?.Invoke();
-            }
+                NotifyChanged();
         }
 
-        public void ReplaceCategoryMergeSources(AnimTreeMergeRule rule, IReadOnlyCollection<AnimCatalogRef> categoryRefs)
+        public void ReplaceCategoryMergeSources(AnimTreeMergeRule rule, ICollection<AnimCatalogRef> categoryRefs)
         {
             rule.Sources.Clear();
             var sorted = new List<AnimCatalogRef>(categoryRefs);
@@ -340,6 +378,90 @@ namespace HS2SandboxPlugin
                 AnimCatalogRef cat = sorted[i];
                 rule.Sources.Add(new AnimCatalogRef(cat.Group, cat.Category, -1));
             }
+        }
+
+        /// <summary>Adds source top-level groups to an existing group merge (additive group merge).
+        /// Returns true if at least one group was new.</summary>
+        public bool AddSourceGroupsToGroupMerge(AnimTreeMergeRule rule, IEnumerable<int> groupIds)
+        {
+            if (rule.Kind != AnimTreeMergeKind.Group)
+                return false;
+            var have = new HashSet<int>();
+            for (int i = 0; i < rule.Sources.Count; i++)
+                have.Add(rule.Sources[i].Group);
+
+            bool changed = false;
+            foreach (int g in groupIds)
+            {
+                if (have.Add(g))
+                {
+                    rule.Sources.Add(new AnimCatalogRef(g, -1, -1));
+                    changed = true;
+                }
+            }
+            if (changed)
+                NotifyChanged();
+            return changed;
+        }
+
+        /// <summary>Removes one source group from a group merge; dissolves the rule if fewer than two
+        /// source groups remain. Symmetric counterpart to <see cref="AddSourceGroupsToGroupMerge"/>.</summary>
+        public void RemoveSourceGroupFromGroupMerge(string groupMergeRuleId, int groupId)
+        {
+            AnimTreeMergeRule? rule = FindTreeMerge(groupMergeRuleId);
+            if (rule == null || rule.Kind != AnimTreeMergeKind.Group)
+                return;
+            if (rule.Sources.RemoveAll(s => s.Group == groupId) == 0)
+                return;
+
+            rule.ExcludedSources.RemoveAll(c => c.Group == groupId);
+            rule.ExcludedAnimationRefs.RemoveAll(a => a.Group == groupId);
+            if (rule.Sources.Count < 2)
+                _treeMerges.RemoveAll(r => string.Equals(r.Id, rule.Id, StringComparison.Ordinal));
+            NotifyChanged();
+        }
+
+        /// <summary>True when the bucket identified by <paramref name="bucketKey"/> in a group merge has
+        /// joined-in aliases that could be split apart (drives the "Split subcategories" action).</summary>
+        public bool HasBucketAliasesTargeting(string groupMergeRuleId, string bucketKey)
+        {
+            AnimTreeMergeRule? rule = FindTreeMerge(groupMergeRuleId);
+            if (rule == null || string.IsNullOrEmpty(bucketKey))
+                return false;
+            foreach (var kvp in rule.SubcategoryBucketAliases)
+            {
+                if (string.Equals(kvp.Value, bucketKey, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(kvp.Key, bucketKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Removes one subcategory bucket alias (splits a previously joined bucket apart).
+        /// Symmetric counterpart to <see cref="MergeSubcategoryBuckets"/>.</summary>
+        public bool RemoveBucketAliasesTargeting(string groupMergeRuleId, string targetBucketKey)
+        {
+            AnimTreeMergeRule? rule = FindTreeMerge(groupMergeRuleId);
+            if (rule == null || string.IsNullOrEmpty(targetBucketKey))
+                return false;
+
+            var toRemove = new List<string>();
+            foreach (var kvp in rule.SubcategoryBucketAliases)
+            {
+                if (string.Equals(kvp.Value, targetBucketKey, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(kvp.Key, targetBucketKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    toRemove.Add(kvp.Key);
+                }
+            }
+            if (toRemove.Count == 0)
+                return false;
+            for (int i = 0; i < toRemove.Count; i++)
+                rule.SubcategoryBucketAliases.Remove(toRemove[i]);
+            NotifyChanged();
+            return true;
         }
 
         public void MergeSubcategoryBuckets(string groupMergeRuleId, string targetBucketKey, IList<string> aliasBucketKeys)
@@ -362,8 +484,7 @@ namespace HS2SandboxPlugin
             }
             if (!changed)
                 return;
-            Save();
-            Changed?.Invoke();
+            NotifyChanged();
         }
 
         /// <summary>When re-merging excluded subcategories, brings them back into an existing merge rule.</summary>
@@ -379,12 +500,11 @@ namespace HS2SandboxPlugin
             }
             if (!changed)
                 return;
-            Save();
-            Changed?.Invoke();
+            NotifyChanged();
         }
 
         /// <summary>Finds a group merge that partially excluded every category in <paramref name="categoryRefs"/>.</summary>
-        public AnimTreeMergeRule? FindGroupMergeForExcludedCategories(IReadOnlyCollection<AnimCatalogRef> categoryRefs)
+        public AnimTreeMergeRule? FindGroupMergeForExcludedCategories(ICollection<AnimCatalogRef> categoryRefs)
         {
             if (categoryRefs == null || categoryRefs.Count == 0)
                 return null;
@@ -481,8 +601,7 @@ namespace HS2SandboxPlugin
                 _displayGroups.Add(group);
             }
             RebuildIndex();
-            Save();
-            Changed?.Invoke();
+            NotifyChanged();
         }
 
         public void RemoveAllDisplayGroups()

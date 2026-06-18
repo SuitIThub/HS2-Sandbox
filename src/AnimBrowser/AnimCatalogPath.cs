@@ -28,7 +28,7 @@ namespace HS2SandboxPlugin
             }
         }
 
-        public void SetFrom(IReadOnlyList<string> segments)
+        public void SetFrom(IList<string> segments)
         {
             Segments.Clear();
             for (int i = 0; i < segments.Count; i++)
