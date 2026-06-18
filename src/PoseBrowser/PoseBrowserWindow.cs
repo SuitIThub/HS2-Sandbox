@@ -49,12 +49,12 @@ namespace HS2SandboxPlugin
         private float PoseCardNameStarW => PoseBrowserScale.Px(PoseCardNameStarWBase);
         private const float GridCellGapBase = 3f;
         private float GridCellGap => PoseBrowserScale.Px(GridCellGapBase);
-        private const int OptionsWindowId = 2021;
-        private const int HelpWindowId = 2022;
-        private const int TagWindowId = 2024;
-        private const int SortWindowId = 2025;
-        private const int CharacterConfigWindowId = 2026;
-        private const int ItemAssociationWindowId = 2028;
+        private const int OptionsWindowId = SandboxImguiWindowIds.PoseBrowser.Options;
+        private const int HelpWindowId = SandboxImguiWindowIds.PoseBrowser.Help;
+        private const int TagWindowId = SandboxImguiWindowIds.PoseBrowser.Tag;
+        private const int SortWindowId = SandboxImguiWindowIds.PoseBrowser.Sort;
+        private const int CharacterConfigWindowId = SandboxImguiWindowIds.PoseBrowser.Characters;
+        private const int ItemAssociationWindowId = SandboxImguiWindowIds.PoseBrowser.ItemAssociation;
         private const float DockedPaneGapBase = 4f;
         private float DockedPaneGap => PoseBrowserScale.Px(DockedPaneGapBase);
         private const float OptionsPaneDefaultWidthBase = 420f;
@@ -398,7 +398,7 @@ namespace HS2SandboxPlugin
         protected override void Start()
         {
             base.Start();
-            windowID = 2020;
+            windowID = SandboxImguiWindowIds.PoseBrowser.Main;
             windowTitle = $"Pose Browser v{PoseBrowserVersionInfo.Version}";
             windowRect = new Rect(200f, 80f, PoseBrowserScale.Px(900f), PoseBrowserScale.Px(620f));
 
@@ -2240,7 +2240,11 @@ namespace HS2SandboxPlugin
 
             bool charPaneOpen = _showCharacterConfigPane;
             if (GUILayout.Button(charPaneOpen ? "Chars ▶" : "Chars", PoseBrowserScale.W(52f), PoseBrowserScale.H(controlHeight)))
+            {
                 _showCharacterConfigPane = !charPaneOpen;
+                if (_showCharacterConfigPane)
+                    _characterConfig.ReloadFromDisk();
+            }
 
             var style = _characterHintStyle!;
             // MinWidth(0) keeps the (content-sized) character label from forcing the top bar — and thus the

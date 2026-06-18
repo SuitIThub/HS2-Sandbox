@@ -139,92 +139,224 @@ function Read-MultiChoice {
     }
 }
 
-$targets = @(
+$gameLabels = @{
+    HS2 = "Honey Select 2 (HS2)"
+    KKS = "Koikatsu Sunshine (KKS)"
+    KK  = "Koikatsu (KK)"
+}
+
+$moduleCatalog = @(
     @{
         Key = "CopyScript"
-        Game = "HS2"
-        DisplayName = "[HS2] CopyScript (HS2Sandbox.CopyScript.dll)"
-        BuildPath = "targets\HS2\CopyScript\HS2Sandbox.CopyScript.csproj"
-        BuiltDllRelPath = "targets\HS2\CopyScript\bin\Release\HS2Sandbox.CopyScript.dll"
-        DeployFileName = "HS2Sandbox.CopyScript.dll"
-        DeactivatedFileName = "HS2Sandbox.CopyScript.dl_"
+        DisplayName = "CopyScript (HS2Sandbox.CopyScript.dll)"
+        Games = @("HS2")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\CopyScript\HS2Sandbox.CopyScript.csproj"
+                BuiltDllRelPath = "targets\HS2\CopyScript\bin\Release\HS2Sandbox.CopyScript.dll"
+                DeployFileName = "HS2Sandbox.CopyScript.dll"
+                DeactivatedFileName = "HS2Sandbox.CopyScript.dl_"
+            }
+        }
     },
     @{
         Key = "Timeline"
-        Game = "HS2"
-        DisplayName = "[HS2] Timeline (HS2Sandbox.Timeline.dll)"
-        BuildPath = "targets\HS2\Timeline\HS2Sandbox.Timeline.csproj"
-        BuiltDllRelPath = "targets\HS2\Timeline\bin\Release\HS2Sandbox.Timeline.dll"
-        DeployFileName = "HS2Sandbox.Timeline.dll"
-        DeactivatedFileName = "HS2Sandbox.Timeline.dl_"
+        DisplayName = "Timeline (HS2Sandbox.Timeline.dll)"
+        Games = @("HS2")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\Timeline\HS2Sandbox.Timeline.csproj"
+                BuiltDllRelPath = "targets\HS2\Timeline\bin\Release\HS2Sandbox.Timeline.dll"
+                DeployFileName = "HS2Sandbox.Timeline.dll"
+                DeactivatedFileName = "HS2Sandbox.Timeline.dl_"
+            }
+        }
     },
     @{
         Key = "SearchBarManager"
-        Game = "HS2"
-        DisplayName = "[HS2] SearchBarManager (HS2Sandbox.SearchBarManager.dll)"
-        BuildPath = "targets\HS2\SearchBarManager\HS2Sandbox.SearchBarManager.csproj"
-        BuiltDllRelPath = "targets\HS2\SearchBarManager\bin\Release\HS2Sandbox.SearchBarManager.dll"
-        DeployFileName = "HS2Sandbox.SearchBarManager.dll"
-        DeactivatedFileName = "HS2Sandbox.SearchBarManager.dl_"
+        DisplayName = "SearchBarManager (HS2Sandbox.SearchBarManager.dll)"
+        Games = @("HS2")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\SearchBarManager\HS2Sandbox.SearchBarManager.csproj"
+                BuiltDllRelPath = "targets\HS2\SearchBarManager\bin\Release\HS2Sandbox.SearchBarManager.dll"
+                DeployFileName = "HS2Sandbox.SearchBarManager.dll"
+                DeactivatedFileName = "HS2Sandbox.SearchBarManager.dl_"
+            }
+        }
     },
     @{
         Key = "SonScale"
-        Game = "HS2"
-        DisplayName = "[HS2] SonScale (HS2Sandbox.SonScale.dll)"
-        BuildPath = "targets\HS2\SonScale\HS2Sandbox.SonScale.csproj"
-        BuiltDllRelPath = "targets\HS2\SonScale\bin\Release\HS2Sandbox.SonScale.dll"
-        DeployFileName = "HS2Sandbox.SonScale.dll"
-        DeactivatedFileName = "HS2Sandbox.SonScale.dl_"
+        DisplayName = "SonScale (HS2Sandbox.SonScale.dll)"
+        Games = @("HS2")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\SonScale\HS2Sandbox.SonScale.csproj"
+                BuiltDllRelPath = "targets\HS2\SonScale\bin\Release\HS2Sandbox.SonScale.dll"
+                DeployFileName = "HS2Sandbox.SonScale.dll"
+                DeactivatedFileName = "HS2Sandbox.SonScale.dl_"
+            }
+        }
     },
     @{
         Key = "WorkspaceTreeLock"
-        Game = "HS2"
-        DisplayName = "[HS2] WorkspaceTreeLock (HS2Sandbox.WorkspaceTreeLock.dll)"
-        BuildPath = "targets\HS2\WorkspaceTreeLock\HS2Sandbox.WorkspaceTreeLock.csproj"
-        BuiltDllRelPath = "targets\HS2\WorkspaceTreeLock\bin\Release\HS2Sandbox.WorkspaceTreeLock.dll"
-        DeployFileName = "HS2Sandbox.WorkspaceTreeLock.dll"
-        DeactivatedFileName = "HS2Sandbox.WorkspaceTreeLock.dl_"
+        DisplayName = "WorkspaceTreeLock (HS2Sandbox.WorkspaceTreeLock.dll)"
+        Games = @("HS2")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\WorkspaceTreeLock\HS2Sandbox.WorkspaceTreeLock.csproj"
+                BuiltDllRelPath = "targets\HS2\WorkspaceTreeLock\bin\Release\HS2Sandbox.WorkspaceTreeLock.dll"
+                DeployFileName = "HS2Sandbox.WorkspaceTreeLock.dll"
+                DeactivatedFileName = "HS2Sandbox.WorkspaceTreeLock.dl_"
+            }
+        }
     },
     @{
         Key = "Notebook"
-        Game = "HS2"
-        DisplayName = "[HS2] Notebook (HS2Sandbox.Notebook.dll)"
-        BuildPath = "targets\HS2\Notebook\HS2Sandbox.Notebook.csproj"
-        BuiltDllRelPath = "targets\HS2\Notebook\bin\Release\HS2Sandbox.Notebook.dll"
-        DeployFileName = "HS2Sandbox.Notebook.dll"
-        DeactivatedFileName = "HS2Sandbox.Notebook.dl_"
+        DisplayName = "Notebook (HS2Sandbox.Notebook.dll)"
+        Games = @("HS2")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\Notebook\HS2Sandbox.Notebook.csproj"
+                BuiltDllRelPath = "targets\HS2\Notebook\bin\Release\HS2Sandbox.Notebook.dll"
+                DeployFileName = "HS2Sandbox.Notebook.dll"
+                DeactivatedFileName = "HS2Sandbox.Notebook.dl_"
+            }
+        }
     },
     @{
         Key = "PoseBrowser"
-        Game = "HS2"
-        DisplayName = "[HS2] PoseBrowser (HS2Sandbox.PoseBrowser.dll)"
-        BuildPath = "targets\HS2\PoseBrowser\HS2Sandbox.PoseBrowser.csproj"
-        BuiltDllRelPath = "targets\HS2\PoseBrowser\bin\Release\HS2Sandbox.PoseBrowser.dll"
-        DeployFileName = "HS2Sandbox.PoseBrowser.dll"
-        DeactivatedFileName = "HS2Sandbox.PoseBrowser.dl_"
+        DisplayName = "PoseBrowser"
+        Games = @("HS2", "KKS", "KK")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\PoseBrowser\HS2Sandbox.PoseBrowser.csproj"
+                BuiltDllRelPath = "targets\HS2\PoseBrowser\bin\Release\HS2Sandbox.PoseBrowser.dll"
+                DeployFileName = "HS2Sandbox.PoseBrowser.dll"
+                DeactivatedFileName = "HS2Sandbox.PoseBrowser.dl_"
+            }
+            KKS = @{
+                BuildPath = "targets\KKS\PoseBrowser\KKSSandbox.PoseBrowser.csproj"
+                BuiltDllRelPath = "targets\KKS\PoseBrowser\bin\Release\KKSSandbox.PoseBrowser.dll"
+                DeployFileName = "KKSSandbox.PoseBrowser.dll"
+                DeactivatedFileName = "KKSSandbox.PoseBrowser.dl_"
+            }
+            KK = @{
+                BuildPath = "targets\KK\PoseBrowser\KKSandbox.PoseBrowser.csproj"
+                BuiltDllRelPath = "targets\KK\PoseBrowser\bin\Release\KKSandbox.PoseBrowser.dll"
+                DeployFileName = "KKSandbox.PoseBrowser.dll"
+                DeactivatedFileName = "KKSandbox.PoseBrowser.dl_"
+            }
+        }
     },
     @{
-        Key = "PoseBrowser-KKS"
-        Game = "KKS"
-        DisplayName = "[KKS] PoseBrowser (KKSSandbox.PoseBrowser.dll)"
-        BuildPath = "targets\KKS\PoseBrowser\KKSSandbox.PoseBrowser.csproj"
-        BuiltDllRelPath = "targets\KKS\PoseBrowser\bin\Release\KKSSandbox.PoseBrowser.dll"
-        DeployFileName = "KKSSandbox.PoseBrowser.dll"
-        DeactivatedFileName = "KKSSandbox.PoseBrowser.dl_"
-    },
-    @{
-        Key = "PoseBrowser-KK"
-        Game = "KK"
-        DisplayName = "[KK] PoseBrowser (KKSandbox.PoseBrowser.dll)"
-        BuildPath = "targets\KK\PoseBrowser\KKSandbox.PoseBrowser.csproj"
-        BuiltDllRelPath = "targets\KK\PoseBrowser\bin\Release\KKSandbox.PoseBrowser.dll"
-        DeployFileName = "KKSandbox.PoseBrowser.dll"
-        DeactivatedFileName = "KKSandbox.PoseBrowser.dl_"
+        Key = "AnimBrowser"
+        DisplayName = "AnimBrowser"
+        Games = @("HS2", "KKS", "KK")
+        Targets = @{
+            HS2 = @{
+                BuildPath = "targets\HS2\AnimBrowser\HS2Sandbox.AnimBrowser.csproj"
+                BuiltDllRelPath = "targets\HS2\AnimBrowser\bin\Release\HS2Sandbox.AnimBrowser.dll"
+                DeployFileName = "HS2Sandbox.AnimBrowser.dll"
+                DeactivatedFileName = "HS2Sandbox.AnimBrowser.dl_"
+            }
+            KKS = @{
+                BuildPath = "targets\KKS\AnimBrowser\KKSSandbox.AnimBrowser.csproj"
+                BuiltDllRelPath = "targets\KKS\AnimBrowser\bin\Release\KKSSandbox.AnimBrowser.dll"
+                DeployFileName = "KKSSandbox.AnimBrowser.dll"
+                DeactivatedFileName = "KKSSandbox.AnimBrowser.dl_"
+            }
+            KK = @{
+                BuildPath = "targets\KK\AnimBrowser\KKSandbox.AnimBrowser.csproj"
+                BuiltDllRelPath = "targets\KK\AnimBrowser\bin\Release\KKSandbox.AnimBrowser.dll"
+                DeployFileName = "KKSandbox.AnimBrowser.dll"
+                DeactivatedFileName = "KKSandbox.AnimBrowser.dl_"
+            }
+        }
     }
 )
 
-$choiceIndices = Read-MultiChoice "What do you want to build/deploy?" ($targets | ForEach-Object { $_.DisplayName })
-$selectedTargets = @($choiceIndices | ForEach-Object { $targets[$_] })
+function Get-ModuleMenuLabel {
+    param($Module)
+
+    if ($Module.Games.Count -eq 1) {
+        return "$($Module.DisplayName) [$($gameLabels[$Module.Games[0]])]"
+    }
+
+    $gameList = ($Module.Games | ForEach-Object { $gameLabels[$_] }) -join ", "
+    return "$($Module.DisplayName) ($gameList)"
+}
+
+function Expand-SelectedTargets {
+    param(
+        [array]$SelectedModules,
+        [string[]]$SelectedGameKeys
+    )
+
+    $result = @()
+    foreach ($module in $SelectedModules) {
+        $gamesToBuild = if ($module.Games.Count -eq 1) {
+            @($module.Games[0])
+        } else {
+            @($SelectedGameKeys | Where-Object { $module.Games -contains $_ })
+        }
+
+        foreach ($game in $gamesToBuild) {
+            $targetInfo = $module.Targets[$game]
+            $result += @{
+                Key = if ($module.Games.Count -eq 1) { $module.Key } else { "$($module.Key)-$game" }
+                ModuleKey = $module.Key
+                Game = $game
+                DisplayName = "[$game] $($module.DisplayName) ($($targetInfo.DeployFileName))"
+                BuildPath = $targetInfo.BuildPath
+                BuiltDllRelPath = $targetInfo.BuiltDllRelPath
+                DeployFileName = $targetInfo.DeployFileName
+                DeactivatedFileName = $targetInfo.DeactivatedFileName
+            }
+        }
+    }
+
+    return $result
+}
+
+$moduleMenuLabels = $moduleCatalog | ForEach-Object { Get-ModuleMenuLabel $_ }
+$moduleChoiceIndices = Read-MultiChoice "Which module(s) do you want to build/deploy?" $moduleMenuLabels
+$selectedModules = @($moduleChoiceIndices | ForEach-Object { $moduleCatalog[$_] })
+
+$multiGameModules = @($selectedModules | Where-Object { $_.Games.Count -gt 1 })
+$selectedGameKeys = @()
+
+if ($multiGameModules.Count -gt 0) {
+    $availableGameKeys = @(
+        $multiGameModules |
+            ForEach-Object { $_.Games } |
+            Select-Object -Unique
+    )
+    $availableGameKeys = @(
+        @("HS2", "KKS", "KK") | Where-Object { $availableGameKeys -contains $_ }
+    )
+
+    $moduleNames = ($multiGameModules | ForEach-Object { $_.DisplayName }) -join ", "
+    $gameMenuLabels = $availableGameKeys | ForEach-Object { $gameLabels[$_] }
+    $gameChoiceIndices = Read-MultiChoice "Which game(s) for: $moduleNames ?" $gameMenuLabels
+    $selectedGameKeys = @($gameChoiceIndices | ForEach-Object { $availableGameKeys[$_] })
+
+    if ($selectedGameKeys.Count -eq 0) {
+        Stop-BuildFlow "No games selected for multi-game module(s)."
+    }
+}
+
+$selectedTargets = Expand-SelectedTargets -SelectedModules $selectedModules -SelectedGameKeys $selectedGameKeys
+
+if ($selectedTargets.Count -eq 0) {
+    Stop-BuildFlow "No build targets resolved from your selection."
+}
+
+Write-Host ""
+Write-Host "Selected build target(s):" -ForegroundColor Cyan
+foreach ($target in $selectedTargets) {
+    Write-Host "  - $($target.DisplayName)"
+}
 
 Write-Host ""
 Write-Host "Building $($selectedTargets.Count) module(s)..." -ForegroundColor Cyan

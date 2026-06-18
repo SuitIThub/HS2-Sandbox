@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from plugin_manifest import release_detect_entries
+from plugin_manifest import manual_rerelease_groups, manual_rerelease_singleton_entries, workflow_group_input_id, workflow_input_id
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "main.yml"
@@ -17,16 +17,19 @@ START = "# >> rerelease-inputs:start (generated — run sync_workflow_rerelease_
 END = "# >> rerelease-inputs:end"
 
 
-def input_id(plugin_key: str) -> str:
-    return f"rerelease_{plugin_key}"
-
-
 def generate_block() -> str:
     lines = [START]
-    for entry in release_detect_entries():
-        iid = input_id(entry.key)
+    for entry in manual_rerelease_singleton_entries():
+        iid = workflow_input_id(entry.key)
         lines.append(f"      {iid}:")
         lines.append(f'        description: "Rerelease — {entry.display_name}"')
+        lines.append("        required: false")
+        lines.append("        default: false")
+        lines.append("        type: boolean")
+    for group in manual_rerelease_groups():
+        iid = workflow_group_input_id(group.key)
+        lines.append(f"      {iid}:")
+        lines.append(f'        description: "Rerelease — {group.display_name}"')
         lines.append("        required: false")
         lines.append("        default: false")
         lines.append("        type: boolean")

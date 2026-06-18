@@ -6,7 +6,13 @@ import json
 import os
 import sys
 
-from plugin_manifest import release_detect_entries, workflow_input_id
+from plugin_manifest import (
+    expand_manual_rerelease_selection,
+    manual_rerelease_groups,
+    manual_rerelease_singleton_entries,
+    workflow_group_input_id,
+    workflow_input_id,
+)
 
 
 def _is_checked(value: object) -> bool:
@@ -18,10 +24,13 @@ def _is_checked(value: object) -> bool:
 def collect_from_event(event: dict) -> list[str]:
     inputs = event.get("inputs") or {}
     selected: list[str] = []
-    for entry in release_detect_entries():
+    for entry in manual_rerelease_singleton_entries():
         if _is_checked(inputs.get(workflow_input_id(entry.key))):
             selected.append(entry.key)
-    return selected
+    for group in manual_rerelease_groups():
+        if _is_checked(inputs.get(workflow_group_input_id(group.key))):
+            selected.append(group.key)
+    return expand_manual_rerelease_selection(selected)
 
 
 def main() -> None:

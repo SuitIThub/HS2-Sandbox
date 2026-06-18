@@ -9,7 +9,7 @@ namespace HS2SandboxPlugin
 {
     public partial class PoseBrowserWindow
     {
-        private readonly PoseBrowserCharacterConfig _characterConfig = new PoseBrowserCharacterConfig();
+        private readonly StudioCharacterPriorityList _characterConfig = new StudioCharacterPriorityList();
         private bool _showCharacterConfigPane;
         private Rect _characterConfigWindowRect;
         private Vector2 _characterConfigScroll;
@@ -17,105 +17,19 @@ namespace HS2SandboxPlugin
 
         private void DrawCharacterConfigWindowContent(int id)
         {
-            GUILayout.BeginVertical(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            GUILayout.Label(
-                "Priority list for multi-character pose apply. Top = highest priority.",
-                PoseBrowserScale.H(32f));
-
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Load characters", PoseBrowserScale.H(26f)))
-            {
-                _characterConfig.LoadNewFromScene(_dataService.GetSceneCharacters());
-                _selectedSlotIndex = -1;
-            }
-
-            if (GUILayout.Button("Remove missing", PoseBrowserScale.H(26f)))
-            {
-                int removed = _characterConfig.RemoveSlotsNotInScene();
-                if (removed > 0)
-                    _selectedSlotIndex = -1;
-            }
-
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(6f);
-            var slots = _characterConfig.Priority;
-            // Draw path: cached Studio selection (refreshed ~5×/s) avoids enumerating Studio every frame.
-            var selectedInStudio = new HashSet<OCIChar>(GetCachedStudioSelectedCharacters());
-            _characterConfigScroll = GUILayout.BeginScrollView(_characterConfigScroll, GUILayout.ExpandHeight(true));
-            for (int i = 0; i < slots.Count; i++)
-            {
-                var slot = slots[i];
-                int slotIndex = i;
-                bool inScene = PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci);
-                bool studioSelected = inScene && selectedInStudio.Contains(oci);
-                bool rowOn = _selectedSlotIndex == i;
-                Color prev = GUI.color;
-                if (!inScene)
-                    GUI.color = new Color(1f, 0.75f, 0.55f, 1f);
-                else if (studioSelected)
-                    GUI.color = new Color(0.55f, 1f, 0.65f, 1f);
-
-                GUILayout.BeginHorizontal();
-                string genderLabel = slot.IsFemale ? "f" : "m";
-                if (GUILayout.Button(genderLabel, PoseBrowserScale.W(24f), PoseBrowserScale.H(22f)))
-                    _characterConfig.ToggleSlotGender(i);
-
-                string label = inScene
-                    ? $"{i + 1}. {slot.DisplayName}"
-                    : $"{i + 1}. {slot.DisplayName} (missing)";
-                if (GUILayout.Toggle(rowOn, label, GUI.skin.button, PoseBrowserScale.H(22f), GUILayout.ExpandWidth(true)))
-                    _selectedSlotIndex = i;
-                else if (rowOn)
-                    _selectedSlotIndex = -1;
-
-                if (GUILayout.Button(
-                        new GUIContent("✕", "Remove this character from the priority list."),
-                        PoseBrowserScale.W(28f),
-                        PoseBrowserScale.H(22f)))
+            StudioCharacterConfigPaneUi.DrawBody(
+                ref _characterConfigScroll,
+                ref _selectedSlotIndex,
+                _characterConfig,
+                GetCachedStudioSelectedCharacters(),
+                new StudioCharacterConfigPaneUi.Layout
                 {
-                    _characterConfig.RemoveSlot(slotIndex);
-                    if (_selectedSlotIndex == slotIndex)
-                        _selectedSlotIndex = -1;
-                    else if (_selectedSlotIndex > slotIndex)
-                        _selectedSlotIndex--;
-                }
-
-                GUILayout.EndHorizontal();
-                GUI.color = prev;
-            }
-
-            GUILayout.EndScrollView();
-
-            GUI.enabled = _selectedSlotIndex >= 0 && _selectedSlotIndex < slots.Count;
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("↑", PoseBrowserScale.W(28f), PoseBrowserScale.H(22f)))
-            {
-                _characterConfig.MoveSlot(_selectedSlotIndex, -1);
-                _selectedSlotIndex = Math.Max(0, _selectedSlotIndex - 1);
-            }
-
-            if (GUILayout.Button("↓", PoseBrowserScale.W(28f), PoseBrowserScale.H(22f)))
-            {
-                _characterConfig.MoveSlot(_selectedSlotIndex, 1);
-                _selectedSlotIndex = Math.Min(slots.Count - 1, _selectedSlotIndex + 1);
-            }
-
-            if (GUILayout.Button("✕", PoseBrowserScale.W(28f), PoseBrowserScale.H(22f)))
-            {
-                _characterConfig.RemoveSlot(_selectedSlotIndex);
-                _selectedSlotIndex = -1;
-            }
-
-            GUILayout.EndHorizontal();
-            GUI.enabled = true;
-
-            GUILayout.Space(6f);
-            if (GUILayout.Button("Close", PoseBrowserScale.H(26f)))
-                _showCharacterConfigPane = false;
-
-            GUILayout.EndVertical();
-            GUI.DragWindow(new Rect(0f, 0f, 10000f, 20f));
+                    W = PoseBrowserScale.W,
+                    H = PoseBrowserScale.H,
+                    DragHeaderHeight = PoseBrowserScale.Px(20f)
+                },
+                "Priority list for multi-character pose apply. Top = highest priority.",
+                () => _showCharacterConfigPane = false);
         }
 
         private bool CanShowMultiCharacterApply()
@@ -164,6 +78,8 @@ namespace HS2SandboxPlugin
 
         private void ApplyPosesListToSelectedCharacters(IList<PoseGridItem> poses, string? knownGroupId = null)
         {
+            _characterConfig.ReloadFromDisk();
+
             PoseGroup? layoutGroup = null;
             if (!string.IsNullOrEmpty(knownGroupId))
             {

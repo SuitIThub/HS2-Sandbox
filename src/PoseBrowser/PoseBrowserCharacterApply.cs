@@ -20,7 +20,7 @@ namespace HS2SandboxPlugin
 
         public static int ApplyPosesToSelectedCharacters(
             PoseDataService dataService,
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             IList<PoseGridItem> poses,
             IList<OCIChar> studioSelection,
             Action<PoseGridItem>? onPoseApplied = null)
@@ -101,7 +101,7 @@ namespace HS2SandboxPlugin
         /// Requires an equal pose and character count.
         /// </summary>
         public static bool CanApplyPosesOneToOne(
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             IList<PoseGridItem> poses,
             IList<OCIChar> studioSelection)
         {
@@ -112,7 +112,7 @@ namespace HS2SandboxPlugin
         /// Planned first-pass pose-to-character mapping (one character per pose).
         /// </summary>
         public static List<PoseOciNullablePair> BuildPlannedPoseAssignments(
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             IList<PoseGridItem> poses,
             IList<OCIChar> studioSelection)
         {
@@ -147,7 +147,7 @@ namespace HS2SandboxPlugin
         /// Full planned apply (first pass + second pass), grouped by pose display order.
         /// </summary>
         public static List<PoseCharListPair> BuildFullPlannedPoseAssignmentPlan(
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             IList<PoseGridItem> poses,
             IList<OCIChar> studioSelection)
         {
@@ -209,7 +209,7 @@ namespace HS2SandboxPlugin
         private static bool TryPickTargetForPose(
             PoseGridItem pose,
             List<OCIChar> selected,
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             List<OCIChar> priorityOrder,
             HashSet<OCIChar> posed,
             ref int maleCursor,
@@ -249,7 +249,7 @@ namespace HS2SandboxPlugin
         /// Builds pose-to-character assignments in pose order when a full one-to-one apply is possible.
         /// </summary>
         public static bool TryBuildPoseCharacterAssignments(
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             IList<PoseGridItem> poses,
             IList<OCIChar> studioSelection,
             out List<PoseOciPair>? assignments)
@@ -282,7 +282,7 @@ namespace HS2SandboxPlugin
         /// </summary>
         public static int ApplyGroupRelativePositions(
             PoseGroup group,
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             IList<PoseGridItem> poses,
             IList<OCIChar> studioSelection,
             string poseRootPath,
@@ -418,7 +418,7 @@ namespace HS2SandboxPlugin
         public static List<OCIChar> BuildEligiblePoolForApply(
             PoseGridItem pose,
             IList<OCIChar> studioSelection,
-            PoseBrowserCharacterConfig config)
+            IStudioCharacterPriorityList config)
         {
             return BuildOrderedSelectedCharacters(
                 studioSelection, config, GetPoseGenderTag(pose), appendUnlisted: false);
@@ -428,7 +428,7 @@ namespace HS2SandboxPlugin
             OCIChar oci,
             PoseGridItem pose,
             IList<OCIChar> studioSelection,
-            PoseBrowserCharacterConfig config)
+            IStudioCharacterPriorityList config)
         {
             var pool = BuildOrderedSelectedCharacters(
                 studioSelection, config, GetPoseGenderTag(pose), appendUnlisted: false);
@@ -437,39 +437,25 @@ namespace HS2SandboxPlugin
 
         private static List<OCIChar> BuildOrderedSelectedCharacters(
             IList<OCIChar> studioSelection,
-            PoseBrowserCharacterConfig config,
+            IStudioCharacterPriorityList config,
             PoseGenderTag tagFilter,
             bool appendUnlisted)
         {
-            var selectedSet = new HashSet<OCIChar>();
-            foreach (var oci in studioSelection)
-                selectedSet.Add(oci);
+            return StudioCharacterPriorityResolver.ResolveCharacters(
+                config.Priority,
+                ToOrderQuery(tagFilter, appendUnlisted),
+                studioSelection);
+        }
 
-            var result = new List<OCIChar>();
-            var used = new HashSet<OCIChar>();
+        private static StudioCharacterOrderQuery ToOrderQuery(PoseGenderTag tag, bool appendUnlisted)
+        {
+            StudioCharacterGenderFilter gender = StudioCharacterGenderFilter.Any;
+            if (tag == PoseGenderTag.Male)
+                gender = StudioCharacterGenderFilter.Male;
+            else if (tag == PoseGenderTag.Female)
+                gender = StudioCharacterGenderFilter.Female;
 
-            foreach (var slot in config.Priority)
-            {
-                if (tagFilter == PoseGenderTag.Male && slot.IsFemale)
-                    continue;
-                if (tagFilter == PoseGenderTag.Female && !slot.IsFemale)
-                    continue;
-                if (!PoseBrowserCharacterSlot.TryResolveInScene(slot, out var oci) || !selectedSet.Contains(oci))
-                    continue;
-                if (used.Add(oci))
-                    result.Add(oci);
-            }
-
-            if (appendUnlisted)
-            {
-                foreach (var oci in studioSelection)
-                {
-                    if (used.Add(oci))
-                        result.Add(oci);
-                }
-            }
-
-            return result;
+            return StudioCharacterOrderQuery.SelectedByPriority(gender, appendUnlisted);
         }
 
         /// <summary>

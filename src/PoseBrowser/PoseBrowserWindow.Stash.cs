@@ -7,8 +7,8 @@ namespace HS2SandboxPlugin
 {
     public partial class PoseBrowserWindow
     {
-        private const int StashWindowId = 2029;
-        private const int StashUndockedWindowId = 2030;
+        private const int StashWindowId = SandboxImguiWindowIds.PoseBrowser.StashDocked;
+        private const int StashUndockedWindowId = SandboxImguiWindowIds.PoseBrowser.StashUndocked;
         private const float StashPaneDefaultWidthBase = 360f;
         private float StashPaneDefaultWidth => PoseBrowserScale.Px(StashPaneDefaultWidthBase);
         private const float StashFloatingMinWidth = 220f;

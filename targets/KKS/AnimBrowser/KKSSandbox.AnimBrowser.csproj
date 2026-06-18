@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KKSSandbox.AnimBrowser</AssemblyName>
+    <RootNamespace>HS2SandboxPlugin</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SrcRoot)Core\**\*.cs" />
+    <Compile Include="$(SrcRoot)AnimBrowser\**\*.cs" />
+    <Compile Include="Plugin.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(AssetsRoot)anim-icon.png" CopyToOutputDirectory="Always" Link="anim-icon.png" />
+    <EmbeddedResource Include="$(AssetsRoot)anim-icon.png">
+      <LogicalName>$(AssemblyName).anim-icon.png</LogicalName>
+      <Link>anim-icon.png</Link>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

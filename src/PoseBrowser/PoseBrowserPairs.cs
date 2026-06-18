@@ -16,18 +16,6 @@ namespace HS2SandboxPlugin
         }
     }
 
-    public struct OciDicKeyPair
-    {
-        public OCIChar Oci;
-        public int DicKey;
-
-        public OciDicKeyPair(OCIChar oci, int dicKey)
-        {
-            Oci = oci;
-            DicKey = dicKey;
-        }
-    }
-
     public struct PoseOciNullablePair
     {
         public PoseGridItem Pose;

@@ -18,6 +18,13 @@ VERSION_RE = re.compile(
 
 
 @dataclass(frozen=True)
+class ManualRereleaseGroup:
+    key: str
+    display_name: str
+    member_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PluginEntry:
     key: str
     display_name: str
@@ -51,9 +58,39 @@ def _parse_entry(raw: dict) -> PluginEntry:
     )
 
 
+def load_manifest_raw() -> dict:
+    return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
 def load_manifest() -> list[PluginEntry]:
-    data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    data = load_manifest_raw()
     return [_parse_entry(item) for item in data["entries"]]
+
+
+def manual_rerelease_groups() -> list[ManualRereleaseGroup]:
+    data = load_manifest_raw()
+    groups: list[ManualRereleaseGroup] = []
+    for raw in data.get("manualRereleaseGroups") or []:
+        groups.append(
+            ManualRereleaseGroup(
+                key=str(raw["key"]).lower(),
+                display_name=str(raw.get("displayName") or raw["key"]),
+                member_keys=tuple(str(k).lower() for k in raw["memberKeys"]),
+            )
+        )
+    return groups
+
+
+def grouped_release_detect_keys() -> set[str]:
+    out: set[str] = set()
+    for group in manual_rerelease_groups():
+        out.update(group.member_keys)
+    return out
+
+
+def manual_rerelease_singleton_entries() -> list[PluginEntry]:
+    grouped = grouped_release_detect_keys()
+    return [e for e in release_detect_entries() if e.key not in grouped]
 
 
 def entry_by_key() -> dict[str, PluginEntry]:
@@ -71,6 +108,30 @@ def release_detect_keys() -> list[str]:
 def workflow_input_id(plugin_key: str) -> str:
     """workflow_dispatch boolean input name for manual rerelease."""
     return f"rerelease_{plugin_key}"
+
+
+def workflow_group_input_id(group_key: str) -> str:
+    """workflow_dispatch boolean input name for a grouped manual rerelease."""
+    return workflow_input_id(group_key)
+
+
+def expand_manual_rerelease_selection(selected_keys: list[str]) -> list[str]:
+    """Expand grouped workflow input keys to individual release-detect plugin keys."""
+    by_key = entry_by_key()
+    group_by_key = {g.key: g for g in manual_rerelease_groups()}
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for key in selected_keys:
+        group = group_by_key.get(key)
+        member_keys = group.member_keys if group else (key,)
+        for member in member_keys:
+            if member not in by_key or not by_key[member].release_detect:
+                raise ValueError(f"Unknown or non-release plugin key in group '{key}': {member}")
+            if member in seen:
+                continue
+            seen.add(member)
+            expanded.append(member)
+    return expanded
 
 
 def versions_json_entries() -> list[PluginEntry]:
@@ -146,17 +207,20 @@ def parse_plugin_keys_arg(value: str) -> list[str]:
 
 
 def validate_release_detect_keys(keys: list[str]) -> list[str]:
+    expanded = expand_manual_rerelease_selection(keys)
     known = {e.key for e in release_detect_entries()}
-    invalid = [k for k in keys if k not in known]
+    invalid = [k for k in expanded if k not in known]
     if invalid:
         raise ValueError(f"Unknown plugin key(s): {', '.join(invalid)}")
-    return keys
+    return expanded
 
 
 def list_release_detect_keys() -> None:
-    for key in release_detect_keys():
-        e = entry_by_key()[key]
-        print(f"  {key} - {e.display_name}")
+    for entry in manual_rerelease_singleton_entries():
+        print(f"  {entry.key} - {entry.display_name}")
+    for group in manual_rerelease_groups():
+        members = ", ".join(group.member_keys)
+        print(f"  {group.key} - {group.display_name} [{members}]")
 
 
 def main() -> None:

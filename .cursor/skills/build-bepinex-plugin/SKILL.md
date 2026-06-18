@@ -31,7 +31,7 @@ Always use the **Ask Question** tool (or equivalent user prompt) everywhere when
 | Plugin deploy folder | `D:/Honey Select/BepInEx/plugins/HS2-Sandbox/` |
 | Game log | `D:/Honey Select/output_log.txt` |
 
-Available modules: `CopyScript`, `Timeline`, `SearchBarManager`, `SonScale`, `WorkspaceTreeLock`, `Notebook`, `PoseBrowser`
+Available modules: `CopyScript`, `Timeline`, `SearchBarManager`, `SonScale`, `WorkspaceTreeLock`, `Notebook`, `PoseBrowser`, `AnimBrowser`
 
 Run shell commands from the **repo root** unless a step uses absolute paths.
 
@@ -49,7 +49,7 @@ dotnet build HS2-Sandbox.sln -c Release
 Or build a single module:
 
 ```powershell
-dotnet build targets/HS2/Timeline/HS2Sandbox.Timeline.csproj -c Release
+dotnet build targets/HS2/AnimBrowser/HS2Sandbox.AnimBrowser.csproj -c Release
 ```
 
 Verify the file exists (example for Timeline):
@@ -143,6 +143,7 @@ HS2-Sandbox/
 │   ├── Core/                      (shared infrastructure)
 │   ├── Timeline/                  (timeline source)
 │   ├── PoseBrowser/               (pose browser source)
+│   ├── AnimBrowser/               (anim browser source)
 │   ├── ...                        (other modules)
 ├── targets/
 │   ├── HS2/

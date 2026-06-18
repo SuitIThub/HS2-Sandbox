@@ -40,7 +40,7 @@ namespace HS2SandboxPlugin
         private string _listEditorText = "";
         private Action<string[]>? _listEditorOnApply;
         private Rect _listEditorWindowRect;
-        private const int ListEditorWindowID = 2007;
+        private const int ListEditorWindowID = SandboxImguiWindowIds.CopyScript.ListEditor;
         private const float ListEditorMaxHeightPx = 1400f;
         private Vector2 _listEditorScrollPosition;
 
@@ -62,7 +62,7 @@ namespace HS2SandboxPlugin
         protected override void Start()
         {
             base.Start();
-            windowID = 2001;
+            windowID = SandboxImguiWindowIds.CopyScript.Main;
             windowTitle = "CopyScript Control";
             windowRect = new Rect(400, 100, WindowMaxWidth, 480);
             

@@ -8,7 +8,7 @@ namespace HS2SandboxPlugin
 {
     public partial class PoseBrowserWindow
     {
-        private const int HistoryWindowId = 2027;
+        private const int HistoryWindowId = SandboxImguiWindowIds.PoseBrowser.History;
         private const float HistoryPaneDefaultWidthBase = 400f;
         private float HistoryPaneDefaultWidth => PoseBrowserScale.Px(HistoryPaneDefaultWidthBase);
 

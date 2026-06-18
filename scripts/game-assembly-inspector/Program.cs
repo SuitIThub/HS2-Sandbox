@@ -151,6 +151,17 @@ namespace GameAssemblyInspector
             Console.WriteLine("Keywords:  " + string.Join(", ", options.Keywords));
             Console.WriteLine();
 
+            if (Environment.GetEnvironmentVariable("LIST_TYPES") is string lt && lt.Length > 0)
+            {
+                Console.WriteLine("=== Types matching: " + lt + " ===");
+                foreach (var t in asm.GetTypes()
+                    .Where(t => t.FullName != null && t.FullName.IndexOf(lt, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderBy(t => t.FullName))
+                    Console.WriteLine("  " + t.FullName);
+                Console.WriteLine();
+                return 0;
+            }
+
             foreach (string typeName in options.Types)
             {
                 InspectType(asm, typeName, options.Keywords);

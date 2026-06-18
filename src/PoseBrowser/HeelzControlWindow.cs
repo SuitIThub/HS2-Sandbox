@@ -11,7 +11,7 @@ namespace HS2SandboxPlugin
     public class HeelzControlWindow : SubWindow
     {
         private const float CharListRefreshInterval = 2f;
-        private const int TagPickerWindowId = 204901;
+        private const int TagPickerWindowId = SandboxImguiWindowIds.HeelzControl.TagPicker;
 
         // Cached character list + states (rebuilt on timer, not per frame)
         private readonly List<OciHeelzStatePair> _cachedChars = new();
@@ -48,7 +48,7 @@ namespace HS2SandboxPlugin
         protected override void Start()
         {
             base.Start();
-            windowID = 204900;
+            windowID = SandboxImguiWindowIds.HeelzControl.Main;
             windowTitle = "Heelz Control";
             windowRect = new Rect(300, 150, 360, 400);
         }

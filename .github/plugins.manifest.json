@@ -1,6 +1,18 @@
 {
   "schemaVersion": 1,
-  "documentation": "CI plugin registry. After adding a releaseDetect plugin: run python .github/scripts/sync_workflow_rerelease_inputs.py. Manual workflow UI: run_mode dropdown + generated rerelease_* checkboxes. See .github/WORKFLOW.md.",
+  "documentation": "CI plugin registry. After adding a releaseDetect plugin: run python .github/scripts/sync_workflow_rerelease_inputs.py. Manual workflow UI: run_mode dropdown + generated rerelease_* checkboxes (multi-game modules are grouped). See .github/WORKFLOW.md.",
+  "manualRereleaseGroups": [
+    {
+      "key": "posebrowser",
+      "displayName": "Pose Browser (HS2 + KKS + KK)",
+      "memberKeys": ["posebrowser", "posebrowserkks", "posebrowserkk"]
+    },
+    {
+      "key": "animbrowser",
+      "displayName": "Anim Browser (HS2 + KKS + KK)",
+      "memberKeys": ["animbrowser", "animbrowserkks", "animbrowserkk"]
+    }
+  ],
   "entries": [
     {
       "key": "copyscript",
@@ -135,6 +147,51 @@
       "readme": {
         "heading": "### KK Sandbox — Pose Browser (`KKSandbox.PoseBrowser.dll`)",
         "downloadLabel": "Pose Browser (KK)"
+      }
+    },
+    {
+      "key": "animbrowser",
+      "displayName": "Anim Browser (HS2)",
+      "projectName": "HS2Sandbox.AnimBrowser",
+      "versionFile": "src/AnimBrowser/AnimBrowserVersionInfo.cs",
+      "versionMatchIndex": 2,
+      "releaseArtifactPath": "targets/HS2/AnimBrowser/bin/Release/HS2Sandbox.AnimBrowser.dll",
+      "releaseDllFileName": "HS2Sandbox.AnimBrowser.dll",
+      "versionsJsonKey": "animBrowser",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### HS2 Sandbox — Anim Browser (`HS2Sandbox.AnimBrowser.dll`)",
+        "downloadLabel": "Anim Browser"
+      }
+    },
+    {
+      "key": "animbrowserkks",
+      "displayName": "Anim Browser (KKS)",
+      "projectName": "KKSSandbox.AnimBrowser",
+      "versionFile": "src/AnimBrowser/AnimBrowserVersionInfo.cs",
+      "versionMatchIndex": 0,
+      "releaseArtifactPath": "targets/KKS/AnimBrowser/bin/Release/KKSSandbox.AnimBrowser.dll",
+      "releaseDllFileName": "KKSSandbox.AnimBrowser.dll",
+      "versionsJsonKey": "animBrowserKks",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### KKS Sandbox — Anim Browser (`KKSSandbox.AnimBrowser.dll`)",
+        "downloadLabel": "Anim Browser (KKS)"
+      }
+    },
+    {
+      "key": "animbrowserkk",
+      "displayName": "Anim Browser (KK)",
+      "projectName": "KKSandbox.AnimBrowser",
+      "versionFile": "src/AnimBrowser/AnimBrowserVersionInfo.cs",
+      "versionMatchIndex": 1,
+      "releaseArtifactPath": "targets/KK/AnimBrowser/bin/Release/KKSandbox.AnimBrowser.dll",
+      "releaseDllFileName": "KKSandbox.AnimBrowser.dll",
+      "versionsJsonKey": "animBrowserKk",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### KK Sandbox — Anim Browser (`KKSandbox.AnimBrowser.dll`)",
+        "downloadLabel": "Anim Browser (KK)"
       }
     },
     {

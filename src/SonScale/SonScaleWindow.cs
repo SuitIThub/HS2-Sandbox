@@ -10,7 +10,7 @@ namespace HS2SandboxPlugin
         protected override void Start()
         {
             base.Start();
-            windowID = 2012;
+            windowID = SandboxImguiWindowIds.SonScale.Main;
             windowTitle = "Son scale";
             windowRect = new Rect(420, 120, 320, 200);
         }

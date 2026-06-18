@@ -25,7 +25,7 @@ namespace HS2SandboxPlugin
         protected override void Start()
         {
             base.Start();
-            windowID = 2012;
+            windowID = SandboxImguiWindowIds.Notebook.Main;
             windowTitle = "Notebook";
             _savePath = NotebookPersistence.GetDefaultPath();
             LoadFromDisk();

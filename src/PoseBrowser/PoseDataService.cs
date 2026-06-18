@@ -674,121 +674,11 @@ namespace HS2SandboxPlugin
         /// Characters implied by workspace / gizmo selection. Includes FK/IK bone guides: resolves
         /// <see cref="ChaControl"/> from <see cref="GuideObject.transformTarget"/> without changing tree or gizmo selection.
         /// </summary>
-        public IEnumerable<OCIChar> GetSelectedCharacters()
-        {
-            var list = new List<OCIChar>();
-            try
-            {
-                var gom = Singleton<GuideObjectManager>.Instance;
-                if (gom == null)
-                    return list;
+        public IEnumerable<OCIChar> GetSelectedCharacters() => StudioCharacterSelection.GetSelectedCharacters();
 
-                foreach (var key in gom.selectObjectKey)
-                {
-                    try
-                    {
-                        if (Studio.Studio.GetCtrlInfo(key) is OCIChar oci)
-                            AddUniqueOCIChar(list, oci);
-                    }
-                    catch
-                    {
-                        // ignore bad key
-                    }
-                }
+        internal static TreeNodeCtrl? TryGetStudioTreeNodeCtrl() => StudioCharacterSelection.TryGetTreeNodeCtrl();
 
-                try
-                {
-                    if (gom.selectObject != null)
-                        AddUniqueOCIChar(list, TryGetOCICharFromGuideObject(gom.selectObject));
-                }
-                catch
-                {
-                    // ignored
-                }
-
-                AddTreeSelectedCharacters(list);
-                return list;
-            }
-            catch
-            {
-                return list;
-            }
-        }
-
-        private static void AddUniqueOCIChar(List<OCIChar> list, OCIChar? oci)
-        {
-            if (oci == null) return;
-            for (int i = 0; i < list.Count; i++)
-            {
-                if (ReferenceEquals(list[i], oci))
-                    return;
-            }
-            list.Add(oci);
-        }
-
-        internal static TreeNodeCtrl? TryGetStudioTreeNodeCtrl()
-        {
-            try
-            {
-                return Singleton<Studio.Studio>.Instance.treeNodeCtrl;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static void AddTreeSelectedCharacters(List<OCIChar> list)
-        {
-            try
-            {
-                var selectedNodes = TryGetStudioTreeNodeCtrl()?.selectNodes;
-                if (selectedNodes == null)
-                    return;
-
-                var studio = Singleton<Studio.Studio>.Instance;
-                foreach (var node in selectedNodes)
-                {
-                    if (node == null)
-                        continue;
-                    if (studio.dicInfo.TryGetValue(node, out ObjectCtrlInfo info) && info is OCIChar oci)
-                        AddUniqueOCIChar(list, oci);
-                }
-            }
-            catch
-            {
-                // ignored
-            }
-        }
-
-        private static OCIChar? TryGetOCICharFromGuideObject(GuideObject guide)
-        {
-            if (guide == null) return null;
-            Transform? t = guide.transformTarget;
-            return t != null ? FindOCICharFromTransform(t) : null;
-        }
-
-        private static OCIChar? FindOCICharFromTransform(Transform t)
-        {
-            if (t == null) return null;
-            ChaControl? cha = t.GetComponentInParent<ChaControl>();
-            if (cha == null) return null;
-
-            try
-            {
-                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
-                {
-                    if (kvp.Value is OCIChar oci && oci.charInfo == cha)
-                        return oci;
-                }
-            }
-            catch
-            {
-                return null;
-            }
-
-            return null;
-        }
+        public static string GetOCICharDisplayName(OCIChar oci) => StudioCharacterSelection.GetDisplayName(oci);
 
         public IList<string> GetSelectedCharacterDisplayNames()
         {
@@ -802,61 +692,14 @@ namespace HS2SandboxPlugin
             }
         }
 
-        public List<OciDicKeyPair> GetSceneCharacters()
-        {
-            var list = new List<OciDicKeyPair>();
-            try
-            {
-                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
-                {
-                    if (kvp.Value is OCIChar oci)
-                        list.Add(new OciDicKeyPair(oci, kvp.Key));
-                }
-            }
-            catch
-            {
-                // ignored
-            }
+        public List<OciDicKeyPair> GetSceneCharacters() => StudioCharacterSelection.GetSceneCharacters();
 
-            return list;
-        }
+        public static bool TryGetDicKey(OCIChar oci, out int dicKey) =>
+            StudioCharacterSelection.TryGetDicKey(oci, out dicKey);
 
-        public static bool TryGetDicKey(OCIChar oci, out int dicKey)
-        {
-            dicKey = 0;
-            try
-            {
-                foreach (var kvp in Singleton<Studio.Studio>.Instance.dicObjectCtrl)
-                {
-                    if (ReferenceEquals(kvp.Value, oci))
-                    {
-                        dicKey = kvp.Key;
-                        return true;
-                    }
-                }
-            }
-            catch
-            {
-                // ignored
-            }
+        public static bool IsFemaleCharacter(OCIChar oci) => StudioCharacterSelection.IsFemaleCharacter(oci);
 
-            return false;
-        }
-
-        public static bool IsFemaleCharacter(OCIChar oci)
-        {
-            if (oci is OCICharFemale) return true;
-            try
-            {
-                return oci.oiCharInfo != null && oci.oiCharInfo.sex != 0;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public static bool IsMaleCharacter(OCIChar oci) => !IsFemaleCharacter(oci);
+        public static bool IsMaleCharacter(OCIChar oci) => StudioCharacterSelection.IsMaleCharacter(oci);
 
         /// <summary>Maker body-height slider (0–1 range, <see cref="ChaFileDefine.BodyShapeIdx.Height"/>).</summary>
         public static bool TryGetCharacterBodyHeight(OCIChar oci, out float height)
@@ -1097,33 +940,6 @@ namespace HS2SandboxPlugin
             {
                 return false;
             }
-        }
-
-        public static string GetOCICharDisplayName(OCIChar oci)
-        {
-            try
-            {
-                var tn = oci.treeNodeObject;
-                if (tn != null && !StringEx.IsNullOrWhiteSpace(tn.textName))
-                    return tn.textName.Trim();
-            }
-            catch
-            {
-                // ignore
-            }
-
-            try
-            {
-                var param = oci.oiCharInfo?.charFile?.parameter;
-                if (param != null && !StringEx.IsNullOrWhiteSpace(param.fullname))
-                    return param.fullname.Trim();
-            }
-            catch
-            {
-                // ignore
-            }
-
-            return "Character";
         }
 
         public bool ApplyPose(PoseGridItem item, OCIChar ociChar)

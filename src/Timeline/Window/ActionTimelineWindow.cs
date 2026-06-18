@@ -36,7 +36,7 @@ namespace HS2SandboxPlugin
         private bool _showVariablesWindow;
         private bool _autoscrollDuringRun = true;
         private Rect _variablesWindowRect;
-        private const int VariablesWindowID = 2004;
+        private const int VariablesWindowID = SandboxImguiWindowIds.Timeline.Variables;
         /// <summary>Persistent variables when timeline is not running. Seeded into run when timeline starts.</summary>
         private readonly TimelineVariableStore _designTimeVariables = new TimelineVariableStore();
         private int _newVarType; // 0=string, 1=int, 2=bool, 3=list, 4=dict
@@ -49,7 +49,7 @@ namespace HS2SandboxPlugin
         private string _listEditorText = "";
         private Action<string[]>? _listEditorOnApply;
         private Rect _listEditorWindowRect;
-        private const int ListEditorWindowID = 2005;
+        private const int ListEditorWindowID = SandboxImguiWindowIds.Timeline.ListEditor;
         /// <summary>Max height of the text viewport (scroll area), not the whole window. GUILayout.MaxHeight on GUILayout.Window does not cap expanding TextAreas.</summary>
         private const float ListOrDictEditorMaxHeightPx = 1400f;
         private Vector2 _listEditorScrollPosition;
@@ -58,14 +58,14 @@ namespace HS2SandboxPlugin
         private string _dictEditorText = "";
         private Action<Dictionary<string, string>>? _dictEditorOnApply;
         private Rect _dictEditorWindowRect;
-        private const int DictEditorWindowID = 2007;
+        private const int DictEditorWindowID = SandboxImguiWindowIds.Timeline.DictEditor;
         // ── Persistent variables ─────────────────────────────────────────────
         private string _persistVarsPath = "";
         private readonly TimelineVariableStore _persistentVariables = new TimelineVariableStore();
         private bool _showPersistentVarsWindow;
         private Rect _persistentVarsWindowRect;
         private Vector2 _persistentVarsScrollPosition;
-        private const int PersistentVarsWindowID = 2008;
+        private const int PersistentVarsWindowID = SandboxImguiWindowIds.Timeline.PersistentVars;
         private int _newPVarType; // 0=string, 1=int, 2=bool, 3=list, 4=dict
         private string _newPVarName = "";
         private string _newPVarValue = "";
@@ -86,7 +86,7 @@ namespace HS2SandboxPlugin
         private int _selectedCategory;
         private bool _categoryWindowVisible;
         private Rect _categoryWindowRect;
-        private const int CategoryWindowID = 2006;
+        private const int CategoryWindowID = SandboxImguiWindowIds.Timeline.Category;
 
         /// <summary>Unique color per command type; same category = similar hue.</summary>
         private static readonly Dictionary<string, Color> CommandColors = new()
@@ -235,7 +235,7 @@ namespace HS2SandboxPlugin
         protected override void Start()
         {
             base.Start();
-            windowID = 2002;
+            windowID = SandboxImguiWindowIds.Timeline.Main;
             windowTitle = "Action Timeline";
             windowRect = new Rect(400, 50, 806, 420);
             _persistPath = Path.Combine(Paths.ConfigPath, "com.hs2.sandbox", "timeline.json");

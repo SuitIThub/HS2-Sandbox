@@ -19,11 +19,14 @@ Only used when **run_mode** is **manual_rerelease**. Check one or more plugins, 
 
 Plugin list is generated from [plugins.manifest.json](plugins.manifest.json) (`releaseDetect: true` entries). Labels match each plugin’s `displayName`.
 
+Multi-game modules (**Pose Browser**, **Anim Browser**) appear as a single checkbox each; selecting one releases all game variants (HS2, KKS, KK) in the same run.
+
 ## Adding a new plugin
 
 1. Add an entry to `plugins.manifest.json`.
-2. Run: `python .github/scripts/sync_workflow_rerelease_inputs.py`
-3. Commit the updated `main.yml` checkbox section and manifest.
+2. If the module ships for multiple games, add a `manualRereleaseGroups` entry (keeps the manual workflow under GitHub’s 10-checkbox limit).
+3. Run: `python .github/scripts/sync_workflow_rerelease_inputs.py`
+4. Commit the updated `main.yml` checkbox section and manifest.
 
 ## GitHub vs GitLab
 
