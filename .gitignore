@@ -45,3 +45,4 @@ packages/
 *.sln.iml
 
 decompiled_*
+tools/
