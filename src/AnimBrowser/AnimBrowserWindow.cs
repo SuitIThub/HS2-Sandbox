@@ -108,6 +108,7 @@ namespace HS2SandboxPlugin
             _cardCellSize = Mathf.Clamp(_options.cardCellSize, MinCardSize, MaxCardSize);
             _controlsGroupByProximity = _options.controlsGroupByProximity;
             _hideNonStudioCatalogAnimations = _options.hideNonStudioCatalogAnimations;
+            ApplyPreviewCameraOptionsToStage();
             ApplyTreePanelWidthFromOptions();
             RestoreWindowRectForViewMode(_viewMode);
             SyncDockedPaneRectsToMainWindow();
@@ -144,6 +145,8 @@ namespace HS2SandboxPlugin
             ProcessDeferredUiInvalidation();
             TryStartCatalogWarmup();
             HandleControlsHotkeys();
+
+            TickPreviewSystem();
 
             if (!isVisible)
                 return;
@@ -218,6 +221,8 @@ namespace HS2SandboxPlugin
             if (!isVisible)
                 return;
 
+            DrawThumbnailCaptureOverlay();
+
             if (_isMinimized)
             {
                 DrawMinimizedRestoreChip();
@@ -256,6 +261,9 @@ namespace HS2SandboxPlugin
                     SyncAllDockedPaneRects();
                 DrawAllDockedPanes();
             }
+
+            // List-view hover preview popup, drawn on top of the window + docked panes.
+            DrawListPreviewPopup();
         }
 
         protected override void DrawWindowContent(int id)
@@ -517,10 +525,12 @@ namespace HS2SandboxPlugin
                 GUILayout.ExpandWidth(false));
 
             Rect thumbRect = GUILayoutUtility.GetRect(innerW, innerW, GUILayout.Width(innerW), GUILayout.Height(innerW));
-            Texture2D? tex = item.Thumbnail;
-            if (tex == null && !item.ThumbnailFailed)
+            // Prefer a captured thumbnail; otherwise fall back to the solid placeholder.
+            Texture2D? tex = GetStoredThumbnail(entry);
+            if (tex == null)
             {
-                if (!item.ThumbnailRequested)
+                tex = item.Thumbnail;
+                if (tex == null && !item.ThumbnailFailed && !item.ThumbnailRequested)
                 {
                     item.ThumbnailRequested = true;
                     item.Thumbnail = AnimThumbnailService.GetPlaceholder(item, Mathf.RoundToInt(innerW));
@@ -534,7 +544,9 @@ namespace HS2SandboxPlugin
             BeginSearchDimDraw(searchDimmed, ref prevGuiColor);
             if (ev.type == EventType.Repaint)
             {
-                if (tex != null)
+                if (IsPreviewHoverIndex(visibleIndex))
+                    DrawPreviewInThumbRect(thumbRect);
+                else if (tex != null)
                     GUI.DrawTexture(thumbRect, tex, ScaleMode.ScaleToFit, false);
                 else
                     GUI.Box(thumbRect, GUIContent.none);
@@ -551,6 +563,8 @@ namespace HS2SandboxPlugin
                     ev.Use();
                 }
             }
+
+            EmitPreviewHoverSensor(thumbRect, visibleIndex);
 
             var titleRowRect = GUILayoutUtility.GetRect(
                 innerW,
@@ -577,6 +591,8 @@ namespace HS2SandboxPlugin
                 HandleEntryActivate(entry, visibleIndex);
                 ev.Use();
             }
+
+            EmitPreviewHoverSensor(nameRect, visibleIndex);
 
             EndSearchDimDraw(searchDimmed, prevGuiColor);
             GUILayout.EndVertical();
@@ -1134,6 +1150,9 @@ namespace HS2SandboxPlugin
 
         private void FinishMainWindowChrome(int id)
         {
+            if (Event.current.type == EventType.Repaint)
+                TryCapturePreviewHoverFromTooltip();
+
             var resizeHandle = new Rect(
                 windowRect.width - ResizeHandleSize,
                 windowRect.height - ResizeHandleSize,

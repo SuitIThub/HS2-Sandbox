@@ -176,7 +176,13 @@ namespace HS2SandboxPlugin
             }
         }
 
-        public bool RenamePoseDisplayNameAndOptionalFile(PoseGridItem item, string newDisplayName, bool renameFileToMatch, PoseTagDatabase tagDb)
+        public bool RenamePoseDisplayNameAndOptionalFile(
+            PoseGridItem item,
+            string newDisplayName,
+            bool renameFileToMatch,
+            PoseTagDatabase tagDb,
+            PoseGroupDatabase? groupDb = null,
+            PoseItemDatabase? itemDb = null)
         {
             string trimmed = newDisplayName?.Trim() ?? "";
             if (string.IsNullOrEmpty(trimmed)) return false;
@@ -202,6 +208,8 @@ namespace HS2SandboxPlugin
             if (!string.Equals(oldPath, targetPath, StringComparison.OrdinalIgnoreCase))
             {
                 tagDb.OnItemPathChanged(oldRel, item);
+                groupDb?.OnItemPathChanged(oldRel, item);
+                itemDb?.OnItemPathChanged(oldRel, item);
                 try { File.Delete(oldPath); }
                 catch { /* best effort */ }
             }
@@ -372,7 +380,12 @@ namespace HS2SandboxPlugin
             return copy;
         }
 
-        public bool RenameFolder(string folderFullPath, string newName, PoseTagDatabase tagDb, out string? resultingFullPath)
+        public bool RenameFolder(
+            string folderFullPath,
+            string newName,
+            PoseTagDatabase tagDb,
+            out string? resultingFullPath,
+            PoseGroupDatabase? groupDb = null)
         {
             resultingFullPath = null;
             string trimmed = newName?.Trim() ?? "";
@@ -400,6 +413,7 @@ namespace HS2SandboxPlugin
             Directory.Move(folderFullPath, newFull);
             string newRel = GetRelativePath(PoseRootPath, newFull);
             tagDb.OnFolderPathRenamed(oldRel, newRel);
+            groupDb?.OnFolderPathRenamed(oldRel, newRel);
             resultingFullPath = newFull;
             return true;
         }

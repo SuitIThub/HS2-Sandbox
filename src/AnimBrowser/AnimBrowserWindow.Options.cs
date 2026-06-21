@@ -20,6 +20,7 @@ namespace HS2SandboxPlugin
         private int _optionsCardSizeLabelRounded = -1;
         private string _optionsUiScaleLabel = string.Empty;
         private float _optionsUiScaleLabelValue = float.NaN;
+        private string _previewDiagnosticStatus = string.Empty;
 
         private GUIStyle? _optionsWrapStyle;
         private GUIStyle? _hotkeySectionBoxStyle;
@@ -50,12 +51,117 @@ namespace HS2SandboxPlugin
             "When enabled, characters sharing the same animation group are only merged into one controls box if they are within "
             + AnimBrowserConfig.ControlsProximityRadius.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)
             + " world units of each other.");
+        private static readonly GUIContent GcHoverPreview = new GUIContent(
+            "Hover animation preview",
+            "Show a live stick-figure preview in the hovered card thumbnail (grid view). Uses embedded skeleton data — no scene character required.");
+        private static readonly GUIContent GcPreviewCamera = new GUIContent(
+            "Preview camera angle",
+            "How the preview camera frames the stick figures. Only one mode is active at a time.");
+        private static readonly GUIContent GcPreviewCameraSpeed = new GUIContent(
+            "Rotation speed",
+            "How fast the camera orbits the figures in the rotating modes.");
+        private static readonly GUIContent GcPreviewCameraPitch = new GUIContent(
+            "Camera pitch (up/down)",
+            "Tilts the preview camera vertically. 0° = level, +90° = straight down (top view), -90° = straight up.");
+        private static readonly GUIContent[] GcPreviewCameraModes =
+        {
+            new GUIContent("Full frontal (0°)", "Straight-on front view."),
+            new GUIContent("Front-side (45°)", "45° front-side view."),
+            new GUIContent("Side (90°)", "90° side view."),
+            new GUIContent("Rotating", "Continuously orbits the figures."),
+            new GUIContent("Rotating, pause 0°/45°/90°", "Orbits continuously but pauses 2 s at 0°, 45° and 90°."),
+        };
+        private static readonly GUIContent GcDumpPreviewSkeleton = new GUIContent(
+            "Dump preview skeleton data…",
+            "Write embedded rig test, joint map and optional scene reference data to BepInEx/config/com.hs2.sandbox/anim_preview_diagnostic.txt");
 
         private GUIStyle GetOptionsWrapStyle()
         {
             if (_optionsWrapStyle == null)
                 _optionsWrapStyle = new GUIStyle(GUI.skin.label) { wordWrap = true };
             return _optionsWrapStyle;
+        }
+
+        private void DrawThumbnailOptionsSection(GUIStyle wrap)
+        {
+            GUILayout.Label("Thumbnails", GUI.skin.label);
+            GUILayout.Space(4f);
+            GUILayout.Label(
+                "Capture a screen thumbnail of each listed animation (applied to the selected scene character) "
+                + "to show on cards when not hovering. Saved under UserData/com.hs2.sandbox/anim_thumbnails. "
+                + "Frame the capture box over the character, then Capture / Auto-capture.",
+                wrap);
+
+            int count = _visibleEntries.Count;
+            bool busy = IsThumbnailCaptureActive;
+            bool prevEnabled = GUI.enabled;
+            GUI.enabled = !busy && count > 0;
+
+            if (GUILayout.Button(new GUIContent("Capture thumbnails (" + count + " listed)…"), AnimBrowserScale.H(28f), GUILayout.ExpandWidth(true)))
+                StartThumbnailCapture(onlyMissing: false);
+
+            if (GUILayout.Button(new GUIContent("Capture missing only…"), AnimBrowserScale.H(26f), GUILayout.ExpandWidth(true)))
+                StartThumbnailCapture(onlyMissing: true);
+
+            GUI.enabled = prevEnabled;
+            if (busy)
+                GUILayout.Label("Capture in progress — use the on-screen box.", wrap);
+        }
+
+        private void DrawPreviewCameraModeSelector()
+        {
+            for (int i = 0; i < GcPreviewCameraModes.Length; i++)
+            {
+                bool active = _options.previewCameraMode == i;
+                GUILayout.BeginHorizontal();
+                bool picked = GUILayout.Toggle(active, GUIContent.none, AnimBrowserScale.W(18f));
+                GUILayout.Label(GcPreviewCameraModes[i], GetOptionsWrapStyle(), GUILayout.ExpandWidth(true));
+                GUILayout.EndHorizontal();
+
+                if (picked && !active)
+                {
+                    _options.previewCameraMode = i;
+                    if (_previewStage != null)
+                        _previewStage.CameraMode = i;
+                    SavePersistedOptions();
+                }
+            }
+
+            // Rotation speed slider — relevant only for the two rotating modes.
+            if (_options.previewCameraMode == (int)AnimPreviewCameraMode.Rotate ||
+                _options.previewCameraMode == (int)AnimPreviewCameraMode.RotateDwell)
+            {
+                GUILayout.Space(4f);
+                GUILayout.Label(GcPreviewCameraSpeed, GetOptionsWrapStyle());
+                float speed = _options.previewCameraRotateSpeed;
+                float newSpeed = GUILayout.HorizontalSlider(speed, AnimPreviewStage.CamRotateSpeedMin, AnimPreviewStage.CamRotateSpeedMax);
+                if (Mathf.Abs(newSpeed - speed) > 0.5f)
+                {
+                    _options.previewCameraRotateSpeed = newSpeed;
+                    if (_previewStage != null)
+                        _previewStage.CameraRotateSpeed = newSpeed;
+                    SavePersistedOptions();
+                }
+                GUILayout.Label(
+                    Mathf.RoundToInt(_options.previewCameraRotateSpeed).ToString(System.Globalization.CultureInfo.InvariantCulture) + " °/s",
+                    GetOptionsWrapStyle());
+            }
+
+            // Pitch (vertical tilt) — applies to every mode.
+            GUILayout.Space(4f);
+            GUILayout.Label(GcPreviewCameraPitch, GetOptionsWrapStyle());
+            float pitch = _options.previewCameraPitch;
+            float newPitch = GUILayout.HorizontalSlider(pitch, AnimPreviewStage.CamPitchMin, AnimPreviewStage.CamPitchMax);
+            if (Mathf.Abs(newPitch - pitch) > 0.25f)
+            {
+                _options.previewCameraPitch = newPitch;
+                if (_previewStage != null)
+                    _previewStage.CameraPitch = newPitch;
+                SavePersistedOptions();
+            }
+            GUILayout.Label(
+                Mathf.RoundToInt(_options.previewCameraPitch).ToString(System.Globalization.CultureInfo.InvariantCulture) + "°",
+                GetOptionsWrapStyle());
         }
 
         private bool DrawOptionsToggle(bool value, GUIContent content)
@@ -131,6 +237,25 @@ namespace HS2SandboxPlugin
                 SavePersistedOptions();
             }
 
+            bool newHoverPreview = DrawOptionsToggle(_options.enableHoverPreview, GcHoverPreview);
+            if (newHoverPreview != _options.enableHoverPreview)
+            {
+                _options.enableHoverPreview = newHoverPreview;
+                if (!newHoverPreview)
+                    OnPreviewHidden();
+                SavePersistedOptions();
+            }
+
+            if (_options.enableHoverPreview)
+            {
+                GUILayout.Space(6f);
+                GUILayout.Label(GcPreviewCamera, wrap);
+                DrawPreviewCameraModeSelector();
+            }
+
+            GUILayout.Space(10f);
+            DrawThumbnailOptionsSection(wrap);
+
             GUILayout.Space(12f);
             GUILayout.Label("Controls", GUI.skin.label);
             GUILayout.Space(4f);
@@ -180,6 +305,28 @@ namespace HS2SandboxPlugin
                 GUI.enabled = prevEnabled;
                 GUILayout.Label(hasGrouping ? GcEmptyHint : GcNoGroupingHint, wrap);
             }
+
+            GUILayout.Space(8f);
+            GUILayout.Label(
+                "Preview skeleton: dumps bone names, card paths and joint resolution for offline stick-figure tuning. "
+                + "Includes an embedded-rig test (no scene characters are created or modified).",
+                wrap);
+            if (GUILayout.Button(GcDumpPreviewSkeleton, AnimBrowserScale.H(28f), GUILayout.ExpandWidth(true)))
+            {
+                try
+                {
+                    string path = AnimPreviewDiagnostics.WriteDumpFile(includeEmbeddedTest: true);
+                    _previewDiagnosticStatus = "Written:\n" + path;
+                }
+                catch (Exception ex)
+                {
+                    _previewDiagnosticStatus = "Dump failed: " + ex.Message;
+                    SandboxServices.Log.LogWarning("Anim preview diagnostic dump failed: " + ex.Message);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(_previewDiagnosticStatus))
+                GUILayout.Label(_previewDiagnosticStatus, wrap);
 
             GUILayout.EndScrollView();
         }

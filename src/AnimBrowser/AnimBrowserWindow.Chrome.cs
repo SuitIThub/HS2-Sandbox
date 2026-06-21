@@ -1,3 +1,4 @@
+using KKAPI.Utilities;
 using UnityEngine;
 
 namespace HS2SandboxPlugin
@@ -16,25 +17,25 @@ namespace HS2SandboxPlugin
         private bool _chipDragging;
         private Vector2 _chipDragOffset;
         private Vector2 _chipMouseDownPos;
+        private Rect _cachedMinimizeButtonRootRect;
 
         private void DrawWindowChromeButtons(float buttonHeight)
         {
             if (GUILayout.Button(new GUIContent("−", "Minimize Anim Browser"), GUILayout.Width(WindowChromeButtonWidth), AnimBrowserScale.H(buttonHeight)))
-            {
-                var btnRect = GUILayoutUtility.GetLastRect();
-                Vector2 btnScreen = GUIUtility.GUIToScreenPoint(new Vector2(btnRect.x, btnRect.y));
-                MinimizeAnimBrowser(btnScreen);
-            }
+                MinimizeAnimBrowser(_cachedMinimizeButtonRootRect);
+
+            if (Event.current.type == EventType.Repaint)
+                _cachedMinimizeButtonRootRect = GUIClip.Unclip(GUILayoutUtility.GetLastRect());
 
             if (GUILayout.Button(new GUIContent("×", "Close Anim Browser"), GUILayout.Width(WindowChromeButtonWidth), AnimBrowserScale.H(buttonHeight)))
                 CloseAnimBrowser();
         }
 
-        private void MinimizeAnimBrowser(Vector2 minimizeButtonScreen)
+        private void MinimizeAnimBrowser(Rect minimizeButtonRoot)
         {
             CaptureWindowRectForCurrentViewMode();
-            _minimizeBtnOffsetFromWindow = minimizeButtonScreen - new Vector2(windowRect.x, windowRect.y);
-            _minimizedChipRect = new Rect(minimizeButtonScreen.x, minimizeButtonScreen.y, MinimizedChipSize, MinimizedChipSize);
+            _minimizeBtnOffsetFromWindow = minimizeButtonRoot.min - new Vector2(windowRect.x, windowRect.y);
+            _minimizedChipRect = new Rect(minimizeButtonRoot.x, minimizeButtonRoot.y, MinimizedChipSize, MinimizedChipSize);
             _chipDragging = false;
             _isMinimized = true;
         }
@@ -66,34 +67,53 @@ namespace HS2SandboxPlugin
             if (_minimizedChipRect.width < 1f)
                 _minimizedChipRect = new Rect(_minimizedChipRect.x, _minimizedChipRect.y, MinimizedChipSize, MinimizedChipSize);
 
-            var chip = _minimizedChipRect;
+            Rect chip = _minimizedChipRect;
+            int controlId = GUIUtility.GetControlID(FocusType.Passive);
+            Rect hitChip = chip;
+            const float hitPad = 2f;
+            hitChip.x -= hitPad;
+            hitChip.y -= hitPad;
+            hitChip.width += hitPad * 2f;
+            hitChip.height += hitPad * 2f;
+
+            switch (e.type)
+            {
+                case EventType.MouseDown:
+                    if (e.button != 0 || !hitChip.Contains(e.mousePosition))
+                        break;
+                    GUIUtility.hotControl = controlId;
+                    _chipDragging = true;
+                    _chipDragOffset = e.mousePosition - chip.min;
+                    _chipMouseDownPos = e.mousePosition;
+                    e.Use();
+                    break;
+                case EventType.MouseDrag:
+                    if (GUIUtility.hotControl != controlId || !_chipDragging)
+                        break;
+                    float nx = e.mousePosition.x - _chipDragOffset.x;
+                    float ny = e.mousePosition.y - _chipDragOffset.y;
+                    nx = Mathf.Clamp(nx, 0f, Screen.width - chip.width);
+                    ny = Mathf.Clamp(ny, 0f, Screen.height - chip.height);
+                    _minimizedChipRect = new Rect(nx, ny, chip.width, chip.height);
+                    e.Use();
+                    break;
+                case EventType.MouseUp:
+                    if (GUIUtility.hotControl != controlId || e.button != 0)
+                        break;
+                    bool clicked = (e.mousePosition - _chipMouseDownPos).sqrMagnitude <=
+                        MinimizedChipClickDragThreshold * MinimizedChipClickDragThreshold;
+                    GUIUtility.hotControl = 0;
+                    _chipDragging = false;
+                    if (clicked)
+                        RestoreFromMinimize();
+                    e.Use();
+                    break;
+            }
+
             GUI.Box(chip, new GUIContent("AB", "Restore Anim Browser"));
 
-            if (e.type == EventType.MouseDown && e.button == 0 && chip.Contains(e.mousePosition))
-            {
-                _chipDragging = true;
-                _chipDragOffset = e.mousePosition - new Vector2(chip.x, chip.y);
-                _chipMouseDownPos = e.mousePosition;
-                e.Use();
-            }
-            else if (e.type == EventType.MouseDrag && _chipDragging)
-            {
-                float nx = e.mousePosition.x - _chipDragOffset.x;
-                float ny = e.mousePosition.y - _chipDragOffset.y;
-                nx = Mathf.Clamp(nx, 0f, Screen.width - chip.width);
-                ny = Mathf.Clamp(ny, 0f, Screen.height - chip.height);
-                _minimizedChipRect = new Rect(nx, ny, chip.width, chip.height);
-                e.Use();
-            }
-            else if (e.type == EventType.MouseUp && e.button == 0 && _chipDragging)
-            {
-                bool clicked = (e.mousePosition - _chipMouseDownPos).sqrMagnitude <=
-                    MinimizedChipClickDragThreshold * MinimizedChipClickDragThreshold;
-                _chipDragging = false;
-                if (clicked)
-                    RestoreFromMinimize();
-                e.Use();
-            }
+            if (GUIUtility.hotControl == controlId || hitChip.Contains(e.mousePosition))
+                IMGUIUtils.EatInputInRect(chip);
         }
     }
 }

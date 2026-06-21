@@ -154,10 +154,27 @@ namespace GameAssemblyInspector
             if (Environment.GetEnvironmentVariable("LIST_TYPES") is string lt && lt.Length > 0)
             {
                 Console.WriteLine("=== Types matching: " + lt + " ===");
-                foreach (var t in asm.GetTypes()
-                    .Where(t => t.FullName != null && t.FullName.IndexOf(lt, StringComparison.OrdinalIgnoreCase) >= 0)
-                    .OrderBy(t => t.FullName))
-                    Console.WriteLine("  " + t.FullName);
+                Type?[] allTypes;
+                try
+                {
+                    allTypes = asm.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    allTypes = ex.Types; // partial list; nulls for types that failed to load
+                }
+
+                foreach (var t in allTypes
+                    .Where(t => t?.FullName != null && t.FullName.IndexOf(lt, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderBy(t => t!.FullName))
+                {
+                    Console.WriteLine("  " + t!.FullName);
+                    foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                        .Where(m => m.Name.IndexOf("Load", StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        Console.WriteLine("      [static] " + FormatMethod(m));
+                    }
+                }
                 Console.WriteLine();
                 return 0;
             }
@@ -165,6 +182,8 @@ namespace GameAssemblyInspector
             foreach (string typeName in options.Types)
             {
                 InspectType(asm, typeName, options.Keywords);
+                if (typeName.EndsWith("RefObjKey", StringComparison.Ordinal))
+                    DumpEnum.Dump(asm, typeName);
                 Console.WriteLine();
             }
 

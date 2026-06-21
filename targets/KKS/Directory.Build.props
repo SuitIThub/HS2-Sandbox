@@ -23,5 +23,9 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>compile</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="ExtensibleSaveFormat.KoikatsuSunshine" Version="21.1.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>

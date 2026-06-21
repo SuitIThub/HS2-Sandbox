@@ -5,7 +5,7 @@ namespace HS2SandboxPlugin
 {
     internal static class AnimBrowserConfig
     {
-        public const int OptionsJsonVersion = 4;
+        public const int OptionsJsonVersion = 5;
 
         /// <summary>World-space radius for merging characters into one controls box (same animation group).</summary>
         public const float ControlsProximityRadius = 3.5f;

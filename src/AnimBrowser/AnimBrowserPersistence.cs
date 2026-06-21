@@ -40,6 +40,17 @@ namespace HS2SandboxPlugin
         public float controlsFloatingY;
         public float controlsFloatingW;
         public float controlsFloatingH;
+        public bool enableHoverPreview = true;
+        public bool enableAnimatedGridThumbnails;
+
+        /// <summary>Preview camera mode: see <see cref="AnimPreviewCameraMode"/> (0 = full frontal).</summary>
+        public int previewCameraMode;
+
+        /// <summary>Preview camera orbit speed (degrees/second) for the rotating modes.</summary>
+        public float previewCameraRotateSpeed = AnimPreviewStage.CamRotateSpeedDefault;
+
+        /// <summary>Preview camera pitch in degrees (0 = level, +90 = top-down, -90 = bottom-up).</summary>
+        public float previewCameraPitch = AnimPreviewStage.CamPitchDefault;	
     }
 
     internal static class AnimBrowserPersistence
@@ -116,6 +127,11 @@ namespace HS2SandboxPlugin
             sb.Append(",\"controlsFloatingY\":").Append(o.controlsFloatingY.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"controlsFloatingW\":").Append(o.controlsFloatingW.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"controlsFloatingH\":").Append(o.controlsFloatingH.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"enableHoverPreview\":").Append(o.enableHoverPreview ? "true" : "false");
+            sb.Append(",\"enableAnimatedGridThumbnails\":").Append(o.enableAnimatedGridThumbnails ? "true" : "false");
+            sb.Append(",\"previewCameraMode\":").Append(o.previewCameraMode.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"previewCameraRotateSpeed\":").Append(o.previewCameraRotateSpeed.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"previewCameraPitch\":").Append(o.previewCameraPitch.ToString(CultureInfo.InvariantCulture));
             sb.Append('}');
             return sb.ToString();
         }
@@ -156,6 +172,11 @@ namespace HS2SandboxPlugin
             o.controlsFloatingY = ReadFloat(json, "controlsFloatingY", o.controlsFloatingY);
             o.controlsFloatingW = ReadFloat(json, "controlsFloatingW", o.controlsFloatingW);
             o.controlsFloatingH = ReadFloat(json, "controlsFloatingH", o.controlsFloatingH);
+            o.enableHoverPreview = ReadBool(json, "enableHoverPreview", o.enableHoverPreview);
+            o.enableAnimatedGridThumbnails = ReadBool(json, "enableAnimatedGridThumbnails", o.enableAnimatedGridThumbnails);
+            o.previewCameraMode = ReadInt(json, "previewCameraMode", o.previewCameraMode);
+            o.previewCameraRotateSpeed = ReadFloat(json, "previewCameraRotateSpeed", o.previewCameraRotateSpeed);
+            o.previewCameraPitch = ReadFloat(json, "previewCameraPitch", o.previewCameraPitch);
             MigrateLegacyWindowRects(o);
             return true;
         }

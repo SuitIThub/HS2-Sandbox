@@ -6,7 +6,7 @@ namespace HS2SandboxPlugin
     /// <summary>BepInEx ConfigurationManager entries for Pose Browser (mirrored in the in-game Options panel).</summary>
     internal static class PoseBrowserConfig
     {
-        public const int OptionsJsonVersion = 16;
+        public const int OptionsJsonVersion = 17;
 
         /// <summary>Config section used for <see cref="KeyboardShortcut"/> entries (ConfigurationManager key picker).</summary>
         public const string KeyboardSection = "Pose Browser · Keyboard shortcuts";
@@ -23,6 +23,7 @@ namespace HS2SandboxPlugin
         public static ConfigEntry<KeyboardShortcut>? HotkeyToggleMinimize;
         public static ConfigEntry<int>? HistoryMaxEntries;
         public static ConfigEntry<bool>? FreezeAnimationSpeedOnApply;
+        public static ConfigEntry<bool>? MinimizeIndependentPositions;
         public static ConfigEntry<float>? CompactHoverThumbnailWidth;
         public static ConfigEntry<KeyboardShortcut>? HotkeyUndo;
         public static ConfigEntry<KeyboardShortcut>? HotkeyRedo;
@@ -79,6 +80,13 @@ namespace HS2SandboxPlugin
                 false,
                 new ConfigDescription(
                     "When enabled, sets each affected character's animation speed to 0 after applying a pose from the browser or restoring a history entry. Editable in Pose Browser → Options."));
+
+            MinimizeIndependentPositions = cfg.Bind(
+                "Pose Browser",
+                "Independent minimize chip position",
+                false,
+                new ConfigDescription(
+                    "When enabled, the draggable PB chip and the main window each remember their own position across minimize/restore. Editable in Pose Browser → Options."));
 
             CompactHoverThumbnailWidth = cfg.Bind(
                 "Pose Browser",

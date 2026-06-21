@@ -108,6 +108,24 @@ namespace HS2SandboxPlugin
             SyncControlsFromSelectionIfChanged(force: true);
         }
 
+        private void LateUpdate()
+        {
+            // While paused (speed 0) the animator's automatic update keeps re-sampling its own stored
+            // frame every frame. A scrub applied from OnGUI is therefore reverted on the next animator
+            // update, which shows up as a 1-frame flicker. Re-assert the held scrub position here:
+            // LateUpdate runs after the animator update and before rendering, so our pose is what gets
+            // drawn. Only runs while the controls are visible and a group is actually paused.
+            if (!IsAnyControlsVisible)
+                return;
+
+            for (int i = 0; i < _controlGroups.Count; i++)
+            {
+                AnimPlaybackControlGroup g = _controlGroups[i];
+                if (g.HasAnimation && g.IsPaused)
+                    AnimPlaybackService.SetNormalizedTime(g.Characters, g.ScrubTime);
+            }
+        }
+
         private void DrawControlsWindowContent(int paneId)
         {
             DrawControlsPaneHeader(showUndockButton: true, showDockButton: false, showCloseButton: false);
@@ -135,7 +153,7 @@ namespace HS2SandboxPlugin
 
             GUILayout.Space(8f);
             if (GUILayout.Button(GcRestartAll, AnimBrowserScale.H(28f)))
-                AnimPlaybackService.RestartAllInScene();
+                RestartAllInSceneFromControls();
 
             GUILayout.EndScrollView();
         }
@@ -146,6 +164,7 @@ namespace HS2SandboxPlugin
 
             if (group.HasAnimation)
             {
+                GUI.enabled = true; // keep the scrubber interactive regardless of pause/speed state
                 DrawAnimationMetadata(group);
                 DrawScrubControl(group);
                 DrawGroupCharactersSummary(group.CharactersSummary);
@@ -176,7 +195,7 @@ namespace HS2SandboxPlugin
                 }
 
                 if (GUILayout.Button(GcRestartGroup, AnimBrowserScale.H(26f)))
-                    AnimPlaybackService.RestartSelected(group.Characters);
+                    RestartGroupPlayback(group);
             }
             else
             {
@@ -375,8 +394,9 @@ namespace HS2SandboxPlugin
         private void DrawSpeedControlForGroup(AnimPlaybackControlGroup group)
         {
             const float maxSpeed = 3f;
-            float minSpeed = AnimBrowserConfig.MinPlaybackSpeed;
-            float displaySpeed = GetGroupEffectiveSpeed(group);
+            const float minSpeed = 0f; // 0 = paused; the slider is allowed to reach it.
+            // While paused the slider sits at 0 so dragging it is the same gesture as the pause button.
+            float displaySpeed = group.IsPaused ? 0f : group.Speed;
 
             GUILayout.BeginHorizontal();
             GUIContent playPauseIcon = group.IsPaused ? GcPlay : GcPause;
@@ -396,18 +416,28 @@ namespace HS2SandboxPlugin
                 parsedSpeed = displaySpeed;
             if (!Mathf.Approximately(newSpeed, displaySpeed))
                 parsedSpeed = newSpeed;
-            if (parsedSpeed <= 0f)
-                return;
+
             parsedSpeed = Mathf.Clamp(parsedSpeed, minSpeed, maxSpeed);
             if (Mathf.Approximately(parsedSpeed, displaySpeed))
                 return;
 
-            group.SpeedBeforePause = parsedSpeed;
-            group.TimingLabelKey = -1;
-            if (group.IsPaused)
-                return;
+            ApplyGroupSpeedFromSlider(group, parsedSpeed);
+        }
 
-            group.Speed = parsedSpeed;
+        private static void ApplyGroupSpeedFromSlider(AnimPlaybackControlGroup group, float speed)
+        {
+            group.TimingLabelKey = -1;
+
+            // Anything at or below the engine's minimum is treated as a pause so the slider can hit 0.
+            if (speed <= AnimBrowserConfig.MinPlaybackSpeed)
+            {
+                PauseGroupPlayback(group);
+                return;
+            }
+
+            group.IsPaused = false;
+            group.SpeedBeforePause = speed;
+            group.Speed = speed;
             AnimPlaybackService.SetSpeed(group.Characters, group.Speed);
         }
 
@@ -449,6 +479,30 @@ namespace HS2SandboxPlugin
 
         private static float GetGroupEffectiveSpeed(AnimPlaybackControlGroup group) =>
             group.IsPaused ? group.SpeedBeforePause : group.Speed;
+
+        // Restart needs to also reset the held scrub position to 0; otherwise LateUpdate keeps re-asserting
+        // the previous scrub frame on paused groups and the restart appears to do nothing.
+        private static void RestartGroupPlayback(AnimPlaybackControlGroup group)
+        {
+            AnimPlaybackService.RestartSelected(group.Characters);
+            group.ScrubTime = 0f;
+            InvalidateScrubTimeLabel(group);
+            if (group.IsPaused)
+                AnimPlaybackService.SetNormalizedTime(group.Characters, 0f);
+        }
+
+        private void RestartAllInSceneFromControls()
+        {
+            AnimPlaybackService.RestartAllInScene();
+            for (int i = 0; i < _controlGroups.Count; i++)
+            {
+                AnimPlaybackControlGroup g = _controlGroups[i];
+                g.ScrubTime = 0f;
+                InvalidateScrubTimeLabel(g);
+                if (g.HasAnimation && g.IsPaused)
+                    AnimPlaybackService.SetNormalizedTime(g.Characters, 0f);
+            }
+        }
 
         private void DrawFloatControl(string label, ref float value, System.Action<float> onChanged)
         {
@@ -599,11 +653,12 @@ namespace HS2SandboxPlugin
             OCIChar? primary = group.Characters.Count > 0 ? group.Characters[0] : null;
             if (primary != null && AnimPlaybackService.TryReadControlsFromCharacter(primary, out AnimPlaybackControlsState state))
             {
-                if (state.Speed <= 0f)
+                if (state.Speed <= AnimBrowserConfig.MinPlaybackSpeed)
                 {
                     group.IsPaused = true;
-                    group.SpeedBeforePause = AnimBrowserConfig.MinPlaybackSpeed;
-                    group.Speed = AnimBrowserConfig.MinPlaybackSpeed;
+                    // Resume at normal speed rather than the frozen near-zero value.
+                    group.SpeedBeforePause = 1f;
+                    group.Speed = 1f;
                 }
                 else
                 {

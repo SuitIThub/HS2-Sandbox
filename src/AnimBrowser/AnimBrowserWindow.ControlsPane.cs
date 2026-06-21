@@ -199,6 +199,7 @@ namespace HS2SandboxPlugin
         {
             _showDockedControls = false;
             AnimThumbnailService.ClearAll();
+            OnPreviewHidden();
         }
 
         private void HandleControlsHotkeys()

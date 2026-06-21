@@ -87,9 +87,10 @@ if (-not (Test-Path $wikiSource)) {
     Write-Error "Wiki source folder not found: $wikiSource"
 }
 
-$mdFiles = Get-ChildItem -Path $wikiSource -Filter "*.md" -File
-if ($mdFiles.Count -eq 0) {
-    Write-Error "No markdown files in $wikiSource"
+$wikiFiles = Get-ChildItem -Path $wikiSource -Recurse -File -Force |
+    Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]?' }
+if ($wikiFiles.Count -eq 0) {
+    Write-Error "No files found under $wikiSource"
 }
 
 if ([string]::IsNullOrWhiteSpace($RemoteUrl)) {
@@ -139,9 +140,19 @@ if (-not $cloneOk -or -not (Test-Path $wikiClone)) {
     Write-Error "Wiki clone directory is missing after setup."
 }
 
-Write-Host "Copying wiki pages..."
-foreach ($file in $mdFiles) {
-    Copy-Item -Path $file.FullName -Destination (Join-Path $wikiClone $file.Name) -Force
+Write-Host "Syncing wiki tree..."
+Get-ChildItem -Path $wikiClone -Force |
+    Where-Object { $_.Name -ne '.git' } |
+    Remove-Item -Recurse -Force
+
+foreach ($file in $wikiFiles) {
+    $relative = $file.FullName.Substring($wikiSource.Length).TrimStart('\', '/')
+    $dest = Join-Path $wikiClone $relative
+    $destDir = Split-Path $dest -Parent
+    if (-not (Test-Path $destDir)) {
+        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    }
+    Copy-Item -Path $file.FullName -Destination $dest -Force
 }
 
 Push-Location $wikiClone

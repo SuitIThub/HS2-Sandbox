@@ -328,20 +328,39 @@ namespace HS2SandboxPlugin
             normalizedTime = SanitizeNormalizedTime(normalizedTime);
             try
             {
-                var animeInfo = oci.oiCharInfo?.animeInfo;
-                if (animeInfo != null && animeInfo.exist)
+                // Seek the animator's current state directly. State hash 0 means "the state currently
+                // playing on this layer", re-played at the given normalized time (the robust hash that
+                // MoveControllerAI uses — a specific state hash can silently mismatch the live state).
+                //
+                // While paused (speed 0) the regular per-frame animator update does NOT evaluate, so the
+                // pending Play() never reaches the bones. We therefore force one evaluation ourselves:
+                // temporarily restore a non-zero speed + AlwaysAnimate, Play, Update(0f) to sample the
+                // pose, then put speed/culling back so playback stays paused. Much cheaper than reloading
+                // the whole animation on every slider frame.
+                Animator? animator = oci.charAnimeCtrl?.animator ?? oci.charInfo?.animBody;
+                if (animator != null && animator.runtimeAnimatorController != null)
                 {
-                    oci.LoadAnime(animeInfo.group, animeInfo.category, animeInfo.no, normalizedTime);
+                    float prevSpeed = animator.speed;
+                    AnimatorCullingMode prevCulling = animator.cullingMode;
+                    if (prevSpeed <= 0f)
+                        animator.speed = 1f;
+                    animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+                    animator.Play(0, 0, normalizedTime);
+                    animator.Update(0f);
+
+                    animator.cullingMode = prevCulling;
+                    animator.speed = prevSpeed;
+
+                    if (oci.oiCharInfo != null)
+                        oci.oiCharInfo.animeNormalizedTime = normalizedTime;
                     return;
                 }
 
-                if (oci.charAnimeCtrl?.animator != null)
-                {
-                    var animator = oci.charAnimeCtrl.animator;
-                    var state = animator.GetCurrentAnimatorStateInfo(0);
-                    animator.Play(state.shortNameHash, 0, normalizedTime);
-                    animator.Update(0f);
-                }
+                // Fallback: no animator handle — reload the animation at the requested time.
+                var animeInfo = oci.oiCharInfo?.animeInfo;
+                if (animeInfo != null && animeInfo.exist)
+                    oci.LoadAnime(animeInfo.group, animeInfo.category, animeInfo.no, normalizedTime);
             }
             catch
             {

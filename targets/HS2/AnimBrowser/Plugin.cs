@@ -27,7 +27,9 @@ namespace HS2SandboxPlugin
         private void Start()
         {
             _gui = gameObject.AddComponent<SandboxGUI>();
+            var previewStage = gameObject.AddComponent<AnimPreviewStage>();
             var animWindow = gameObject.AddComponent<AnimBrowserWindow>();
+            animWindow.BindPreviewStage(previewStage);
             _gui.RegisterWindow(SandboxWindowKeys.AnimBrowser, animWindow, initialVisible: false);
 
             _icon = ToolbarIconLoader.LoadPng("anim-icon.png");

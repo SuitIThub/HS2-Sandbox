@@ -9,7 +9,7 @@ namespace HS2SandboxPlugin
     public partial class AnimBrowserWindow
     {
         private const float RoleButtonRowHeightBase = 18f;
-        private const float ReviewPaneDefaultWidthBase = 340f;
+        private const float ReviewPaneDefaultWidthBase = 680f;
         private float ReviewPaneDefaultWidth => AnimBrowserScale.Px(ReviewPaneDefaultWidthBase);
 
         // Tree multi-select (node ids), grid item multi-select (refs), group-card select (ids).
@@ -315,6 +315,11 @@ namespace HS2SandboxPlugin
                 tooltip: "Combine the selected animations into one card.");
             if (groups > 0)
                 bar.AddButton("Ungroup", btnH, minW, RequestUngroupSelected, tooltip: "Dissolve the selected group card(s).");
+            int selectedTotal = items + groups;
+            bar.AddButton(
+                selectedTotal == 1 ? "Capture thumbnail…" : "Capture thumbnails…",
+                btnH, minW, StartThumbnailCaptureForSelection,
+                tooltip: "Capture a screen-grab thumbnail for the selected animation(s).");
             bar.AddButton("Clear", btnH, AnimBrowserScale.Px(60f), ClearGridSelection);
             bar.End();
         }
@@ -1717,7 +1722,9 @@ namespace HS2SandboxPlugin
             BeginSearchDimDraw(searchDimmed, ref prevGuiColor);
             if (ev.type == EventType.Repaint)
             {
-                if (tex != null)
+                if (IsPreviewHoverIndex(visibleIndex))
+                    DrawPreviewInThumbRect(thumbRect);
+                else if (tex != null)
                     GUI.DrawTexture(thumbRect, tex, ScaleMode.ScaleToFit, false);
                 else
                     GUI.Box(thumbRect, GUIContent.none);
@@ -1734,6 +1741,8 @@ namespace HS2SandboxPlugin
                     ev.Use();
                 }
             }
+
+            EmitPreviewHoverSensor(thumbRect, visibleIndex);
 
             EndSearchDimDraw(searchDimmed, prevGuiColor);
 
@@ -1763,12 +1772,17 @@ namespace HS2SandboxPlugin
                 float w = ColumnWidth(genderRow.width, genderContents.Length, gap);
                 bool prevEnabled = GUI.enabled;
                 GUI.enabled = gendersEnabled;
+                bool tintRoles = IsPreviewHoverIndex(visibleIndex);
+                Color prevBg = GUI.backgroundColor;
                 for (int i = 0; i < genderContents.Length; i++)
                 {
                     var r = new Rect(genderRow.x + i * (w + gap), genderRow.y, w, genderRow.height);
+                    if (tintRoles)
+                        GUI.backgroundColor = AnimPreviewStage.FigureColorAt(i);
                     if (GUI.Button(r, genderContents[i], _roleButtonStyle!))
                         OnGenderButtonClicked(group, group.GenderParticipants[i]);
                 }
+                GUI.backgroundColor = prevBg;
                 GUI.enabled = prevEnabled;
             }
 
@@ -1778,12 +1792,17 @@ namespace HS2SandboxPlugin
                 GUIContent[] indexContents = group.SlotIndexContents;
                 float gap = AnimBrowserScale.Px(2f);
                 float w = ColumnWidth(indexRow.width, indexContents.Length, gap);
+                bool tintIndex = IsPreviewHoverIndex(visibleIndex);
+                Color prevIndexBg = GUI.backgroundColor;
                 for (int i = 0; i < indexContents.Length; i++)
                 {
                     var r = new Rect(indexRow.x + i * (w + gap), indexRow.y, w, indexRow.height);
+                    if (tintIndex)
+                        GUI.backgroundColor = AnimPreviewStage.FigureColorAt(i);
                     if (GUI.Button(r, indexContents[i], _roleButtonStyle!))
                         OnSlotIndexButtonClicked(group, i);
                 }
+                GUI.backgroundColor = prevIndexBg;
             }
 
             Rect nameRect = GUILayoutUtility.GetRect(innerW, CardNameRowH, GUILayout.Width(innerW), GUILayout.Height(CardNameRowH));
@@ -1843,6 +1862,9 @@ namespace HS2SandboxPlugin
             AnimGridItem? item = group.Slots.Count > 0 ? group.Slots[0].Item : null;
             if (item == null)
                 return null;
+            // Prefer a captured thumbnail (keyed by the group's representative animation).
+            if (AnimThumbnailStore.TryGetTexture("g_" + item.CatalogKey, out Texture2D? saved) && saved != null)
+                return saved;
             if (item.Thumbnail == null && !item.ThumbnailFailed && !item.ThumbnailRequested)
             {
                 item.ThumbnailRequested = true;
@@ -1877,8 +1899,7 @@ namespace HS2SandboxPlugin
             if (IsEntrySelected(entry))
                 GUI.backgroundColor = new Color(0.22f, 0.48f, 0.98f, 1f);
             GUIContent rowContent = _displayCatalog.GetItemDisplayContent(item);
-            if (searchDimmed)
-                rowContent = new GUIContent(rowContent.text, rowContent.text + SearchDimmedEntryTooltipSuffix);
+            rowContent = new GUIContent(rowContent.text, BuildPreviewHoverTooltip(visibleIndex));
             Color prevGuiColor = GUI.color;
             BeginSearchDimDraw(searchDimmed, ref prevGuiColor);
             if (GUILayout.Button(rowContent, _listRowStyle!, GUILayout.ExpandWidth(true), AnimBrowserScale.H(ListRowHeightBase)))
@@ -1904,8 +1925,7 @@ namespace HS2SandboxPlugin
             if (IsEntrySelected(entry))
                 GUI.backgroundColor = new Color(0.22f, 0.48f, 0.98f, 1f);
             GUIContent rowContent = group.GetListContent("Apply main phase; checkbox or Ctrl/Shift for selection");
-            if (searchDimmed)
-                rowContent = new GUIContent(rowContent.text, rowContent.text + SearchDimmedEntryTooltipSuffix);
+            rowContent = new GUIContent(rowContent.text, BuildPreviewHoverTooltip(visibleIndex));
             Color prevGuiColor = GUI.color;
             BeginSearchDimDraw(searchDimmed, ref prevGuiColor);
             if (GUILayout.Button(rowContent, _listRowStyle!, GUILayout.ExpandWidth(true), AnimBrowserScale.H(ListRowHeightBase)))
@@ -1927,6 +1947,8 @@ namespace HS2SandboxPlugin
                         OnPhaseButtonClicked(group, group.Phases[i], Event.current);
                 }
             }
+            bool tintRoles = IsPreviewHoverIndex(visibleIndex);
+            Color prevRoleBg = GUI.backgroundColor;
             if (group.HasGenders)
             {
                 var genderContents = group.GenderContents;
@@ -1935,9 +1957,12 @@ namespace HS2SandboxPlugin
                 GUI.enabled = gendersEnabled;
                 for (int i = 0; i < genderContents.Length; i++)
                 {
+                    if (tintRoles)
+                        GUI.backgroundColor = AnimPreviewStage.FigureColorAt(i);
                     if (GUILayout.Button(genderContents[i], _roleButtonStyle!, GUILayout.Width(roleW), GUILayout.Height(roleH)))
                         OnGenderButtonClicked(group, group.GenderParticipants[i]);
                 }
+                GUI.backgroundColor = prevRoleBg;
                 GUI.enabled = prevEnabled;
             }
             if (group.HasSlotIndexButtons)
@@ -1945,9 +1970,12 @@ namespace HS2SandboxPlugin
                 var indexContents = group.SlotIndexContents;
                 for (int i = 0; i < indexContents.Length; i++)
                 {
+                    if (tintRoles)
+                        GUI.backgroundColor = AnimPreviewStage.FigureColorAt(i);
                     if (GUILayout.Button(indexContents[i], _roleButtonStyle!, GUILayout.Width(roleW), GUILayout.Height(roleH)))
                         OnSlotIndexButtonClicked(group, i);
                 }
+                GUI.backgroundColor = prevRoleBg;
             }
             GUILayout.EndHorizontal();
         }

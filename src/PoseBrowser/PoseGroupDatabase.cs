@@ -44,7 +44,7 @@ namespace HS2SandboxPlugin
         public string? GetGroupIdForItem(PoseGridItem item)
         {
             string rel = GetRelativeKey(item);
-            return string.IsNullOrEmpty(rel) ? null : _pathToGroupId.TryGetValue(rel, out var id) ? id : null;
+            return string.IsNullOrEmpty(rel) ? null : ResolveGroupIdForMemberPath(rel);
         }
 
         public PoseGroup? GetGroupForItem(PoseGridItem item)
@@ -64,7 +64,62 @@ namespace HS2SandboxPlugin
         public void ApplyMembershipToItems(IEnumerable<PoseGridItem> items)
         {
             foreach (var item in items)
-                item.GroupId = GetGroupIdForItem(item);
+            {
+                string? groupId = ResolveGroupIdForMemberPath(GetRelativeKey(item));
+                item.GroupId = groupId;
+                if (!string.IsNullOrEmpty(groupId))
+                {
+                    string rel = GetRelativeKey(item);
+                    if (!string.IsNullOrEmpty(rel))
+                        _pathToGroupId[rel] = groupId;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resolve group membership for a stored member path. Uses the fast path map first, then falls back to
+        /// each group's persisted member list (keeps working when the map was never built or drifted out of sync).
+        /// </summary>
+        private string? ResolveGroupIdForMemberPath(string relativePath)
+        {
+            string norm = NormalizeStorageKey(relativePath);
+            if (string.IsNullOrEmpty(norm))
+                return null;
+
+            if (_pathToGroupId.TryGetValue(norm, out var mappedId) && _groupsById.ContainsKey(mappedId))
+                return mappedId;
+
+            foreach (var kvp in _groupsById)
+            {
+                var members = kvp.Value.MemberRelativePaths;
+                for (int i = 0; i < members.Count; i++)
+                {
+                    if (string.Equals(members[i], norm, StringComparison.OrdinalIgnoreCase))
+                        return kvp.Key;
+                }
+            }
+
+            return null;
+        }
+
+        private void RebuildPathToGroupIdFromGroups()
+        {
+            _pathToGroupId.Clear();
+            foreach (var kvp in _groupsById)
+            {
+                foreach (var rel in kvp.Value.MemberRelativePaths)
+                {
+                    if (string.IsNullOrEmpty(rel))
+                        continue;
+                    if (_pathToGroupId.ContainsKey(rel))
+                    {
+                        SandboxServices.Log.LogWarning(
+                            $"PoseGroupDatabase: duplicate member \"{rel}\"; keeping group \"{kvp.Key}\".");
+                    }
+
+                    _pathToGroupId[rel] = kvp.Key;
+                }
+            }
         }
 
         public PoseGroup CreateGroup(string name, IEnumerable<PoseGridItem> members, IEnumerable<string>? tags = null)
@@ -152,7 +207,10 @@ namespace HS2SandboxPlugin
             if (string.IsNullOrEmpty(oldK) || string.IsNullOrEmpty(newK) || string.Equals(oldK, newK, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            if (!_pathToGroupId.TryGetValue(oldK, out var groupId)) return;
+            string? groupId = ResolveGroupIdForMemberPath(oldK);
+            if (groupId == null)
+                return;
+
             _pathToGroupId.Remove(oldK);
             if (_groupsById.TryGetValue(groupId, out var group))
             {
@@ -193,6 +251,88 @@ namespace HS2SandboxPlugin
             _pathToGroupId[newK] = groupId;
             item.GroupId = groupId;
             MarkDirty();
+        }
+
+        /// <summary>Rewrite stored member paths when a folder under the pose root is renamed.</summary>
+        public void OnFolderPathRenamed(string oldRelativeDir, string newRelativeDir)
+        {
+            if (StringEx.IsNullOrWhiteSpace(oldRelativeDir))
+                return;
+
+            string oldPrefix = NormalizeStorageKey(oldRelativeDir).TrimEnd('/');
+            string newPrefix = NormalizeStorageKey(newRelativeDir).TrimEnd('/');
+            if (string.IsNullOrEmpty(oldPrefix) ||
+                string.Equals(oldPrefix, newPrefix, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            bool changed = false;
+            foreach (var group in _groupsById.Values)
+            {
+                changed |= RewriteMemberPathListPrefix(group.MemberRelativePaths, oldPrefix, newPrefix);
+                changed |= RewriteMemberLayoutKeyPrefix(group.MemberRelativeOffsets, oldPrefix, newPrefix);
+                changed |= RewriteMemberLayoutKeyPrefix(group.MemberBodyHeights, oldPrefix, newPrefix);
+                changed |= RewriteMemberLayoutKeyPrefix(group.MemberObjectScales, oldPrefix, newPrefix);
+                changed |= RewriteMemberLayoutKeyPrefix(group.MemberRelativeRotations, oldPrefix, newPrefix);
+            }
+
+            if (!changed)
+                return;
+
+            RebuildPathToGroupIdFromGroups();
+            MarkDirty();
+        }
+
+        private static bool RewriteMemberPathListPrefix(List<string> paths, string oldPrefix, string newPrefix)
+        {
+            bool changed = false;
+            for (int i = 0; i < paths.Count; i++)
+            {
+                string? rewritten = RewriteSingleMemberPathPrefix(paths[i], oldPrefix, newPrefix);
+                if (rewritten == null)
+                    continue;
+                paths[i] = rewritten;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool RewriteMemberLayoutKeyPrefix<T>(Dictionary<string, T> map, string oldPrefix, string newPrefix)
+        {
+            if (map.Count == 0)
+                return false;
+
+            var rewrites = new List<KeyValuePair<string, string>>();
+            foreach (var key in map.Keys)
+            {
+                string? rewritten = RewriteSingleMemberPathPrefix(key, oldPrefix, newPrefix);
+                if (rewritten != null && !string.Equals(key, rewritten, StringComparison.OrdinalIgnoreCase))
+                    rewrites.Add(new KeyValuePair<string, string>(key, rewritten));
+            }
+
+            if (rewrites.Count == 0)
+                return false;
+
+            foreach (var kvp in rewrites)
+            {
+                if (!map.TryGetValue(kvp.Key, out var value))
+                    continue;
+                map.Remove(kvp.Key);
+                map[kvp.Value] = value;
+            }
+
+            return true;
+        }
+
+        private static string? RewriteSingleMemberPathPrefix(string path, string oldPrefix, string newPrefix)
+        {
+            string norm = NormalizeMemberPath(path);
+            if (string.Equals(norm, oldPrefix, StringComparison.OrdinalIgnoreCase))
+                return newPrefix;
+            string oldWithSlash = oldPrefix + "/";
+            if (norm.StartsWith(oldWithSlash, StringComparison.OrdinalIgnoreCase))
+                return newPrefix + norm.Substring(oldPrefix.Length);
+            return null;
         }
 
         public void SetGroupName(string groupId, string name)
@@ -595,20 +735,10 @@ namespace HS2SandboxPlugin
                     }
 
                     _groupsById[group.Id] = group;
-                    foreach (var m in group.MemberRelativePaths)
-                    {
-                        if (_pathToGroupId.ContainsKey(m))
-                        {
-                            SandboxServices.Log.LogWarning($"PoseGroupDatabase: duplicate member \"{m}\"; keeping first group.");
-                            continue;
-                        }
-
-                        _pathToGroupId[m] = group.Id;
-                    }
-
                     imported++;
                 }
 
+                RebuildPathToGroupIdFromGroups();
                 return true;
             }
             catch (Exception ex)
@@ -898,15 +1028,10 @@ namespace HS2SandboxPlugin
                     };
                     if (group.MemberRelativePaths.Count == 0) continue;
                     _groupsById[group.Id] = group;
-                    foreach (var m in group.MemberRelativePaths)
-                    {
-                        if (!_pathToGroupId.ContainsKey(m))
-                            _pathToGroupId[m] = group.Id;
-                    }
-
                     imported++;
                 }
 
+                RebuildPathToGroupIdFromGroups();
                 return imported > 0;
             }
             catch

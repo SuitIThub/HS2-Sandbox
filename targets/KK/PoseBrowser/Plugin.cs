@@ -19,11 +19,13 @@ namespace HS2SandboxPlugin
         {
             SandboxServices.Initialize(Logger, Config);
             PoseBrowserConfig.Register(Config);
+            PePoseCompatService.Initialize(Config);
             Logger.LogInfo($"{PluginName} v{PluginVersion} loaded");
         }
 
         private void Start()
         {
+            PePoseCompatService.EnsureDetected();
             PoseBrowserWikiRegistration.TryRegister(Logger);
 
             var gui = gameObject.AddComponent<SandboxGUI>();

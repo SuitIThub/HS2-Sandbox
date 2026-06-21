@@ -46,3 +46,6 @@ packages/
 
 decompiled_*
 tools/
+
+# Local clone for scripts/sync-github-wiki.ps1
+.wiki-clone/

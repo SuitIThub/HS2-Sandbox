@@ -18,6 +18,12 @@
   "poseBrowserKksDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-5.6.0%2B1.1.0%2B2.5.0/KKSSandbox.PoseBrowser.dll",
   "poseBrowserKk": "1.1.0",
   "poseBrowserKkDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-posebrowser%2Bposebrowserkk%2Bposebrowserkks-5.6.0%2B1.1.0%2B2.5.0/KKSandbox.PoseBrowser.dll",
+  "animBrowser": "1.0.0",
+  "animBrowserDownload": "",
+  "animBrowserKks": "1.0.0",
+  "animBrowserKksDownload": "",
+  "animBrowserKk": "1.0.0",
+  "animBrowserKkDownload": "",
   "allInOne": "2.0.0",
   "allInOneDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-posebrowser-4.3.2/HS2SandboxPlugin.dll"
 }

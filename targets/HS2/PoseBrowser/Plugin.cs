@@ -22,11 +22,13 @@ namespace HS2SandboxPlugin
             SandboxServices.Initialize(Logger, Config);
             PoseBrowserConfig.Register(Config);
             HeelzControlService.Initialize(Config);
+            PePoseCompatService.Initialize(Config);
             Logger.LogInfo($"{PluginName} v{PluginVersion} loaded");
         }
 
         private void Start()
         {
+            PePoseCompatService.EnsureDetected();
             PoseBrowserWikiRegistration.TryRegister(Logger);
 
             _gui = gameObject.AddComponent<SandboxGUI>();

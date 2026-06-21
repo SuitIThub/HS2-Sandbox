@@ -49,6 +49,17 @@ namespace HS2SandboxPlugin
             CommitTempFile(tempPath, destinationPath);
         }
 
+        public static void WriteAllBytesAtomic(string destinationPath, byte[] bytes)
+        {
+            string? dir = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            string tempPath = destinationPath + ".tmp";
+            File.WriteAllBytes(tempPath, bytes);
+            CommitTempFile(tempPath, destinationPath);
+        }
+
         public static void CommitTempFile(string tempPath, string destinationPath)
         {
             if (File.Exists(destinationPath))

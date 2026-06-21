@@ -117,6 +117,10 @@ namespace HS2SandboxPlugin
         private bool _chipDragging;
         private Vector2 _chipDragOffset;
         private Vector2 _chipMouseDownPos;
+        private bool _minimizeViaHotkeyPending;
+        private float _savedMinimizedChipX = -1f;
+        private float _savedMinimizedChipY = -1f;
+        private Rect _cachedMinimizeButtonRootRect;
         private int _compactPoseIndex = -1;
         private string? _compactSelectedGroupId;
 
@@ -651,6 +655,13 @@ namespace HS2SandboxPlugin
             if (_isMinimized)
             {
                 DrawMinimizedRestoreChip();
+                return;
+            }
+
+            if (_minimizeViaHotkeyPending)
+            {
+                _minimizeViaHotkeyPending = false;
+                MinimizePoseBrowser(EstimateMinimizeButtonRootRect());
                 return;
             }
 
@@ -1288,32 +1299,104 @@ namespace HS2SandboxPlugin
         private void DrawWindowChromeButtons(float buttonHeight)
         {
             if (GUILayout.Button(new GUIContent("−", "Minimize Pose Browser"), GUILayout.Width(WindowChromeButtonWidth), PoseBrowserScale.H(buttonHeight)))
-            {
-                var btnRect = GUILayoutUtility.GetLastRect();
-                Vector2 btnScreen = GUIUtility.GUIToScreenPoint(new Vector2(btnRect.x, btnRect.y));
-                MinimizePoseBrowser(btnScreen);
-            }
+                MinimizePoseBrowser(_cachedMinimizeButtonRootRect);
+
+            if (Event.current.type == EventType.Repaint)
+                _cachedMinimizeButtonRootRect = ToRootGuiRect(GUILayoutUtility.GetLastRect());
 
             if (GUILayout.Button(new GUIContent("×", "Close Pose Browser"), GUILayout.Width(WindowChromeButtonWidth), PoseBrowserScale.H(buttonHeight)))
                 ClosePoseBrowser();
         }
 
-        private void MinimizePoseBrowser(Vector2 minimizeButtonScreen)
+        /// <summary>
+        /// Map a rect from the current IMGUI clip/group context (e.g. nested layout inside
+        /// <see cref="GUILayout.Window"/>) to root GUI coordinates — the same space used by the minimized
+        /// chip and <see cref="Event.mousePosition"/>.
+        /// </summary>
+        private static Rect ToRootGuiRect(Rect rectInCurrentGuiContext)
+        {
+            return GUIClip.Unclip(rectInCurrentGuiContext);
+        }
+
+        private static Vector2 ToRootGuiPoint(Vector2 pointInCurrentGuiContext)
+        {
+            return ToRootGuiRect(new Rect(pointInCurrentGuiContext.x, pointInCurrentGuiContext.y, 0f, 0f)).min;
+        }
+
+        /// <summary>Approximate minimize-button rect when toggled via hotkey outside an active layout pass.</summary>
+        private Rect EstimateMinimizeButtonRootRect()
+        {
+            var winStyle = GUI.skin != null ? GUI.skin.window : null;
+            float padLeft = winStyle != null ? winStyle.padding.left : 8f;
+            float padTop = winStyle != null ? winStyle.padding.top : 22f;
+            float btnH = PoseBrowserScale.Px(24f);
+            float x = windowRect.x + padLeft;
+            float y = windowRect.y + padTop;
+            if (_layoutTier == PoseBrowserLayoutTier.Normal)
+                y += Mathf.Max(0f, (TopBarHeight - btnH) * 0.5f);
+            else
+                y += Mathf.Max(0f, (PoseBrowserScale.Px(26f) - btnH) * 0.5f);
+            return new Rect(x, y, WindowChromeButtonWidth, btnH);
+        }
+
+        private bool UseIndependentMinimizePositions =>
+            PoseBrowserConfig.MinimizeIndependentPositions != null &&
+            PoseBrowserConfig.MinimizeIndependentPositions.Value;
+
+        private bool HasSavedMinimizedChipPosition =>
+            _savedMinimizedChipX >= 0f && _savedMinimizedChipY >= 0f;
+
+        private Rect ClampMinimizedChipRect(Rect chip)
+        {
+            float nx = Mathf.Clamp(chip.x, 0f, Screen.width - chip.width);
+            float ny = Mathf.Clamp(chip.y, 0f, Screen.height - chip.height);
+            return new Rect(nx, ny, chip.width, chip.height);
+        }
+
+        private Rect ResolveMinimizedChipRect(Rect minimizeButtonRoot)
+        {
+            if (UseIndependentMinimizePositions && HasSavedMinimizedChipPosition)
+            {
+                return ClampMinimizedChipRect(new Rect(
+                    _savedMinimizedChipX, _savedMinimizedChipY, MinimizedChipSize, MinimizedChipSize));
+            }
+
+            // Top-left aligned with the actual chrome button (Unclip includes window border + title bar).
+            return ClampMinimizedChipRect(new Rect(
+                minimizeButtonRoot.x, minimizeButtonRoot.y, MinimizedChipSize, MinimizedChipSize));
+        }
+
+        private void PersistMinimizedChipPosition()
+        {
+            _savedMinimizedChipX = _minimizedChipRect.x;
+            _savedMinimizedChipY = _minimizedChipRect.y;
+            SavePersistedOptions();
+        }
+
+        private void MinimizePoseBrowser(Rect minimizeButtonRoot)
         {
             CaptureWindowRectForCurrentTier();
-            _minimizeBtnOffsetFromWindow = minimizeButtonScreen - new Vector2(windowRect.x, windowRect.y);
-            _minimizedChipRect = new Rect(minimizeButtonScreen.x, minimizeButtonScreen.y, MinimizedChipSize, MinimizedChipSize);
+            if (!UseIndependentMinimizePositions)
+                _minimizeBtnOffsetFromWindow = minimizeButtonRoot.min - new Vector2(windowRect.x, windowRect.y);
+            _minimizedChipRect = ResolveMinimizedChipRect(minimizeButtonRoot);
             _chipDragging = false;
             _isMinimized = true;
         }
 
         private void RestoreFromMinimize()
         {
+            if (UseIndependentMinimizePositions)
+                PersistMinimizedChipPosition();
+
             _isMinimized = false;
             RestoreWindowRectForTier(_layoutTier);
 
-            windowRect.x = _minimizedChipRect.x - _minimizeBtnOffsetFromWindow.x;
-            windowRect.y = _minimizedChipRect.y - _minimizeBtnOffsetFromWindow.y;
+            if (!UseIndependentMinimizePositions)
+            {
+                windowRect.x = _minimizedChipRect.x - _minimizeBtnOffsetFromWindow.x;
+                windowRect.y = _minimizedChipRect.y - _minimizeBtnOffsetFromWindow.y;
+            }
+
             windowRect.x = Mathf.Clamp(windowRect.x, 4f, Mathf.Max(4f, Screen.width - windowRect.width - 4f));
             windowRect.y = Mathf.Clamp(windowRect.y, 4f, Mathf.Max(4f, Screen.height - windowRect.height - 4f));
         }
@@ -1343,36 +1426,55 @@ namespace HS2SandboxPlugin
             if (_minimizedChipRect.width < 1f)
                 _minimizedChipRect = new Rect(_minimizedChipRect.x, _minimizedChipRect.y, MinimizedChipSize, MinimizedChipSize);
 
-            var chip = _minimizedChipRect;
+            Rect chip = _minimizedChipRect;
+            int controlId = GUIUtility.GetControlID(FocusType.Passive);
+            Rect hitChip = chip;
+            const float hitPad = 2f;
+            hitChip.x -= hitPad;
+            hitChip.y -= hitPad;
+            hitChip.width += hitPad * 2f;
+            hitChip.height += hitPad * 2f;
+
+            switch (e.type)
+            {
+                case EventType.MouseDown:
+                    if (e.button != 0 || !hitChip.Contains(e.mousePosition))
+                        break;
+                    GUIUtility.hotControl = controlId;
+                    _chipDragging = true;
+                    _chipDragOffset = e.mousePosition - chip.min;
+                    _chipMouseDownPos = e.mousePosition;
+                    e.Use();
+                    break;
+                case EventType.MouseDrag:
+                    if (GUIUtility.hotControl != controlId || !_chipDragging)
+                        break;
+                    _minimizedChipRect = ClampMinimizedChipRect(new Rect(
+                        e.mousePosition.x - _chipDragOffset.x,
+                        e.mousePosition.y - _chipDragOffset.y,
+                        chip.width,
+                        chip.height));
+                    e.Use();
+                    break;
+                case EventType.MouseUp:
+                    if (GUIUtility.hotControl != controlId || e.button != 0)
+                        break;
+                    bool clicked = (e.mousePosition - _chipMouseDownPos).sqrMagnitude <=
+                        MinimizedChipClickDragThreshold * MinimizedChipClickDragThreshold;
+                    GUIUtility.hotControl = 0;
+                    _chipDragging = false;
+                    if (clicked)
+                        RestoreFromMinimize();
+                    else if (UseIndependentMinimizePositions)
+                        PersistMinimizedChipPosition();
+                    e.Use();
+                    break;
+            }
+
             GUI.Box(chip, new GUIContent("PB", "Restore Pose Browser"));
 
-            if (e.type == EventType.MouseDown && e.button == 0 && chip.Contains(e.mousePosition))
-            {
-                _chipDragging = true;
-                _chipDragOffset = e.mousePosition - new Vector2(chip.x, chip.y);
-                _chipMouseDownPos = e.mousePosition;
-                e.Use();
-            }
-            else if (e.type == EventType.MouseDrag && _chipDragging)
-            {
-                float nx = e.mousePosition.x - _chipDragOffset.x;
-                float ny = e.mousePosition.y - _chipDragOffset.y;
-                nx = Mathf.Clamp(nx, 0f, Screen.width - chip.width);
-                ny = Mathf.Clamp(ny, 0f, Screen.height - chip.height);
-                _minimizedChipRect = new Rect(nx, ny, chip.width, chip.height);
-                e.Use();
-            }
-            else if (e.type == EventType.MouseUp && e.button == 0 && _chipDragging)
-            {
-                bool clicked = (e.mousePosition - _chipMouseDownPos).sqrMagnitude <=
-                    MinimizedChipClickDragThreshold * MinimizedChipClickDragThreshold;
-                _chipDragging = false;
-                if (clicked && chip.Contains(e.mousePosition))
-                    RestoreFromMinimize();
-                e.Use();
-            }
-
-            IMGUIUtils.EatInputInRect(chip);
+            if (GUIUtility.hotControl == controlId || hitChip.Contains(e.mousePosition))
+                IMGUIUtils.EatInputInRect(chip);
         }
 
         private void SyncWindowTitleForLayoutTier()
@@ -4414,7 +4516,7 @@ namespace HS2SandboxPlugin
                     if (target != null)
                     {
                         string oldFull = Path.GetFullPath(target.FullPath);
-                        if (_dataService.RenameFolder(oldFull, _renameFolderText, _tagDb, out var newFull))
+                        if (_dataService.RenameFolder(oldFull, _renameFolderText, _tagDb, out var newFull, _groupDb))
                         {
                             ClearPendingFolderOperation();
                             NotifyLibraryCacheStructureChanged();
@@ -4456,15 +4558,11 @@ namespace HS2SandboxPlugin
                     if (GUILayout.Button("OK", PoseBrowserScale.H(22f)))
                     {
                         string oldPath = sel[0].FilePath;
-                        string oldRel = sel[0].RelativePath(_dataService.PoseRootPath);
-                        if (_dataService.RenamePoseDisplayNameAndOptionalFile(sel[0], _renamePoseText, _renamePoseAlsoFile, _tagDb))
+                        if (_dataService.RenamePoseDisplayNameAndOptionalFile(
+                                sel[0], _renamePoseText, _renamePoseAlsoFile, _tagDb, _groupDb, _itemDb))
                         {
-                            if (_renamePoseAlsoFile && !string.Equals(oldPath, sel[0].FilePath, StringComparison.OrdinalIgnoreCase))
-                            {
-                                _groupDb.OnItemPathChanged(oldRel, sel[0]);
-                                _itemDb.OnItemPathChanged(oldRel, sel[0]);
+                            if (!string.Equals(oldPath, sel[0].FilePath, StringComparison.OrdinalIgnoreCase))
                                 NotifyLibraryCachePoseMoved(oldPath, sel[0]);
-                            }
                             else
                                 _libraryCache.SyncMetadata(sel[0]);
                             ResortPoseItemsInPlace();
@@ -5196,7 +5294,7 @@ namespace HS2SandboxPlugin
             _thumbCapture.StartCapture(
                 this,
                 items,
-                onApplyPose: ApplyPoseToSelectedWithUsage,
+                onApplyItem: ApplyPoseToSelectedWithUsage,
                 onCaptured: CommitCapturedThumbnail,
                 onComplete: () => { });
         }
@@ -5220,6 +5318,8 @@ namespace HS2SandboxPlugin
                 string oldRel = item.RelativePath(_dataService.PoseRootPath);
                 _dataService.ConvertDatToPng(item, pngBytes);
                 _tagDb.OnItemPathChanged(oldRel, item);
+                _groupDb.OnItemPathChanged(oldRel, item);
+                _itemDb.OnItemPathChanged(oldRel, item);
             }
 
             var tex = CreateDisplayThumbnail(pngBytes);
@@ -5248,7 +5348,7 @@ namespace HS2SandboxPlugin
             _thumbCapture.StartCapture(
                 this,
                 new List<PoseGridItem> { new PoseGridItem { FilePath = Path.Combine(folder, baseName + ".png"), DisplayName = baseName } },
-                onApplyPose: _ => { },
+                onApplyItem: _ => { },
                 onCaptured: (_, pngBytes) =>
                 {
                     if (chars.Count == 1)
@@ -5323,7 +5423,7 @@ namespace HS2SandboxPlugin
             _thumbCapture.StartCapture(
                 this,
                 new List<PoseGridItem> { item },
-                onApplyPose: _ => { },
+                onApplyItem: _ => { },
                 onCaptured: (capturedItem, pngBytes) =>
                 {
                     DoUpdatePose(capturedItem, pngBytes);
@@ -5882,6 +5982,13 @@ namespace HS2SandboxPlugin
             if (newFreezeAnim != freezeAnim)
                 PoseBrowserConfig.FreezeAnimationSpeedOnApply!.Value = newFreezeAnim;
 
+            bool indepMinimize = PoseBrowserConfig.MinimizeIndependentPositions!.Value;
+            bool newIndepMinimize = DrawOptionsToggle(
+                indepMinimize,
+                "Remember minimize chip and window positions separately (each keeps its last location)");
+            if (newIndepMinimize != indepMinimize)
+                PoseBrowserConfig.MinimizeIndependentPositions!.Value = newIndepMinimize;
+
             GUILayout.Space(10f);
             bool newApplyLayout = DrawOptionsToggle(
                 _applyGroupRelativePositions,
@@ -5923,6 +6030,10 @@ namespace HS2SandboxPlugin
                 SavePersistedOptions();
             }
             GUILayout.Label($"{Mathf.Round(_compactHoverThumbnailWidth)} px");
+
+#if HS2 || KK || KKS
+            DrawPluginCompatibilitySection(wrap);
+#endif
 
             GUILayout.Space(14f);
             DrawHotkeyOptionsSection(wrap);
@@ -6153,6 +6264,12 @@ namespace HS2SandboxPlugin
                 if (data.optionsVersion >= 16)
                     _stashPreferUndocked = data.stashPreferUndocked;
 
+                if (data.optionsVersion >= 17 && data.minimizedChipX >= 0f && data.minimizedChipY >= 0f)
+                {
+                    _savedMinimizedChipX = data.minimizedChipX;
+                    _savedMinimizedChipY = data.minimizedChipY;
+                }
+
                 ClampCurrentPage();
                 RestoreWindowRectForTier(_layoutTier);
                 SyncWindowTitleForLayoutTier();
@@ -6209,7 +6326,9 @@ namespace HS2SandboxPlugin
                     stashFloatingH = _savedStashFloatingH,
                     stashFloatingX = _savedStashFloatingX,
                     stashFloatingY = _savedStashFloatingY,
-                    stashPreferUndocked = _stashPreferUndocked
+                    stashPreferUndocked = _stashPreferUndocked,
+                    minimizedChipX = _savedMinimizedChipX,
+                    minimizedChipY = _savedMinimizedChipY
                 };
                 FileEx.WriteAllTextAtomic(
                     path,
@@ -6322,9 +6441,7 @@ namespace HS2SandboxPlugin
                 return;
             }
 
-            Vector2 chipScreen = GUIUtility.GUIToScreenPoint(
-                new Vector2(windowRect.xMax - MinimizedChipSize, windowRect.y + 8f));
-            MinimizePoseBrowser(chipScreen);
+            _minimizeViaHotkeyPending = true;
         }
 
         private void MaybeProcessPoseBrowserHotkeys()
@@ -6562,5 +6679,7 @@ namespace HS2SandboxPlugin
         public float stashFloatingX;
         public float stashFloatingY;
         public bool stashPreferUndocked;
+        public float minimizedChipX = -1f;
+        public float minimizedChipY = -1f;
     }
 }

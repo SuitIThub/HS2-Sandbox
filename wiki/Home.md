@@ -1,4 +1,4 @@
-# HS2-Sandbox Wiki
+﻿# HS2-Sandbox Wiki
 
 Welcome to the official wiki for **[HS2-Sandbox](https://github.com/SuitIThub/HS2-Sandbox)** — a collection of **BepInEx 5 plugins** that extend **Chara Studio** in Illusion games.
 
@@ -25,6 +25,10 @@ HS2-Sandbox bundles Studio workflow tools: pose and animation libraries, automat
 
 ## Module overview
 
+Each plugin module has a **start page with a table of contents**. Detail pages end with **Navigation** links (`← Previous · Module home · Next →`) so you can read each guide cover to cover.
+
+Wiki sources are grouped by folder: `getting-started/`, `hs2/`, `pose-browser/`, `anim-browser/`, `reference/`, `developers/`. Screenshots go in `images/pose-browser/` and `images/anim-browser/`.
+
 ### HS2 only
 
 | Module | Description | Manual |
@@ -40,8 +44,8 @@ HS2-Sandbox bundles Studio workflow tools: pose and animation libraries, automat
 
 | Module | Description | Manual |
 |--------|-------------|--------|
-| **Pose Browser** | Pose library under `UserData/studio/pose` | [Pose Browser](Pose-Browser) |
-| **Anim Browser** | Animation catalog with grouping and playback | [Anim Browser](Anim-Browser) |
+| **Pose Browser** | Pose library under `UserData/studio/pose` | [Pose Browser](Pose-Browser) · [screenshot checklist](images/SCREENSHOTS.md) |
+| **Anim Browser** | Animation catalog, grouping, playback, thumbnails & HS2 hover preview | [Anim Browser](Anim-Browser) · [screenshot checklist](images/SCREENSHOTS.md) |
 
 ## More wiki pages
 
@@ -50,7 +54,7 @@ HS2-Sandbox bundles Studio workflow tools: pose and animation libraries, automat
 - [Building from source](Building-from-Source)
 - [Configuration & data files](Configuration-and-Data-Files)
 - [Keyboard shortcuts](Keyboard-Shortcuts)
-- [Plugin compatibility](Plugin-Compatibility) (HS2Wiki, Better Penetration, HS2Heelz, …)
+- [Plugin compatibility](Plugin-Compatibility) (HS2Wiki, Better Penetration, HS2Heelz, HS2PE/KKPE, …)
 - [Pose ZIP format](Pose-ZIP-Format) (for modders)
 - [Timeline commands (reference)](Timeline-Commands-Reference)
 - [Troubleshooting](Troubleshooting)

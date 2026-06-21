@@ -138,13 +138,25 @@ namespace HS2SandboxPlugin
                 "• As singles shows animations individually inside the merged category without bundling them.",
                 "• Confirm applies everything at once; Cancel discards it with no changes made.",
             }),
+            new HelpTopic("Thumbnails & hover preview", new[]
+            {
+                "Grid cards can show captured PNG thumbnails (UserData/com.hs2.sandbox/anim_thumbnails) or, on HS2, "
+                + "a live stick-figure hover preview while the cursor is on the card.",
+                "• Options → Thumbnails: capture all listed or missing-only; uses the same green-frame overlay as Pose Browser.",
+                "• Select cards with checkboxes, then Capture thumbnail(s)… in the content action bar.",
+                "• Options → Hover animation preview (HS2): toggle preview and set camera angle, rotation speed, and pitch.",
+            }),
             new HelpTopic("Options panel", new[]
             {
                 "• UI scale: enlarge the whole browser for high-resolution screens.",
                 "• Card size: thumbnail size in the grid.",
+                "• Hover animation preview: live stick-figure in the hovered card thumbnail (HS2 grid; works without scene characters).",
+                "• Preview camera angle / rotation speed / pitch: framing for hover preview (HS2).",
+                "• Thumbnails: capture screen PNGs for the current sub-category or selected cards.",
+                "• Options → Debug → Dump preview skeleton data: writes embedded rig + joint diagnostics to BepInEx config (share the file for stick-figure tuning).",
                 "• Hide non-Studio animation lists: hide odd 'Group 101 / Category 2018' entries that come "
                 + "from H-scene-only lists. On by default.",
-                "• Group controls by proximity: only merge playback controls for characters that are close together.",
+                "• Group controls by proximity: only merge playback controls for characters that are close together (3.5 units).",
                 "• Keyboard shortcuts: overview of keys (assigned in BepInEx configuration).",
                 "• Dissolve all groups: reset every group and merge you have made.",
             }),
