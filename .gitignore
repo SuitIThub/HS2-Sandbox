@@ -1,6 +1,13 @@
 # MSBuild: generated from PluginVersion constants before build
 PluginVersions.generated.props
 
+# CI: written by detect_plugin_versions.py at runtime
+.release-asset-paths.txt
+
+# Python bytecode (CI scripts under .github/scripts)
+__pycache__/
+*.py[cod]
+
 # Build results (applies recursively to targets/HS2/*/bin etc.)
 [Dd]ebug/
 [Dd]ebugPublic/

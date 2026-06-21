@@ -169,13 +169,24 @@ def safe_fetch_releases_page(repo: str, token: str, page: int) -> list[dict]:
 
 
 def release_targets_commit(rel: dict, after_sha: str) -> bool:
-    target = str(rel.get("target_commitish") or "")
-    if not target:
+    """True if this release was cut from after_sha (idempotent re-run guard).
+
+    Do NOT use target_commitish: GitHub stores it as the branch name ("main")
+    for every release here, and `git rev-parse main` resolves to the currently
+    checked-out HEAD (== after_sha) — so it would falsely match the newest
+    release on every run. Resolve the release's tag to its commit instead and
+    compare that. Requires tags to be fetched (fetch-tags: true in the workflow).
+    """
+    if not after_sha:
         return False
-    target_sha = git_rev_parse_stdout(target)
-    if target_sha and after_sha:
-        return target_sha == after_sha
-    return target == after_sha or target.startswith(after_sha) or after_sha.startswith(target)
+    tag = str(rel.get("tag_name") or "")
+    if not tag:
+        return False
+    for ref in (f"refs/tags/{tag}^{{commit}}", f"{tag}^{{commit}}"):
+        tag_sha = git_rev_parse_stdout(ref)
+        if tag_sha:
+            return tag_sha == after_sha
+    return False
 
 
 def tag_suffix_for_stem(tag: str, stem: str, versions: str) -> int | None:
