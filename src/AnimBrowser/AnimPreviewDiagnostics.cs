@@ -288,17 +288,26 @@ namespace HS2SandboxPlugin
                     if (clip == null)
                         continue;
 
-                    sb.AppendLine("  clip '" + clip.name + "' humanMotion=" + clip.humanMotion +
-                        " legacy=" + clip.legacy +
-                        " hasMotionCurves=" + clip.hasMotionCurves +
-                        " hasRootCurves=" + clip.hasRootCurves +
-                        " len=" + clip.length.ToString("F2", CultureInfo.InvariantCulture));
+                    sb.AppendLine("  clip '" + clip.name + "' " + FormatClipProbeFlags(clip));
                     reported++;
                 }
             }
 
             if (reported == 0)
                 sb.AppendLine("(no clips reachable via animationClips — they may be assigned per-state at runtime)");
+        }
+
+        private static string FormatClipProbeFlags(AnimationClip clip)
+        {
+            var sb = new StringBuilder(128);
+            sb.Append("humanMotion=").Append(clip.humanMotion);
+            sb.Append(" legacy=").Append(clip.legacy);
+#if !KK
+            sb.Append(" hasMotionCurves=").Append(clip.hasMotionCurves);
+            sb.Append(" hasRootCurves=").Append(clip.hasRootCurves);
+#endif
+            sb.Append(" len=").Append(clip.length.ToString("F2", CultureInfo.InvariantCulture));
+            return sb.ToString();
         }
 
         /// <summary>

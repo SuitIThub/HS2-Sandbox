@@ -35,6 +35,75 @@ def git_rev_parse(ref: str) -> bool:
     return r.returncode == 0
 
 
+def git_rev_parse_stdout(ref: str) -> str:
+    r = subprocess.run(
+        ["git", "rev-parse", ref],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
+    if r.returncode != 0:
+        return ""
+    return r.stdout.strip()
+
+
+def resolve_comparison_refs(before: str, after: str) -> tuple[str, str]:
+    """Normalize refs and ensure we compare an ancestor..descendant range when possible."""
+    after_sha = git_rev_parse_stdout(after) or after
+    before_sha = git_rev_parse_stdout(before)
+
+    if not before_sha or re.fullmatch(r"0+", before):
+        parent = git_rev_parse_stdout(f"{after_sha}^")
+        before_sha = parent or before_sha or before
+        if parent:
+            print(
+                f"::warning::Invalid push 'before' ref; comparing {before_sha[:7]}..{after_sha[:7]} "
+                "(HEAD~1 fallback)."
+            )
+    elif not git_rev_parse(before_sha):
+        before_sha = before
+
+    if (
+        before_sha
+        and after_sha
+        and git_rev_parse(before_sha)
+        and git_rev_parse(after_sha)
+    ):
+        anc = subprocess.run(
+            ["git", "merge-base", before_sha, after_sha],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        if anc.returncode == 0:
+            merge_base = anc.stdout.strip()
+            is_anc = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", before_sha, after_sha],
+                capture_output=True,
+                cwd=ROOT,
+            )
+            if is_anc.returncode != 0 and merge_base:
+                print(
+                    f"::warning::before ({before_sha[:7]}) is not an ancestor of after "
+                    f"({after_sha[:7]}); using merge-base {merge_base[:7]}."
+                )
+                before_sha = merge_base
+
+    return before_sha, after_sha
+
+
+def version_file_changed(before: str, after: str, rel_path: str) -> bool:
+    if not (git_rev_parse(before) and git_rev_parse(after)):
+        return False
+    r = subprocess.run(
+        ["git", "diff", "--name-only", before, after, "--", rel_path],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
+    return bool(r.stdout.strip())
+
+
 def git_log_changelog(before: str, after: str) -> list[str]:
     if not (git_rev_parse(before) and git_rev_parse(after)):
         return []
@@ -89,6 +158,26 @@ def fetch_releases_page(repo: str, token: str, page: int) -> list[dict]:
     return []
 
 
+def safe_fetch_releases_page(repo: str, token: str, page: int) -> list[dict]:
+    if not repo:
+        return []
+    try:
+        return fetch_releases_page(repo, token, page)
+    except Exception as exc:
+        print(f"::warning::GitHub releases API page {page} failed: {exc}")
+        return []
+
+
+def release_targets_commit(rel: dict, after_sha: str) -> bool:
+    target = str(rel.get("target_commitish") or "")
+    if not target:
+        return False
+    target_sha = git_rev_parse_stdout(target)
+    if target_sha and after_sha:
+        return target_sha == after_sha
+    return target == after_sha or target.startswith(after_sha) or after_sha.startswith(target)
+
+
 def tag_suffix_for_stem(tag: str, stem: str, versions: str) -> int | None:
     expected = f"{stem}-{versions}"
     if tag == expected:
@@ -136,6 +225,10 @@ def main() -> None:
     force = len(sys.argv) > 3 and sys.argv[3].lower() == "true"
     selected_raw = sys.argv[4] if len(sys.argv) > 4 else ""
 
+    before, after = resolve_comparison_refs(before, after)
+    after_sha = git_rev_parse_stdout(after) or after
+    print(f"Comparing plugin versions: {before[:7]}..{after_sha[:7]}")
+
     token = os.environ.get("GITHUB_TOKEN", "")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     entries = {e.key: e for e in release_detect_entries()}
@@ -147,15 +240,36 @@ def main() -> None:
 
     for key in all_keys:
         entry = entries[key]
+        rel_path = entry.version_file.relative_to(ROOT).as_posix()
         old_v = read_version_at_git_ref(before, entry)
         new_v = read_version_at_git_ref(after, entry)
+        file_changed = version_file_changed(before, after, rel_path)
+
         if not new_v:
-            print(f"::warning::Could not read PluginVersion from {entry.version_file} at {after}")
+            if file_changed:
+                versions_changed = "true"
+                changed.append(key)
+                notes.append(
+                    f"- **{key}**: `{old_v or '∅'}` → `(version file changed; could not parse at after)`"
+                )
+                print(
+                    f"::warning::Version file changed for {key} but PluginVersion "
+                    f"could not be parsed at {after}"
+                )
+            else:
+                print(
+                    f"::warning::Could not read PluginVersion from {entry.version_file} at {after}"
+                )
             continue
         if old_v != new_v:
             versions_changed = "true"
             changed.append(key)
             notes.append(f"- **{key}**: `{old_v or '∅'}` → `{new_v}`")
+        elif file_changed:
+            print(
+                f"::notice::Version file changed for {key} but parsed version stayed {new_v!r}; "
+                "no release for this plugin."
+            )
 
     changelog = git_log_changelog(before, after)
 
@@ -252,11 +366,11 @@ def main() -> None:
     if repo and token:
         page = 1
         while page <= 20:
-            rel_page = fetch_releases_page(repo, token, page)
+            rel_page = safe_fetch_releases_page(repo, token, page)
             if not rel_page:
                 break
             for rel in rel_page:
-                if rel.get("target_commitish") == after:
+                if release_targets_commit(rel, after_sha):
                     existing_tag = str(rel.get("tag_name") or "")
                     existing_name = str(rel.get("name") or "")
                     break
@@ -278,7 +392,7 @@ def main() -> None:
         max_inc = 0
         page = 1
         while page <= 20:
-            rel_page = fetch_releases_page(repo, token, page)
+            rel_page = safe_fetch_releases_page(repo, token, page)
             if not rel_page:
                 break
             for rel in rel_page:

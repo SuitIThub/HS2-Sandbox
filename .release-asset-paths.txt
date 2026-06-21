@@ -1,0 +1,3 @@
+targets/HS2/AnimBrowser/bin/Release/HS2Sandbox.AnimBrowser.dll
+targets/KKS/AnimBrowser/bin/Release/KKSSandbox.AnimBrowser.dll
+targets/KK/AnimBrowser/bin/Release/KKSandbox.AnimBrowser.dll

@@ -116,7 +116,14 @@ jobs:
             BEFORE="$(git rev-parse HEAD~1)"
           elif [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
             AFTER="$(git rev-parse HEAD)"
-            BEFORE="$(git rev-parse HEAD~1)"
+            BEFORE="$(git rev-parse HEAD~1 2>/dev/null || true)"
+            if [[ -z "$BEFORE" ]]; then
+              echo "::warning::Single-commit branch; comparing empty tree to HEAD for version detect."
+              BEFORE="$(git hash-object -t tree /dev/null)"
+            fi
+          elif ! git merge-base --is-ancestor "$BEFORE" "$AFTER" 2>/dev/null; then
+            echo "::warning::Push before-SHA is not an ancestor of after; using merge-base for version detect."
+            BEFORE="$(git merge-base "$BEFORE" "$AFTER")"
           fi
 
           echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
