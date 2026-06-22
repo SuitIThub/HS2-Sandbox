@@ -249,10 +249,24 @@ namespace HS2SandboxPlugin
                 object controller = GetOrCreatePoseController(ociChar);
                 if (controller == null) return;
 
-                if (TryScheduleLoad(controller, node))
+                // Mirror HS2PE/KKPE's own MainWindow.LoadElement: the Advanced Mode
+                // controller must be enabled for LoadXml'd values to take effect. The
+                // boobs/dynamic-bone values are applied in PoseController.LateUpdate,
+                // a Unity message that only runs while the controller Behaviour is
+                // enabled — and the pose editor leaves controllers disabled until the
+                // user activates Advanced Mode. Without re-enabling it here, embedded
+                // data only applied to characters the user had manually activated.
+                bool controllerEnabled = true;
+                if (node.Attributes != null && node.Attributes["enabled"] != null)
+                    controllerEnabled = XmlConvert.ToBoolean(node.Attributes["enabled"].Value);
+
+                Action<bool> onLoadEnd = _ => SetControllerEnabled(controller, controllerEnabled);
+
+                if (TryScheduleLoad(controller, node, onLoadEnd))
                     return;
 
                 _loadXmlMethod.Invoke(controller, new object[] { node });
+                SetControllerEnabled(controller, controllerEnabled);
             }
             catch (Exception ex)
             {
@@ -325,15 +339,25 @@ namespace HS2SandboxPlugin
             return ociChar.guideObject.transformTarget.gameObject.AddComponent(_charaPoseControllerType);
         }
 
-        private static bool TryScheduleLoad(object controller, XmlNode node)
+        private static bool TryScheduleLoad(object controller, XmlNode node, Action<bool> onLoadEnd)
         {
             if (_scheduleLoadMethod == null || _mainWindowSelfField == null)
                 return false;
             if (_mainWindowSelfField.GetValue(null) == null)
                 return false;
 
-            _scheduleLoadMethod.Invoke(controller, new object[] { node, null });
+            // ScheduleLoad(XmlNode, Action<bool> onLoadEnd) runs LoadXml on a coroutine
+            // owned by MainWindow (so it works even on a disabled controller), then
+            // invokes onLoadEnd — where we enable the controller, just like HS2PE does.
+            _scheduleLoadMethod.Invoke(controller, new object[] { node, onLoadEnd });
             return true;
+        }
+
+        private static void SetControllerEnabled(object controller, bool enabled)
+        {
+            var behaviour = controller as Behaviour;
+            if (behaviour != null)
+                behaviour.enabled = enabled;
         }
 
         private static Type FindType(string fullName)
