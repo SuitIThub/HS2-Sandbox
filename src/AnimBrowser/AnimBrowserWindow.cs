@@ -25,7 +25,7 @@ namespace HS2SandboxPlugin
         private const float TopBarControlHeightBase = 22f;
         private const float GridPanelChromePadBase = 24f;
         private float GridPanelChromePad => AnimBrowserScale.Px(GridPanelChromePadBase);
-        private const float ControlsPaneDefaultWidthBase = 320f;
+        private const float ControlsPaneDefaultWidthBase = 384f;
         private float ControlsPaneDefaultWidth => AnimBrowserScale.Px(ControlsPaneDefaultWidthBase);
         private const float MinCardSize = 96f;
         private const float MaxCardSize = 280f;

@@ -29,7 +29,7 @@ namespace HS2SandboxPlugin
         public bool showOptionsPane;
         public bool showHelpPane;
         public float cardCellSize = 120f;
-        public float controlsPaneWidth = 280f;
+        public float controlsPaneWidth = 336f;
         public float characterConfigPaneWidth = 300f;
         public float optionsPaneWidth = 260f;
         public float helpPaneWidth = 380f;
