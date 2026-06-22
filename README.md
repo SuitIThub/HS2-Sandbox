@@ -122,21 +122,21 @@ Same pose library browser for original **Koikatsu** **Chara Studio** (Unity 5.6 
 **Typical use:** install **`KKSandbox.PoseBrowser.dll`** (and `pose-icon.png` beside it) under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`poseBrowserKk`** / **`poseBrowserKkDownload`** from [`versions.json`](versions.json).
 
 ### HS2 Sandbox — Anim Browser (`HS2Sandbox.AnimBrowser.dll`)
-[Download Anim Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-22-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.1.0%2B1.1.0%2B1.1.0/HS2Sandbox.AnimBrowser.dll)
+[Download Anim Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-22-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.2.0%2B1.2.0%2B1.2.0/HS2Sandbox.AnimBrowser.dll)
 
 Browse Studio's **animation catalog**, apply animations to selected characters, reorganize categories (non-destructive grouping/merging), and control playback from one window. **HS2** adds a live **hover preview** (embedded stick-figure rig) on animation cards.
 
 **Typical use:** open from the **anim icon** on the Studio left toolbar, pick a sub-category, click an animation to apply. Optional **[HS2Wiki](https://github.com/SuitIThub/HS2Wiki)** adds extra help when installed. More detail: [`docs/AnimBrowser-HS2Wiki-Manual.md`](docs/AnimBrowser-HS2Wiki-Manual.md).
 
 ### KKS Sandbox — Anim Browser (`KKSSandbox.AnimBrowser.dll`)
-[Download Anim Browser (KKS)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-22-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.1.0%2B1.1.0%2B1.1.0/KKSSandbox.AnimBrowser.dll)
+[Download Anim Browser (KKS)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-22-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.2.0%2B1.2.0%2B1.2.0/KKSSandbox.AnimBrowser.dll)
 
 Same animation browser for **Koikatsu Sunshine** **Chara Studio**: category tree, grid/list views, search, playback controls, grouping/merging, and thumbnail capture. No hover preview on KKS.
 
 **Typical use:** install **`KKSSandbox.AnimBrowser.dll`** (and `anim-icon.png` beside it) under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.AnimBrowser.dll`**. The in-game update check reads **`animBrowserKks`** / **`animBrowserKksDownload`** from [`versions.json`](versions.json).
 
 ### KK Sandbox — Anim Browser (`KKSandbox.AnimBrowser.dll`)
-[Download Anim Browser (KK)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-22-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.1.0%2B1.1.0%2B1.1.0/KKSandbox.AnimBrowser.dll)
+[Download Anim Browser (KK)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-22-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.2.0%2B1.2.0%2B1.2.0/KKSandbox.AnimBrowser.dll)
 
 Same animation browser for original **Koikatsu** **Chara Studio** (Unity 5.6 / .NET 3.5). Uses the same shared code as the HS2/KKS builds.
 
