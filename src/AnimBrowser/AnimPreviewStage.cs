@@ -321,7 +321,13 @@ namespace HS2SandboxPlugin
                 if (AnimClipLoader.TryGetCached(item, out AnimationClip? clip, out _) && clip != null)
                 {
                     _activeClips[i] = clip;
-                    rig.ApplyAnimation(item, clip, 0f);
+                    RuntimeAnimatorController? controller = null;
+#if KK
+                    // KK only: SampleAnimation needs the rig's Animator to carry a controller that
+                    // references the clip. HS2/KKS leave this null and sample on a bare Animator.
+                    AnimClipLoader.TryGetCachedController(item, out controller);
+#endif
+                    rig.ApplyAnimation(item, clip, controller, 0f);
                     if (clip.length > maxLength)
                         maxLength = clip.length;
                 }

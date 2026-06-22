@@ -8,15 +8,15 @@ namespace HS2SandboxPlugin
     public static class AnimBrowserVersionInfo
     {
 #if KKS
-        public const string Version = "1.0.1";
+        public const string Version = "1.0.2";
         public const string StandaloneDllAssetName = "KKSSandbox.AnimBrowser.dll";
         public const string VersionsJsonVersionKey = "animBrowserKks";
 #elif KK
-        public const string Version = "1.0.1";
+        public const string Version = "1.0.2";
         public const string StandaloneDllAssetName = "KKSandbox.AnimBrowser.dll";
         public const string VersionsJsonVersionKey = "animBrowserKk";
 #else
-        public const string Version = "1.0.1";
+        public const string Version = "1.0.2";
         public const string StandaloneDllAssetName = "HS2Sandbox.AnimBrowser.dll";
         public const string VersionsJsonVersionKey = "animBrowser";
 #endif

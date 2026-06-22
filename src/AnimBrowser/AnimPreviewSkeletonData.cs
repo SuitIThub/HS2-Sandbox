@@ -4,13 +4,218 @@ namespace HS2SandboxPlugin
 {
     /// <summary>
     /// Baked path-faithful body skeleton (chains feeding the 19 stick joints) captured from a
-    /// real HS2 character via the diagnostic dump. Names/parents are identical for both sexes;
-    /// local TRS differs. Built as GameObjects so AnimationClip.SampleAnimation binds generic
-    /// clips by transform path (root = the animator object, i.e. cf_J_Root attaches at depth 0).
-    /// See [[animbrowser-clip-sampling-runtime]].
+    /// real character via the diagnostic dump, per game. Names/parents are identical for both
+    /// sexes; local TRS differs. Built as GameObjects so AnimationClip.SampleAnimation binds
+    /// generic clips by transform path (root = the animator object, i.e. the skeleton root bone
+    /// attaches at depth 0). HS2 uses the cf_J_* rig under p_cf_anim; KK/KKS use the lowercase
+    /// cf_j_* rig under p_cf_body_bone. See [[animbrowser-clip-sampling-runtime]].
     /// </summary>
     internal static class AnimPreviewSkeletonData
     {
+#if KK || KKS
+        // Koikatsu / Koikatsu Sunshine rig (lowercase cf_j_* body bones, animator root p_cf_body_bone).
+        // Baked from a KKS character diagnostic dump (clean T-pose; both sexes share bind positions,
+        // only cf_n_height uniform scale differs: F 0.9066, M 0.9360). 26 bones feed the 19 stick joints.
+        public const int BoneCount = 26;
+
+        /// <summary>Bone names, parents-before-children. cf_j_root (index 0) attaches to the sampling root.</summary>
+        public static readonly string[] BoneNames =
+        {
+            "cf_j_root", "cf_n_height", "cf_j_hips", "cf_j_spine01", "cf_j_waist01", "cf_j_spine02", "cf_j_waist02", "cf_j_spine03", "cf_j_thigh00_L", "cf_j_thigh00_R", "cf_d_shoulder_L", "cf_d_shoulder_R", "cf_j_neck", "cf_j_leg01_L", "cf_j_leg01_R", "cf_j_shoulder_L", "cf_j_shoulder_R", "cf_j_head", "cf_j_leg03_L", "cf_j_leg03_R", "cf_j_arm00_L", "cf_j_arm00_R", "cf_j_forearm01_L", "cf_j_forearm01_R", "cf_j_hand_L", "cf_j_hand_R"
+        };
+
+        /// <summary>Parent bone index per bone (-1 = sampling root / animator object).</summary>
+        public static readonly int[] BoneParents =
+        {
+            -1, 0, 1, 2, 2, 3, 4, 5, 6, 6, 7, 7, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 21, 22, 23
+        };
+
+        /// <summary>Stick joint index (0..18) -> bone index in this table.</summary>
+        public static readonly int[] StickJointBone =
+        {
+            0, 3, 7, 12, 17, 15, 20, 22, 24, 16, 21, 23, 25, 8, 13, 18, 9, 14, 19
+        };
+
+        public static readonly Vector3[] FemaleLocalPosition =
+        {
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 1.1435f, 0.0000f),
+            new Vector3(0.0000f, 0.0050f, 0.0000f),
+            new Vector3(0.0000f, -0.0050f, 0.0000f),
+            new Vector3(0.0000f, 0.0900f, -0.0066f),
+            new Vector3(0.0000f, -0.1353f, -0.0166f),
+            new Vector3(0.0000f, 0.0900f, -0.0102f),
+            new Vector3(-0.0830f, -0.0250f, 0.0000f),
+            new Vector3(0.0830f, -0.0250f, 0.0000f),
+            new Vector3(-0.0156f, 0.0847f, -0.0070f),
+            new Vector3(0.0156f, 0.0847f, -0.0070f),
+            new Vector3(0.0000f, 0.1219f, 0.0000f),
+            new Vector3(0.0000f, -0.4600f, 0.0000f),
+            new Vector3(0.0000f, -0.4600f, 0.0000f),
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 0.0650f, 0.0000f),
+            new Vector3(0.0000f, -0.4350f, 0.0000f),
+            new Vector3(0.0000f, -0.4350f, 0.0000f),
+            new Vector3(-0.0940f, 0.0000f, 0.0000f),
+            new Vector3(0.0940f, 0.0000f, 0.0000f),
+            new Vector3(-0.2530f, 0.0000f, 0.0000f),
+            new Vector3(0.2531f, 0.0000f, 0.0000f),
+            new Vector3(-0.2500f, 0.0000f, 0.0000f),
+            new Vector3(0.2500f, 0.0000f, 0.0000f)
+        };
+
+        public static readonly Quaternion[] FemaleLocalRotation =
+        {
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00873f, 0.00001f, 0.00000f, 0.99996f),
+            new Quaternion(0.00873f, 0.00000f, 0.00000f, 0.99996f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00873f, 0.00000f, 0.00000f, 0.99996f),
+            new Quaternion(0.00873f, 0.00000f, 0.00000f, 0.99996f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, -0.00001f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, -0.02199f, 0.00000f, 0.99976f),
+            new Quaternion(0.00000f, 0.02117f, 0.00000f, 0.99978f),
+            new Quaternion(0.00000f, 0.02198f, 0.00000f, 0.99976f),
+            new Quaternion(0.00005f, -0.02119f, 0.00000f, 0.99978f),
+            new Quaternion(0.00000f, 0.00001f, 0.00000f, 1.00000f),
+            new Quaternion(-0.00005f, 0.00002f, 0.00001f, 1.00000f)
+        };
+
+        public static readonly Vector3[] FemaleLocalScale =
+        {
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(0.9066f, 0.9066f, 0.9066f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f)
+        };
+
+        public static readonly Vector3[] MaleLocalPosition =
+        {
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 1.1435f, 0.0000f),
+            new Vector3(0.0000f, 0.0050f, 0.0000f),
+            new Vector3(0.0000f, -0.0050f, 0.0000f),
+            new Vector3(0.0000f, 0.0900f, -0.0066f),
+            new Vector3(0.0000f, -0.1353f, -0.0166f),
+            new Vector3(0.0000f, 0.0900f, -0.0102f),
+            new Vector3(-0.0830f, -0.0250f, 0.0000f),
+            new Vector3(0.0830f, -0.0250f, 0.0000f),
+            new Vector3(-0.0156f, 0.0847f, -0.0070f),
+            new Vector3(0.0156f, 0.0847f, -0.0070f),
+            new Vector3(0.0000f, 0.1219f, 0.0000f),
+            new Vector3(0.0000f, -0.4600f, 0.0000f),
+            new Vector3(0.0000f, -0.4600f, 0.0000f),
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 0.0000f, 0.0000f),
+            new Vector3(0.0000f, 0.0650f, 0.0000f),
+            new Vector3(0.0000f, -0.4350f, 0.0000f),
+            new Vector3(0.0000f, -0.4350f, 0.0000f),
+            new Vector3(-0.0940f, 0.0000f, 0.0000f),
+            new Vector3(0.0940f, 0.0000f, 0.0000f),
+            new Vector3(-0.2530f, 0.0000f, 0.0000f),
+            new Vector3(0.2531f, 0.0000f, 0.0000f),
+            new Vector3(-0.2500f, 0.0000f, 0.0000f),
+            new Vector3(0.2500f, 0.0000f, 0.0000f)
+        };
+
+        public static readonly Quaternion[] MaleLocalRotation =
+        {
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00873f, 0.00001f, 0.00000f, 0.99996f),
+            new Quaternion(0.00873f, 0.00000f, 0.00000f, 0.99996f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00873f, 0.00000f, 0.00000f, 0.99996f),
+            new Quaternion(0.00873f, 0.00000f, 0.00000f, 0.99996f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, -0.00001f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, 0.00000f, 0.00000f, 1.00000f),
+            new Quaternion(0.00000f, -0.02199f, 0.00000f, 0.99976f),
+            new Quaternion(0.00000f, 0.02117f, 0.00000f, 0.99978f),
+            new Quaternion(0.00000f, 0.02198f, 0.00000f, 0.99976f),
+            new Quaternion(0.00005f, -0.02119f, 0.00000f, 0.99978f),
+            new Quaternion(0.00000f, 0.00001f, 0.00000f, 1.00000f),
+            new Quaternion(-0.00005f, 0.00002f, 0.00001f, 1.00000f)
+        };
+
+        public static readonly Vector3[] MaleLocalScale =
+        {
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(0.9360f, 0.9360f, 0.9360f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f),
+            new Vector3(1.0000f, 1.0000f, 1.0000f)
+        };
+#else
         public const int BoneCount = 48;
 
         /// <summary>Bone names, parents-before-children. cf_J_Root (index 0) attaches to the sampling root.</summary>
@@ -342,6 +547,8 @@ namespace HS2SandboxPlugin
             new Vector3(1.0400f, 1.0400f, 1.0400f),
             new Vector3(1.0400f, 1.0400f, 1.0400f)
         };
+
+#endif
 
         // sex: 0 = male, anything else = female (matches OCIChar.sex / preview convention).
         public static Vector3[] LocalPositions(int sex) => sex == 0 ? MaleLocalPosition : FemaleLocalPosition;

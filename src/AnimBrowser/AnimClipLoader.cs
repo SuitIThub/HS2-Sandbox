@@ -19,6 +19,7 @@ namespace HS2SandboxPlugin
         private sealed class CacheEntry
         {
             public AnimationClip? Clip;
+            public RuntimeAnimatorController? Controller;
             public bool IsHumanoid;
             public string Key = string.Empty;
         }
@@ -42,6 +43,22 @@ namespace HS2SandboxPlugin
             clip = entry.Clip;
             isHumanoid = entry.IsHumanoid;
             return true;
+        }
+
+        /// <summary>The RuntimeAnimatorController the cached clip came from (KK needs it assigned to
+        /// the preview Animator so SampleAnimation binds — see <see cref="AnimPreviewEmbeddedRig"/>).</summary>
+        public static bool TryGetCachedController(AnimGridItem item, out RuntimeAnimatorController? controller)
+        {
+            controller = null;
+            if (item == null)
+                return false;
+
+            string key = BuildCacheKey(item);
+            if (!Cache.TryGetValue(key, out CacheEntry? entry) || entry == null)
+                return false;
+
+            controller = entry.Controller;
+            return controller != null;
         }
 
         public static IEnumerator LoadClipCoroutine(AnimGridItem item, AnimGender gender, int ordinal,
@@ -94,6 +111,7 @@ namespace HS2SandboxPlugin
 
             float deadline = Time.realtimeSinceStartup + MaxLoadSeconds;
             AnimationClip? clip = null;
+            RuntimeAnimatorController? clipController = null;
             string error = string.Empty;
 
             for (int ci = 0; ci < candidates.Count && clip == null; ci++)
@@ -122,7 +140,7 @@ namespace HS2SandboxPlugin
                     continue;
                 }
 
-                clip = ExtractClip(op, clipName, gender, ordinal);
+                clip = ExtractClip(op, clipName, gender, ordinal, out clipController);
             }
 
             if (clip == null)
@@ -132,7 +150,7 @@ namespace HS2SandboxPlugin
                 yield break;
             }
 
-            var entry = new CacheEntry { Clip = clip, IsHumanoid = clip.humanMotion, Key = key };
+            var entry = new CacheEntry { Clip = clip, Controller = clipController, IsHumanoid = clip.humanMotion, Key = key };
             Cache[key] = entry;
             RegisterLru(key);
             TrimLru();
@@ -171,9 +189,10 @@ namespace HS2SandboxPlugin
         /// RuntimeAnimatorController's clips, then from all clips the bundle load surfaced, then the
         /// op's own asset (for bundles where the entry is a clip rather than a controller).
         /// </summary>
-        private static AnimationClip? ExtractClip(AssetBundleLoadAssetOperation op, string clipName, AnimGender gender, int ordinal)
+        private static AnimationClip? ExtractClip(AssetBundleLoadAssetOperation op, string clipName, AnimGender gender, int ordinal,
+            out RuntimeAnimatorController? controller)
         {
-            RuntimeAnimatorController? controller = null;
+            controller = null;
             try { controller = op.GetAsset<RuntimeAnimatorController>(); } catch { }
 
             if (controller != null)

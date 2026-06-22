@@ -15,6 +15,8 @@ namespace HS2SandboxPlugin
         private readonly Transform[] _bones = new Transform[AnimPreviewSkeletonData.BoneCount];
         private readonly Transform[] _stickJoints = new Transform[AnimPreviewBoneSet.JointCount];
         private Transform? _samplingRoot;
+        private Animator? _animator;
+        private RuntimeAnimatorController? _controller;
         private Vector3 _worldAnchor = Vector3.zero;
         private int _sex = 1;
         private bool _built;
@@ -50,6 +52,7 @@ namespace HS2SandboxPlugin
                 UnityEngine.Object.Destroy(_samplingRoot.gameObject);
 
             _samplingRoot = null;
+            _animator = null;
             for (int i = 0; i < _bones.Length; i++)
                 _bones[i] = null!;
             for (int i = 0; i < _stickJoints.Length; i++)
@@ -84,16 +87,37 @@ namespace HS2SandboxPlugin
             }
         }
 
-        /// <summary>Apply the clip at the given time via SampleAnimation (the only runtime-available path).</summary>
-        public void SampleClip(AnimationClip? clip, float timeSeconds)
+        /// <summary>
+        /// Apply the clip at the given time via SampleAnimation. HS2/KKS bind a generic clip onto the
+        /// bare Animator directly. KK (Unity 5.6) additionally requires the Animator to carry a
+        /// Controller that references the clip — otherwise SampleAnimation writes nothing — so the
+        /// clip's source controller is assigned (kept disabled so it doesn't auto-drive the rig).
+        /// The controller is sticky: pass it once (on clip change); later scrub calls may omit it.
+        /// </summary>
+        public void SampleClip(AnimationClip? clip, float timeSeconds, RuntimeAnimatorController? controller = null)
         {
             if (!_built || _samplingRoot == null)
                 return;
+
+            if (controller != null)
+                _controller = controller;
 
             ApplyRestPose();
             if (clip == null)
                 return;
 
+#if KK
+            // Unity 5.6: AnimationClip.SampleAnimation only writes when the Animator carries a
+            // Controller that references the clip (on a bare Animator it writes nothing). Assign the
+            // clip's source controller, kept disabled so its own state machine doesn't overwrite our
+            // explicit sample during the animation update. See [[animbrowser-clip-sampling-runtime]].
+            if (_animator != null && _controller != null)
+            {
+                if (_animator.runtimeAnimatorController != _controller)
+                    _animator.runtimeAnimatorController = _controller;
+                _animator.enabled = false;
+            }
+#endif
             try
             {
                 clip.SampleAnimation(_samplingRoot.gameObject, WrapClipTime(clip, timeSeconds));
@@ -103,8 +127,8 @@ namespace HS2SandboxPlugin
                 ApplyRestPose();
             }
 
-            // SampleAnimation may translate the rig via cf_J_Root motion curves; keep the sampling
-            // root pinned so the figure stays at the stage anchor (camera reframes on bounds anyway).
+            // Sampling may translate the rig via root motion curves; keep the sampling root pinned
+            // so the figure stays at the stage anchor (camera reframes on bounds anyway).
             _samplingRoot.position = _worldAnchor;
             _samplingRoot.rotation = Quaternion.identity;
         }
@@ -144,13 +168,13 @@ namespace HS2SandboxPlugin
 
             // AnimationClip.SampleAnimation only writes to the hierarchy when the root GameObject
             // carries an Animator (it provides the binding context for generic Mecanim clips).
-            // No controller/avatar needed; kept from auto-updating so only our explicit
-            // SampleAnimation call drives the bones. cullingMode=AlwaysAnimate so an off-screen,
-            // renderer-less rig is never culled out of sampling.
-            var animator = rootGo.AddComponent<Animator>();
-            animator.applyRootMotion = false;
-            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            animator.enabled = true;
+            // HS2/KKS need no controller; KK (Unity 5.6) gets the clip's source controller assigned
+            // in SampleClip. cullingMode=AlwaysAnimate so an off-screen, renderer-less rig is never
+            // culled out of sampling.
+            _animator = rootGo.AddComponent<Animator>();
+            _animator.applyRootMotion = false;
+            _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            _animator.enabled = true;
 
             Vector3[] pos = AnimPreviewSkeletonData.LocalPositions(_sex);
             Quaternion[] rot = AnimPreviewSkeletonData.LocalRotations(_sex);

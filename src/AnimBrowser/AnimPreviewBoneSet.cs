@@ -19,6 +19,31 @@ namespace HS2SandboxPlugin
             index >= 0 && index < JointNames.Length ? JointNames[index] : string.Empty;
 
         private static readonly string[] JointNames =
+#if KK || KKS
+        // Koikatsu / KKS rig: lowercase cf_j_* body bones (no _s deform variants). Order must match
+        // AnimPreviewSkeletonData.StickJointBone (root, spine01, spine03/upper, neck, head, L arm, R arm, L leg, R leg).
+        {
+            "cf_j_root",
+            "cf_j_spine01",
+            "cf_j_spine03",
+            "cf_j_neck",
+            "cf_j_head",
+            "cf_j_shoulder_L",
+            "cf_j_arm00_L",
+            "cf_j_forearm01_L",
+            "cf_j_hand_L",
+            "cf_j_shoulder_R",
+            "cf_j_arm00_R",
+            "cf_j_forearm01_R",
+            "cf_j_hand_R",
+            "cf_j_thigh00_L",
+            "cf_j_leg01_L",
+            "cf_j_leg03_L",
+            "cf_j_thigh00_R",
+            "cf_j_leg01_R",
+            "cf_j_leg03_R",
+        };
+#else
         {
             "cf_J_Root_s",
             "cf_J_Spine01_s",
@@ -40,6 +65,7 @@ namespace HS2SandboxPlugin
             "cf_J_LegLow01_s_R",
             "cf_J_LegLow03_s_R",
         };
+#endif
 
         public static void GetPair(int pairIndex, out int jointA, out int jointB)
         {

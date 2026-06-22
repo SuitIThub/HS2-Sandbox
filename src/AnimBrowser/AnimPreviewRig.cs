@@ -16,6 +16,7 @@ namespace HS2SandboxPlugin
         public Vector3 StageAnchor = AnimPreviewRigPool.OffScreenPosition + new Vector3(0f, 1f, 0f);
 
         private AnimationClip? _activeClip;
+        private RuntimeAnimatorController? _activeController;
         private float _sampleTime;
 
         public void EnsureSkeleton(int sex)
@@ -28,11 +29,12 @@ namespace HS2SandboxPlugin
         public void Detach()
         {
             _activeClip = null;
+            _activeController = null;
             _sampleTime = 0f;
             _skeleton.Dispose();
         }
 
-        public void ApplyAnimation(AnimGridItem item, AnimationClip? clip, float normalizedTime)
+        public void ApplyAnimation(AnimGridItem item, AnimationClip? clip, RuntimeAnimatorController? controller, float normalizedTime)
         {
             if (clip == null)
             {
@@ -41,8 +43,9 @@ namespace HS2SandboxPlugin
             }
 
             _activeClip = clip;
+            _activeController = controller;
             _sampleTime = Mathf.Clamp01(normalizedTime) * clip.length;
-            _skeleton.SampleClip(clip, _sampleTime);
+            _skeleton.SampleClip(clip, _sampleTime, controller);
         }
 
         public void AdvanceSample(float deltaTime, float speed)
@@ -57,7 +60,7 @@ namespace HS2SandboxPlugin
                     _sampleTime %= _activeClip.length;
             }
 
-            _skeleton.SampleClip(_activeClip, _sampleTime);
+            _skeleton.SampleClip(_activeClip, _sampleTime, _activeController);
         }
 
         public bool TrySampleJoints(out Vector3[] joints, out bool[] valid)
