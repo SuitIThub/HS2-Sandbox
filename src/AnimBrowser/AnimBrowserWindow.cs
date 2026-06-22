@@ -94,6 +94,9 @@ namespace HS2SandboxPlugin
         private Coroutine? _displayWarmupCoroutine;
         private bool _treeGroupsCollapsedByDefault;
 
+        private readonly AnimBrowserUpdateCheck _updateCheck = new AnimBrowserUpdateCheck();
+        private Coroutine? _updateCheckCoroutine;
+
         protected override void Start()
         {
             base.Start();
@@ -121,12 +124,28 @@ namespace HS2SandboxPlugin
             StudioAutoTranslation.TranslationsUpdated += OnAutoTranslationsUpdated;
             _groupStore.Load();
             InitControlsState();
+
+            // Fire-and-forget update check. The coroutine swallows all network/parse errors and
+            // lands in Unavailable, so a failed check never disrupts the window.
+            try
+            {
+                _updateCheckCoroutine = StartCoroutine(_updateCheck.RunCheck());
+            }
+            catch (System.Exception ex)
+            {
+                SandboxServices.Log.LogDebug("Anim Browser update check could not start: " + ex.Message);
+            }
         }
 
         private void OnDestroy()
         {
             StudioAutoTranslation.TranslationsUpdated -= OnAutoTranslationsUpdated;
             _groupStore.Changed -= OnGroupStoreChanged;
+            if (_updateCheckCoroutine != null)
+            {
+                StopCoroutine(_updateCheckCoroutine);
+                _updateCheckCoroutine = null;
+            }
             if (_catalogWarmupCoroutine != null)
             {
                 StopCoroutine(_catalogWarmupCoroutine);
@@ -323,6 +342,7 @@ namespace HS2SandboxPlugin
                 SavePersistedOptions();
             }
             GUILayout.FlexibleSpace();
+            DrawUpdateNotice(controlH);
             GUILayout.EndHorizontal();
 
             GUILayout.Space(2f);
@@ -333,6 +353,34 @@ namespace HS2SandboxPlugin
             DrawTopBarCharacterSection(controlH);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
+        }
+
+        /// <summary>Right-aligned "Update vX.Y.Z" button shown only when a newer release exists.
+        /// Clicking opens the direct download (or the releases page as fallback). Silent otherwise.</summary>
+        private void DrawUpdateNotice(float controlHeight)
+        {
+            if (_updateCheck.State != AnimBrowserUpdateCheck.Status.UpdateAvailable)
+                return;
+
+            string remote = _updateCheck.RemoteVersion ?? "?";
+            string url = _updateCheck.DownloadUrl ?? AnimBrowserVersionInfo.LatestReleasePageUrl;
+            bool directDll = url.IndexOf(".dll", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            string tip = directDll
+                ? "A newer Anim Browser is available — click to download the updated .dll directly."
+                : "A newer Anim Browser is available — click to open the releases page.";
+
+            var label = new GUIContent("Update v" + remote, tip);
+            if (GUILayout.Button(label, GUI.skin.button, AnimBrowserScale.H(controlHeight), AnimBrowserScale.MinW(108f)))
+            {
+                try
+                {
+                    Application.OpenURL(url);
+                }
+                catch (System.Exception ex)
+                {
+                    SandboxServices.Log.LogWarning("Anim Browser: opening update URL failed: " + ex.Message);
+                }
+            }
         }
 
         private void DrawTreePanel()
