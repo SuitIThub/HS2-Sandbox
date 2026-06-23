@@ -7,7 +7,7 @@ namespace HS2SandboxPlugin
 {
     public partial class AnimBrowserWindow
     {
-        private const float OptionsPaneDefaultWidthBase = 420f;
+        private const float OptionsPaneDefaultWidthBase = 672f;
         private float OptionsPaneDefaultWidth => AnimBrowserScale.Px(OptionsPaneDefaultWidthBase);
         private const float HotkeyBindingColumnWidthBase = 128f;
         private float HotkeyBindingColumnWidth => AnimBrowserScale.Px(HotkeyBindingColumnWidthBase);
@@ -63,6 +63,17 @@ namespace HS2SandboxPlugin
         private static readonly GUIContent GcPreviewCameraPitch = new GUIContent(
             "Camera pitch (up/down)",
             "Tilts the preview camera vertically. 0° = level, +90° = straight down (top view), -90° = straight up.");
+        private static readonly GUIContent GcPreviewIterationPan = new GUIContent(
+            "Iteration pan duration",
+            "How long the camera takes to glide from the first to the last figure in iteration-group previews "
+            + "(numbered slots 1, 2, 3…). It ping-pongs back and forth. Higher = slower. Other previews are unaffected.");
+        private static readonly GUIContent GcPreviewCameraStd = new GUIContent(
+            "Standard previews",
+            "Camera orbit for single animations and multi-character (gender) groups.");
+        private static readonly GUIContent GcPreviewIterationCamera = new GUIContent(
+            "Iteration groups (1, 2, 3…)",
+            "Camera orbit used only when previewing numbered-slot groups, where the camera also pans "
+            + "left-right between the figures. Set independently from the standard previews.");
         private static readonly GUIContent[] GcPreviewCameraModes =
         {
             new GUIContent("Full frontal (0°)", "Straight-on front view."),
@@ -108,28 +119,54 @@ namespace HS2SandboxPlugin
                 GUILayout.Label("Capture in progress — use the on-screen box.", wrap);
         }
 
-        private void DrawPreviewCameraModeSelector()
+        /// <summary>Draws a radio list of camera modes and returns the selected index (unchanged if no pick).</summary>
+        private int DrawCameraModeRadioList(int currentMode)
         {
+            int result = currentMode;
             for (int i = 0; i < GcPreviewCameraModes.Length; i++)
             {
-                bool active = _options.previewCameraMode == i;
+                bool active = currentMode == i;
                 GUILayout.BeginHorizontal();
                 bool picked = GUILayout.Toggle(active, GUIContent.none, AnimBrowserScale.W(18f));
                 GUILayout.Label(GcPreviewCameraModes[i], GetOptionsWrapStyle(), GUILayout.ExpandWidth(true));
                 GUILayout.EndHorizontal();
-
                 if (picked && !active)
-                {
-                    _options.previewCameraMode = i;
-                    if (_previewStage != null)
-                        _previewStage.CameraMode = i;
-                    SavePersistedOptions();
-                }
+                    result = i;
+            }
+            return result;
+        }
+
+        private static bool IsRotatingCameraMode(int mode) =>
+            mode == (int)AnimPreviewCameraMode.Rotate || mode == (int)AnimPreviewCameraMode.RotateDwell;
+
+        private void DrawPreviewCameraModeSelector()
+        {
+            // Standard previews (singles + gender/co-authored groups).
+            GUILayout.Label(GcPreviewCameraStd, GetOptionsWrapStyle());
+            int newMode = DrawCameraModeRadioList(_options.previewCameraMode);
+            if (newMode != _options.previewCameraMode)
+            {
+                _options.previewCameraMode = newMode;
+                if (_previewStage != null)
+                    _previewStage.CameraMode = newMode;
+                SavePersistedOptions();
             }
 
-            // Rotation speed slider — relevant only for the two rotating modes.
-            if (_options.previewCameraMode == (int)AnimPreviewCameraMode.Rotate ||
-                _options.previewCameraMode == (int)AnimPreviewCameraMode.RotateDwell)
+            // Iteration groups (numbered slots) — own orbit mode, combined with the left-right pan below.
+            GUILayout.Space(6f);
+            GUILayout.Label(GcPreviewIterationCamera, GetOptionsWrapStyle());
+            int newIterMode = DrawCameraModeRadioList(_options.previewIterationCameraMode);
+            if (newIterMode != _options.previewIterationCameraMode)
+            {
+                _options.previewIterationCameraMode = newIterMode;
+                if (_previewStage != null)
+                    _previewStage.IterationCameraMode = newIterMode;
+                SavePersistedOptions();
+            }
+
+            // Rotation speed slider — shown when either mode orbits (the speed is shared by both).
+            if (IsRotatingCameraMode(_options.previewCameraMode) ||
+                IsRotatingCameraMode(_options.previewIterationCameraMode))
             {
                 GUILayout.Space(4f);
                 GUILayout.Label(GcPreviewCameraSpeed, GetOptionsWrapStyle());
@@ -161,6 +198,22 @@ namespace HS2SandboxPlugin
             }
             GUILayout.Label(
                 Mathf.RoundToInt(_options.previewCameraPitch).ToString(System.Globalization.CultureInfo.InvariantCulture) + "°",
+                GetOptionsWrapStyle());
+
+            // Iteration-group left-right pan duration — applies to numbered-slot group previews only.
+            GUILayout.Space(4f);
+            GUILayout.Label(GcPreviewIterationPan, GetOptionsWrapStyle());
+            float pan = _options.previewIterationPanSeconds;
+            float newPan = GUILayout.HorizontalSlider(pan, AnimPreviewStage.IterationPanSecondsMin, AnimPreviewStage.IterationPanSecondsMax);
+            if (Mathf.Abs(newPan - pan) > 0.05f)
+            {
+                _options.previewIterationPanSeconds = newPan;
+                if (_previewStage != null)
+                    _previewStage.IterationPanSeconds = newPan;
+                SavePersistedOptions();
+            }
+            GUILayout.Label(
+                _options.previewIterationPanSeconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " s",
                 GetOptionsWrapStyle());
         }
 

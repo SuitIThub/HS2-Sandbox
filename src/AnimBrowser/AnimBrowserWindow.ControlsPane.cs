@@ -8,9 +8,9 @@ namespace HS2SandboxPlugin
         private const int ControlsUndockedWindowId = SandboxImguiWindowIds.AnimBrowser.ControlsUndocked;
         private const float ControlsFloatingMinWidth = 220f;
         private const float ControlsFloatingMinHeight = 180f;
-        private const float ControlsFloatingMaxWidth = 720f;
+        private const float ControlsFloatingMaxWidth = 1080f;
         private const float ControlsFloatingMaxHeight = 900f;
-        private const float ControlsFloatingDefaultWidthBase = 320f;
+        private const float ControlsFloatingDefaultWidthBase = 480f;
         private const float ControlsFloatingDefaultHeightBase = 480f;
         private float ControlsFloatingDefaultWidth => AnimBrowserScale.Px(ControlsFloatingDefaultWidthBase);
         private float ControlsFloatingDefaultHeight => AnimBrowserScale.Px(ControlsFloatingDefaultHeightBase);

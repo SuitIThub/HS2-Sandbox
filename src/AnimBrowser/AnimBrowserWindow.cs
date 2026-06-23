@@ -25,7 +25,7 @@ namespace HS2SandboxPlugin
         private const float TopBarControlHeightBase = 22f;
         private const float GridPanelChromePadBase = 24f;
         private float GridPanelChromePad => AnimBrowserScale.Px(GridPanelChromePadBase);
-        private const float ControlsPaneDefaultWidthBase = 384f;
+        private const float ControlsPaneDefaultWidthBase = 504f;
         private float ControlsPaneDefaultWidth => AnimBrowserScale.Px(ControlsPaneDefaultWidthBase);
         private const float MinCardSize = 96f;
         private const float MaxCardSize = 280f;
@@ -1149,7 +1149,10 @@ namespace HS2SandboxPlugin
             _controlsWindowRect = new Rect(
                 windowRect.xMax + DockedPaneGap,
                 windowRect.y,
-                _options.controlsPaneWidth > 10f ? _options.controlsPaneWidth : ControlsPaneDefaultWidth,
+                // The docked controls pane isn't drag-resizable, so its width is driven entirely by this
+                // value. Floor it at the (widened) default so an older, narrower persisted width still
+                // gets the extra room instead of staying cramped.
+                Mathf.Max(_options.controlsPaneWidth, ControlsPaneDefaultWidth),
                 windowRect.height);
             _characterConfigWindowRect = new Rect(
                 windowRect.xMax + DockedPaneGap,
@@ -1181,16 +1184,18 @@ namespace HS2SandboxPlugin
             string title,
             float minWidth)
         {
-            float widthBefore = paneRect.width;
+            // Fixed width (GUILayout.Width pins min == max). Auto-sizing via MinWidth made the window
+            // snap to the narrower content width and then get stretched back, which flickered on every
+            // layout/scroll event — these docked panes aren't mouse-resizable, so a fixed width is right.
+            float targetWidth = paneRect.width > 1f ? paneRect.width : minWidth;
             paneRect = GUILayout.Window(
                 paneId,
                 paneRect,
                 drawContent,
                 title,
-                GUILayout.MinWidth(minWidth),
+                GUILayout.Width(targetWidth),
                 AnimBrowserScale.MinH(120f));
-            if (widthBefore > 1f && paneRect.width > widthBefore + 0.5f)
-                paneRect.width = widthBefore;
+            paneRect.width = targetWidth;
             paneRect.x = Mathf.Clamp(paneRect.x, 4f, Mathf.Max(4f, Screen.width - paneRect.width - 4f));
             paneRect.y = Mathf.Clamp(paneRect.y, 4f, Mathf.Max(4f, Screen.height - paneRect.height - 4f));
             IMGUIUtils.EatInputInRect(paneRect);
@@ -1342,8 +1347,9 @@ namespace HS2SandboxPlugin
 
         private void EnsureMinimumOptionsPaneWidth()
         {
-            float minW = AnimBrowserScale.Px(380f);
-            if (_options.optionsPaneWidth <= 10f || _options.optionsPaneWidth < minW)
+            // Floor at the (widened) default so an older, narrower persisted width still gets the extra
+            // room; a wider custom width is left untouched.
+            if (_options.optionsPaneWidth <= 10f || _options.optionsPaneWidth < OptionsPaneDefaultWidth)
                 _options.optionsPaneWidth = OptionsPaneDefaultWidth;
         }
 

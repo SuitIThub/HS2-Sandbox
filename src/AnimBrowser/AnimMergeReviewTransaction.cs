@@ -35,6 +35,11 @@ namespace HS2SandboxPlugin
         public string BucketMergeTargetKey = string.Empty;
         public readonly List<string> BucketMergeAliasKeys = new List<string>();
 
+        /// <summary>Existing display groups to drop before committing (group-edit flow): the edited
+        /// proposals replace these, so members the user removed from a group genuinely become singles
+        /// instead of lingering as a leftover group. Empty for merge / new-group reviews.</summary>
+        public readonly List<string> ReplacedDisplayGroupIds = new List<string>();
+
         public void Reset()
         {
             Rule = null;
@@ -43,6 +48,7 @@ namespace HS2SandboxPlugin
             RuleName = null;
             GroupMergeAddedGroupIds = null;
             Reinclude.Clear();
+            ReplacedDisplayGroupIds.Clear();
             ClearBucketMerge();
         }
 
@@ -67,6 +73,9 @@ namespace HS2SandboxPlugin
         {
             using (store.BeginBatch())
             {
+                if (ReplacedDisplayGroupIds.Count > 0)
+                    store.RemoveDisplayGroups(ReplacedDisplayGroupIds);
+
                 if (Rule != null)
                 {
                     if (CategoryMergeSources != null)

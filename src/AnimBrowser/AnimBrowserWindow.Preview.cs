@@ -34,8 +34,10 @@ namespace HS2SandboxPlugin
             if (_previewStage == null)
                 return;
             _previewStage.CameraMode = _options.previewCameraMode;
+            _previewStage.IterationCameraMode = _options.previewIterationCameraMode;
             _previewStage.CameraRotateSpeed = _options.previewCameraRotateSpeed;
             _previewStage.CameraPitch = _options.previewCameraPitch;
+            _previewStage.IterationPanSeconds = _options.previewIterationPanSeconds;
         }
 
         private GUIStyle PreviewHoverSensorStyle

@@ -314,7 +314,11 @@ namespace HS2SandboxPlugin
             bar.AddButton("Group selected…", btnH, minW, BeginGridGroup, enabled: items >= 2,
                 tooltip: "Combine the selected animations into one card.");
             if (groups > 0)
+            {
+                bar.AddButton("Edit…", btnH, minW, BeginGridGroupEdit, enabled: CanEditSelectedGroups(),
+                    tooltip: "Adjust member roles and names of the selected group(s) in the review pane.");
                 bar.AddButton("Ungroup", btnH, minW, RequestUngroupSelected, tooltip: "Dissolve the selected group card(s).");
+            }
             int selectedTotal = items + groups;
             bar.AddButton(
                 selectedTotal == 1 ? "Capture thumbnail…" : "Capture thumbnails…",
@@ -573,6 +577,45 @@ namespace HS2SandboxPlugin
                 return;
             var proposals = new List<AnimDisplayGroupData> { single };
             OpenReview("Review group", proposals, null);
+        }
+
+        /// <summary>Opens the review pane on the selected existing display groups so their member roles
+        /// and names can be adjusted just like a merge. Each edited proposal replaces the original group
+        /// on confirm (members removed in review return to singles).</summary>
+        private void BeginGridGroupEdit()
+        {
+            if (_selectedGroupIds.Count == 0)
+                return;
+
+            _mergeTx.Reset();
+            var proposals = new List<AnimDisplayGroupData>();
+            foreach (string id in _selectedGroupIds)
+            {
+                AnimDisplayGroupData? stored = _groupStore.FindDisplayGroup(id);
+                if (stored == null || stored.Members.Count < 2)
+                    continue;
+                proposals.Add(CloneDisplayGroupForReview(stored, null, pairWithinSubcategory: false));
+                _mergeTx.ReplacedDisplayGroupIds.Add(id);
+            }
+            if (proposals.Count == 0)
+                return;
+
+            string heading = proposals.Count == 1
+                ? "Edit group"
+                : "Edit " + proposals.Count + " groups";
+            OpenReview(heading, proposals, null);
+        }
+
+        /// <summary>True when at least one selected group card is an editable stored display group.</summary>
+        private bool CanEditSelectedGroups()
+        {
+            foreach (string id in _selectedGroupIds)
+            {
+                AnimDisplayGroupData? stored = _groupStore.FindDisplayGroup(id);
+                if (stored != null && stored.Members.Count >= 2)
+                    return true;
+            }
+            return false;
         }
 
         private void RequestUngroupSelected()

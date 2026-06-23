@@ -29,9 +29,9 @@ namespace HS2SandboxPlugin
         public bool showOptionsPane;
         public bool showHelpPane;
         public float cardCellSize = 120f;
-        public float controlsPaneWidth = 336f;
+        public float controlsPaneWidth = 504f;
         public float characterConfigPaneWidth = 300f;
-        public float optionsPaneWidth = 260f;
+        public float optionsPaneWidth = 672f;
         public float helpPaneWidth = 380f;
         public bool controlsGroupByProximity = true;
         public bool hideNonStudioCatalogAnimations = true;
@@ -50,7 +50,20 @@ namespace HS2SandboxPlugin
         public float previewCameraRotateSpeed = AnimPreviewStage.CamRotateSpeedDefault;
 
         /// <summary>Preview camera pitch in degrees (0 = level, +90 = top-down, -90 = bottom-up).</summary>
-        public float previewCameraPitch = AnimPreviewStage.CamPitchDefault;	
+        public float previewCameraPitch = AnimPreviewStage.CamPitchDefault;
+
+        /// <summary>Seconds for the camera to pan from the first to the last figure in iteration-group previews.</summary>
+        public float previewIterationPanSeconds = AnimPreviewStage.IterationPanSecondsDefault;
+
+        /// <summary>Camera mode (see <see cref="AnimPreviewCameraMode"/>) used for iteration-group previews,
+        /// independent of <see cref="previewCameraMode"/>. Default 0 = full frontal (cleanest left-right pan).</summary>
+        public int previewIterationCameraMode;
+
+        /// <summary>Last thumbnail-capture box position/size (screen pixels). Size &lt;= 0 means unset
+        /// (a centred default is used). Restored when a capture session starts.</summary>
+        public float thumbCaptureRectX = -1f;
+        public float thumbCaptureRectY = -1f;
+        public float thumbCaptureRectSize = -1f;
     }
 
     internal static class AnimBrowserPersistence
@@ -132,6 +145,11 @@ namespace HS2SandboxPlugin
             sb.Append(",\"previewCameraMode\":").Append(o.previewCameraMode.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"previewCameraRotateSpeed\":").Append(o.previewCameraRotateSpeed.ToString(CultureInfo.InvariantCulture));
             sb.Append(",\"previewCameraPitch\":").Append(o.previewCameraPitch.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"previewIterationPanSeconds\":").Append(o.previewIterationPanSeconds.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"previewIterationCameraMode\":").Append(o.previewIterationCameraMode.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"thumbCaptureRectX\":").Append(o.thumbCaptureRectX.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"thumbCaptureRectY\":").Append(o.thumbCaptureRectY.ToString(CultureInfo.InvariantCulture));
+            sb.Append(",\"thumbCaptureRectSize\":").Append(o.thumbCaptureRectSize.ToString(CultureInfo.InvariantCulture));
             sb.Append('}');
             return sb.ToString();
         }
@@ -177,6 +195,11 @@ namespace HS2SandboxPlugin
             o.previewCameraMode = ReadInt(json, "previewCameraMode", o.previewCameraMode);
             o.previewCameraRotateSpeed = ReadFloat(json, "previewCameraRotateSpeed", o.previewCameraRotateSpeed);
             o.previewCameraPitch = ReadFloat(json, "previewCameraPitch", o.previewCameraPitch);
+            o.previewIterationPanSeconds = ReadFloat(json, "previewIterationPanSeconds", o.previewIterationPanSeconds);
+            o.previewIterationCameraMode = ReadInt(json, "previewIterationCameraMode", o.previewIterationCameraMode);
+            o.thumbCaptureRectX = ReadFloat(json, "thumbCaptureRectX", o.thumbCaptureRectX);
+            o.thumbCaptureRectY = ReadFloat(json, "thumbCaptureRectY", o.thumbCaptureRectY);
+            o.thumbCaptureRectSize = ReadFloat(json, "thumbCaptureRectSize", o.thumbCaptureRectSize);
             MigrateLegacyWindowRects(o);
             return true;
         }

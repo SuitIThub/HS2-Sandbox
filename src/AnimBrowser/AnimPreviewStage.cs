@@ -66,15 +66,35 @@ namespace HS2SandboxPlugin
         public const float CamPitchMin = -90f;
         public const float CamPitchMax = 90f;
 
+        // Iteration groups (plain numbered slots 1,2,3…): figures are independent single-character
+        // clips that all root at the same spot, so they're spread out along X and the camera slowly
+        // pans between the outermost two while it orbits, framing one figure at a time.
+        public const float IterationPanSecondsDefault = 4f; // one-way sweep duration (ping-pongs)
+        public const float IterationPanSecondsMin = 1f;     // faster pan
+        public const float IterationPanSecondsMax = 15f;    // slower pan
+        private const float IterationFigureGap = 0.3f;      // clear space between adjacent figures (m)
+        private const float IterationFigureMinSpacing = 0.8f;
+
         private int _cameraMode;
+        private int _iterationCameraMode;
         private float _cameraRotateSpeed = CamRotateSpeedDefault;
         private float _cameraPitch = CamPitchDefault;
+        private float _iterationPanSeconds = IterationPanSecondsDefault;
 
         /// <summary>Active camera mode (see <see cref="AnimPreviewCameraMode"/>); set from options.</summary>
         public int CameraMode
         {
             get => _cameraMode;
             set => _cameraMode = value;
+        }
+
+        /// <summary>Camera mode used for iteration-group (numbered-slot) previews, where the camera also
+        /// pans between figures. Kept separate from <see cref="CameraMode"/> so the orbit behaviour for
+        /// the pan can be chosen independently. Set from options.</summary>
+        public int IterationCameraMode
+        {
+            get => _iterationCameraMode;
+            set => _iterationCameraMode = value;
         }
 
         /// <summary>Orbit speed (degrees/second) for the rotating camera modes; set from options.</summary>
@@ -91,12 +111,24 @@ namespace HS2SandboxPlugin
             set => _cameraPitch = Mathf.Clamp(value, CamPitchMin, CamPitchMax);
         }
 
+        /// <summary>Seconds the camera takes to sweep from the first to the last figure in iteration-group
+        /// previews (one-way; it ping-pongs). Higher = slower pan. Set from options.</summary>
+        public float IterationPanSeconds
+        {
+            get => _iterationPanSeconds;
+            set => _iterationPanSeconds = Mathf.Clamp(value, IterationPanSecondsMin, IterationPanSecondsMax);
+        }
+
         private AnimDisplayEntry? _targetEntry;
         private AnimPreviewStageState _state = AnimPreviewStageState.Idle;
         private string _statusMessage = string.Empty;
         private bool _active;
         private Coroutine? _loadCoroutine;
         private int _activeFigureCount;
+
+        /// <summary>True when the target is an iteration group (numbered slots): figures get spread
+        /// along X and the camera pans between the outermost ones (see <see cref="FrameCameraOnFiguresSpread"/>).</summary>
+        private bool _spreadFigures;
 
         public Texture? OutputTexture => _renderTexture;
         public AnimPreviewStageState State => _state;
@@ -179,6 +211,7 @@ namespace HS2SandboxPlugin
             _active = false;
             _targetEntry = null;
             _activeFigureCount = 0;
+            _spreadFigures = false;
             _state = AnimPreviewStageState.Idle;
             _statusMessage = string.Empty;
 
@@ -212,7 +245,7 @@ namespace HS2SandboxPlugin
                     rig.AdvanceSample(Time.unscaledDeltaTime, 1f);
             }
 
-            FrameCameraOnFigures();
+            FrameCamera();
             RenderFrame();
         }
 
@@ -232,6 +265,8 @@ namespace HS2SandboxPlugin
             yield return AnimPreviewRigPool.EnsureFigureCountCoroutine(figureCount, _figureSlots, _activeRigs);
 
             _activeFigureCount = figureCount;
+            _spreadFigures = entry.IsGroup && entry.Group != null &&
+                             entry.Group.HasSlotIndexButtons && figureCount >= 2;
             bool anyReady = false;
 
             for (int i = 0; i < _activeFigureCount; i++)
@@ -249,7 +284,7 @@ namespace HS2SandboxPlugin
                 _state = AnimPreviewStageState.Ready;
                 if (_camera != null)
                 {
-                    FrameCameraOnFigures();
+                    FrameCamera();
                     _camera.enabled = true;
                 }
                 RenderFrame();
@@ -270,8 +305,13 @@ namespace HS2SandboxPlugin
             // Apply the initial phase's clips to each figure (figures stay in T-pose if none load).
             ApplyPhaseClips(_sequencer.ActivePhase);
 
+            // Iteration groups: now that the figures are posed, spread them out along X so they sit
+            // side by side instead of overlapping at a shared root.
+            if (_spreadFigures)
+                LayoutSpreadFigures();
+
             _statusMessage = string.Empty;
-            FrameCameraOnFigures();
+            FrameCamera();
             RenderFrame();
             _loadCoroutine = null;
         }
@@ -374,10 +414,10 @@ namespace HS2SandboxPlugin
             AnimPreviewGlRenderer.DrawStickFigures(camera, _figureDraws, count);
         }
 
-        /// <summary>Camera yaw (degrees) for the active mode — constant angles, or time-driven orbit.</summary>
-        private float ComputeCameraYaw()
+        /// <summary>Camera yaw (degrees) for the given mode — constant angles, or time-driven orbit.</summary>
+        private float ComputeCameraYaw(int mode)
         {
-            switch ((AnimPreviewCameraMode)_cameraMode)
+            switch ((AnimPreviewCameraMode)mode)
             {
                 case AnimPreviewCameraMode.Front45:
                     return 45f;
@@ -430,6 +470,141 @@ namespace HS2SandboxPlugin
             return CamDwellAngles[0];
         }
 
+        private void FrameCamera()
+        {
+            if (_spreadFigures && _activeFigureCount >= 2)
+                FrameCameraOnFiguresSpread();
+            else
+                FrameCameraOnFigures();
+        }
+
+        /// <summary>Spreads iteration-group figures evenly along X so they no longer overlap. Spacing is
+        /// derived from the widest single figure (measured from its own root) plus a fixed gap, and the
+        /// row is centred on the shared stage anchor. Called once after the clips are first applied.</summary>
+        private void LayoutSpreadFigures()
+        {
+            if (_activeFigureCount < 2)
+                return;
+
+            float maxHalfX = 0.25f;
+            for (int i = 0; i < _activeFigureCount; i++)
+            {
+                AnimPreviewRig? rig = _activeRigs[i];
+                if (rig == null || !rig.TrySampleJoints(out Vector3[] joints, out bool[] valid))
+                    continue;
+                float rootX = rig.StageAnchor.x;
+                for (int j = 0; j < AnimPreviewBoneSet.JointCount; j++)
+                {
+                    if (!valid[j] || !IsFinite(joints[j]))
+                        continue;
+                    maxHalfX = Mathf.Max(maxHalfX, Mathf.Abs(joints[j].x - rootX));
+                }
+            }
+
+            float spacing = Mathf.Max(2f * maxHalfX + IterationFigureGap, IterationFigureMinSpacing);
+            Vector3 baseAnchor = AnimPreviewRigPool.OffScreenPosition + new Vector3(0f, 1f, 0f);
+            float mid = (_activeFigureCount - 1) * 0.5f;
+            for (int i = 0; i < _activeFigureCount; i++)
+            {
+                AnimPreviewRig? rig = _activeRigs[i];
+                if (rig == null)
+                    continue;
+                // Mirror the X order (mid - i instead of i - mid): the camera is yawed a flat 180° so it
+                // faces the figures' front, which flips world-X on screen. Placing figure 0 at +X puts the
+                // first animation on the viewer's LEFT, so the on-screen order matches the slot order 1,2,3.
+                rig.StageAnchor = baseAnchor + new Vector3((mid - i) * spacing, 0f, 0f);
+                // Re-pin the root at the new anchor so subsequent samples place the figure there.
+                rig.TrySampleJoints(out _, out _);
+            }
+        }
+
+        /// <summary>
+        /// Framing for iteration groups: the orthographic size fits the single largest figure (measured
+        /// per-character from its own root, NOT the combined bounds of all figures), and the camera
+        /// centre ping-pongs between the outermost figures' roots so it slowly wanders across the row
+        /// while the orbit yaw keeps rotating.
+        /// </summary>
+        private void FrameCameraOnFiguresSpread()
+        {
+            if (_camera == null || _activeFigureCount < 2)
+                return;
+
+            float yaw = ComputeCameraYaw(_iterationCameraMode) + 180f;
+            Quaternion rot = Quaternion.Euler(_cameraPitch, yaw, 0f);
+            Vector3 camRight = rot * Vector3.right;
+            Vector3 camUp = rot * Vector3.up;
+
+            // Per-figure metrics: each figure's own joint-bounds centre (so the camera frames the body
+            // mass, not the ground-level root) and its own half-extents. Zoom uses the largest SINGLE
+            // figure — never the combined span of all figures — so a row of N iterations frames like one.
+            float halfWidth = 0.15f;
+            float halfHeight = 0.25f;
+            Vector3 firstCenter = Vector3.zero;
+            Vector3 lastCenter = Vector3.zero;
+            bool haveFirst = false;
+            bool haveLast = false;
+
+            for (int i = 0; i < _activeFigureCount; i++)
+            {
+                AnimPreviewRig? rig = _activeRigs[i];
+                if (rig == null || !rig.TrySampleJoints(out Vector3[] joints, out bool[] valid))
+                    continue;
+
+                bool haveBounds = false;
+                Vector3 fMin = Vector3.zero;
+                Vector3 fMax = Vector3.zero;
+                for (int j = 0; j < AnimPreviewBoneSet.JointCount; j++)
+                {
+                    if (!valid[j] || !IsFinite(joints[j]))
+                        continue;
+                    if (!haveBounds) { fMin = joints[j]; fMax = joints[j]; haveBounds = true; }
+                    else { fMin = Vector3.Min(fMin, joints[j]); fMax = Vector3.Max(fMax, joints[j]); }
+                }
+                if (!haveBounds)
+                    continue;
+
+                Vector3 figureCenter = (fMin + fMax) * 0.5f;
+                for (int j = 0; j < AnimPreviewBoneSet.JointCount; j++)
+                {
+                    if (!valid[j] || !IsFinite(joints[j]))
+                        continue;
+                    Vector3 off = joints[j] - figureCenter;
+                    halfWidth = Mathf.Max(halfWidth, Mathf.Abs(Vector3.Dot(off, camRight)));
+                    halfHeight = Mathf.Max(halfHeight, Mathf.Abs(Vector3.Dot(off, camUp)));
+                }
+
+                if (i == 0) { firstCenter = figureCenter; haveFirst = true; }
+                if (i == _activeFigureCount - 1) { lastCenter = figureCenter; haveLast = true; }
+            }
+
+            // Pan between the outermost figures' centres (figure 2 of 1-2-3 lies in between, so it's
+            // naturally covered). Smoothstep eases the dwell at each end.
+            if (!haveFirst)
+                firstCenter = _activeRigs[0]?.StageAnchor ?? AnimPreviewRigPool.OffScreenPosition + Vector3.up;
+            if (!haveLast)
+                lastCenter = firstCenter;
+            float t = Mathf.PingPong(Time.unscaledTime / _iterationPanSeconds, 1f);
+            t = t * t * (3f - 2f * t);
+            Vector3 center = Vector3.Lerp(firstCenter, lastCenter, t);
+            if (!IsFinite(center))
+                center = firstCenter;
+
+            const float camDistance = 50f;
+            Transform camT = _camera.transform;
+            camT.position = center + rot * new Vector3(0f, 0f, -camDistance);
+            camT.rotation = rot;
+            _camera.orthographic = true;
+            _camera.nearClipPlane = 0.1f;
+            _camera.farClipPlane = camDistance * 2f;
+            float aspect = _renderTexture != null && _renderTexture.height > 0
+                ? (float)_renderTexture.width / _renderTexture.height
+                : 1f;
+            float orthoSize = Mathf.Max(halfHeight, halfWidth / aspect) * 1.2f;
+            _camera.orthographicSize = (float.IsNaN(orthoSize) || float.IsInfinity(orthoSize) || orthoSize <= 0f)
+                ? 1f
+                : Mathf.Clamp(orthoSize, 0.05f, 1000f);
+        }
+
         private void FrameCameraOnFigures()
         {
             if (_camera == null || _activeFigureCount <= 0)
@@ -476,7 +651,7 @@ namespace HS2SandboxPlugin
             const float camDistance = 50f;
             // +180° so a yaw of 0° looks at the character's front (the rig faces -Z; without the offset
             // the camera sits behind it). Applied uniformly so every mode/angle is front-relative.
-            float yaw = ComputeCameraYaw() + 180f;
+            float yaw = ComputeCameraYaw(_cameraMode) + 180f;
             Quaternion rot = Quaternion.Euler(_cameraPitch, yaw, 0f);
             Vector3 camRight = rot * Vector3.right;
             Vector3 camUp = rot * Vector3.up;

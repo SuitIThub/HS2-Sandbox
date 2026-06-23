@@ -110,6 +110,16 @@ namespace HS2SandboxPlugin
 
         private void LateUpdate()
         {
+            // While a thumbnail capture is running the apply-target characters are paused and held at
+            // the chosen progress frame; this owns the pose (and restores speeds when it ends), so it
+            // runs regardless of whether the controls pane is open.
+            if (_thumbCaptureHoldChars != null)
+            {
+                ThumbCaptureHoldLateUpdate();
+                if (IsThumbnailCaptureActive)
+                    return;
+            }
+
             // While paused (speed 0) the animator's automatic update keeps re-sampling its own stored
             // frame every frame. A scrub applied from OnGUI is therefore reverted on the next animator
             // update, which shows up as a 1-frame flicker. Re-assert the held scrub position here:

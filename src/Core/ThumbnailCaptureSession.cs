@@ -26,10 +26,18 @@ namespace HS2SandboxPlugin
 
         public Rect CaptureRect { get; set; }
 
+        /// <summary>0–1 value shown as a slider in the overlay and applied to the scene (via the prepare
+        /// callback) after each item is applied and before the auto-capture delay. The Anim Browser uses
+        /// it to seek animation progress. Hidden when no prepare callback was supplied.</summary>
+        public float CaptureProgress01 { get; set; }
+
+        public bool SupportsCaptureProgress => _onPrepareCapture != null;
+
         private List<T>? _queue;
         private Action<T, byte[]>? _onCaptured;
         private Action? _onComplete;
         private Action<T>? _onApplyItem;
+        private Action<float>? _onPrepareCapture;
         private Action? _onGroupSetup;
         private Action<int>? _onGroupFocusIndex;
         private Action? _onGroupCleanup;
@@ -52,7 +60,8 @@ namespace HS2SandboxPlugin
             List<T> items,
             Action<T> onApplyItem,
             Action<T, byte[]> onCaptured,
-            Action onComplete)
+            Action onComplete,
+            Action<float>? onPrepareCapture = null)
         {
             if (items.Count == 0)
                 return;
@@ -62,6 +71,7 @@ namespace HS2SandboxPlugin
             _onApplyItem = onApplyItem;
             _onCaptured = onCaptured;
             _onComplete = onComplete;
+            _onPrepareCapture = onPrepareCapture;
             _onGroupSetup = null;
             _onGroupFocusIndex = null;
             _onGroupCleanup = null;
@@ -94,6 +104,7 @@ namespace HS2SandboxPlugin
             _onApplyItem = null;
             _onCaptured = onCaptured;
             _onComplete = onComplete;
+            _onPrepareCapture = null;
             _onGroupSetup = onGroupSetup;
             _onGroupFocusIndex = onGroupFocusIndex;
             _onGroupCleanup = onGroupCleanup;
@@ -138,6 +149,7 @@ namespace HS2SandboxPlugin
             CurrentItem = default;
             _queue = null;
             _onApplyItem = null;
+            _onPrepareCapture = null;
             _onGroupSetup = null;
             _onGroupFocusIndex = null;
             _onGroupCleanup = null;
@@ -216,6 +228,11 @@ namespace HS2SandboxPlugin
                 if (cam == null)
                     return;
 
+                // Seek the scene to the chosen progress immediately before grabbing the frame. The
+                // capture re-renders the camera itself (ScreenCapture2D), so the pose set here is what
+                // ends up in the thumbnail. The Anim Browser uses this to freeze a specific frame.
+                _onPrepareCapture?.Invoke(CaptureProgress01);
+
                 var flippedRect = new Rect(
                     CaptureRect.x,
                     Screen.height - CaptureRect.y - CaptureRect.height,
@@ -276,7 +293,9 @@ namespace HS2SandboxPlugin
             float btnGap = ScalePx(4f);
             float labelH = ScalePx(20f);
             float padV = ScalePx(7f);
-            float panelH = padV + labelH + btnH + padV;
+            bool showProgress = SupportsCaptureProgress;
+            float sliderH = showProgress ? ScalePx(22f) : 0f;
+            float panelH = padV + labelH + sliderH + btnH + padV;
             float panelW = Mathf.Min(ScalePx(Mode == CaptureMode.Manual ? 420f : 300f), Screen.width - 16f);
 
             float panelX = CaptureRect.center.x - panelW * 0.5f;
@@ -296,7 +315,37 @@ namespace HS2SandboxPlugin
             string status = Mode == CaptureMode.Auto
                 ? "Auto " + (CurrentIndex + 1) + " / " + TotalCount + ": " + name
                 : prefix + " " + (CurrentIndex + 1) + " / " + TotalCount + ": " + name;
-            GUILayout.Label(status, GUILayout.Height(labelH));
+            // Status line with two small, symbolic drag handles tucked at the right edge — deliberately
+            // less prominent than the action buttons. Drawn as boxes (which never consume mouse events)
+            // so the press-and-drag is handled explicitly in HandleCaptureHandles (no scene click-through).
+            float hBtn = ScalePx(20f);
+            GUILayout.BeginHorizontal(GUILayout.Height(labelH));
+            GUILayout.Label(status, GUILayout.ExpandWidth(true), GUILayout.Height(labelH));
+            GUILayout.Box(new GUIContent("+", "Drag to move the capture box."),
+                GUI.skin.button, GUILayout.Width(hBtn), GUILayout.Height(hBtn));
+            Rect moveLocal = GUILayoutUtility.GetLastRect();
+            GUILayout.Space(ScalePx(2f));
+            GUILayout.Box(new GUIContent("◢", "Drag to resize the capture box (stays square)."),
+                GUI.skin.button, GUILayout.Width(hBtn), GUILayout.Height(hBtn));
+            Rect resizeLocal = GUILayoutUtility.GetLastRect();
+            GUILayout.EndHorizontal();
+            _moveHandleScreenRect = new Rect(moveLocal.x + panelX, moveLocal.y + panelY, moveLocal.width, moveLocal.height);
+            _resizeHandleScreenRect = new Rect(resizeLocal.x + panelX, resizeLocal.y + panelY, resizeLocal.width, resizeLocal.height);
+
+            if (showProgress)
+            {
+                GUILayout.BeginHorizontal(GUILayout.Height(sliderH));
+                int pct = Mathf.RoundToInt(Mathf.Clamp01(CaptureProgress01) * 100f);
+                GUILayout.Label("Progress: " + pct + "%", GUILayout.Width(ScalePx(96f)));
+                float newProgress = GUILayout.HorizontalSlider(Mathf.Clamp01(CaptureProgress01), 0f, 1f);
+                if (!Mathf.Approximately(newProgress, CaptureProgress01))
+                {
+                    CaptureProgress01 = Mathf.Clamp01(newProgress);
+                    // Live feedback: re-seek the currently applied item as the user drags.
+                    _onPrepareCapture?.Invoke(CaptureProgress01);
+                }
+                GUILayout.EndHorizontal();
+            }
 
             GUILayout.BeginHorizontal();
             if (Mode == CaptureMode.Manual)
@@ -323,16 +372,23 @@ namespace HS2SandboxPlugin
             GUILayout.EndHorizontal();
 
             GUILayout.EndArea();
-            IMGUIUtils.EatInputInRect(panelRect);
 
-            HandleDragResize();
+            // Handle the drag handles BEFORE eating panel input, so the initial press on a handle is
+            // consumed here rather than swallowed by EatInputInRect (which would never start a drag).
+            HandleCaptureHandles();
+            IMGUIUtils.EatInputInRect(panelRect);
         }
 
-        private bool _isDragging;
-        private bool _isResizing;
-        private Vector2 _dragOffset;
+        private bool _panelMove;
+        private bool _panelResize;
+        private Vector2 _panelDragLast;
+        private Rect _moveHandleScreenRect;
+        private Rect _resizeHandleScreenRect;
 
-        private void HandleDragResize()
+        /// <summary>Press-and-drag move/resize driven by the panel's "Move" / "Resize" handles. Tracks the
+        /// drag in screen space (delta-based) so it stays stable even as the panel follows the moving box;
+        /// resize keeps the box square. Every step is consumed so nothing leaks through to the scene.</summary>
+        private void HandleCaptureHandles()
         {
             if (!IsActive)
                 return;
@@ -340,49 +396,50 @@ namespace HS2SandboxPlugin
             if (e == null)
                 return;
 
-            const float handleSize = 16f;
-            var resizeHandle = new Rect(CaptureRect.xMax - handleSize, CaptureRect.yMax - handleSize, handleSize, handleSize);
-
             if (e.type == EventType.MouseDown && e.button == 0)
             {
-                if (resizeHandle.Contains(e.mousePosition))
+                if (_moveHandleScreenRect.Contains(e.mousePosition))
                 {
-                    _isResizing = true;
+                    _panelMove = true;
+                    _panelResize = false;
+                    _panelDragLast = e.mousePosition;
                     e.Use();
                 }
-                else if (CaptureRect.Contains(e.mousePosition))
+                else if (_resizeHandleScreenRect.Contains(e.mousePosition))
                 {
-                    _isDragging = true;
-                    _dragOffset = e.mousePosition - new Vector2(CaptureRect.x, CaptureRect.y);
+                    _panelResize = true;
+                    _panelMove = false;
+                    _panelDragLast = e.mousePosition;
                     e.Use();
                 }
             }
-            else if (e.type == EventType.MouseDrag && e.button == 0)
+            else if (e.type == EventType.MouseDrag && e.button == 0 && (_panelMove || _panelResize))
             {
-                if (_isResizing)
+                Vector2 d = e.mousePosition - _panelDragLast;
+                _panelDragLast = e.mousePosition;
+
+                if (_panelMove)
                 {
-                    float nw = e.mousePosition.x - CaptureRect.x;
-                    float nh = e.mousePosition.y - CaptureRect.y;
-                    float side = Mathf.Max(nw, nh);
-                    float maxSide = Mathf.Min(Screen.width - CaptureRect.x, Screen.height - CaptureRect.y);
-                    side = Mathf.Clamp(side, 64f, maxSide);
-                    CaptureRect = new Rect(CaptureRect.x, CaptureRect.y, side, side);
-                    e.Use();
-                }
-                else if (_isDragging)
-                {
-                    float nx = e.mousePosition.x - _dragOffset.x;
-                    float ny = e.mousePosition.y - _dragOffset.y;
-                    nx = Mathf.Clamp(nx, 0, Screen.width - CaptureRect.width);
-                    ny = Mathf.Clamp(ny, 0, Screen.height - CaptureRect.height);
+                    float nx = Mathf.Clamp(CaptureRect.x + d.x, 0f, Mathf.Max(0f, Screen.width - CaptureRect.width));
+                    float ny = Mathf.Clamp(CaptureRect.y + d.y, 0f, Mathf.Max(0f, Screen.height - CaptureRect.height));
                     CaptureRect = new Rect(nx, ny, CaptureRect.width, CaptureRect.height);
-                    e.Use();
                 }
+                else
+                {
+                    // Square resize from the top-left corner; the dominant drag axis sets the delta.
+                    float dom = Mathf.Abs(d.x) >= Mathf.Abs(d.y) ? d.x : d.y;
+                    float maxSide = Mathf.Min(Screen.width - CaptureRect.x, Screen.height - CaptureRect.y);
+                    float side = Mathf.Clamp(CaptureRect.width + dom, 64f, Mathf.Max(64f, maxSide));
+                    CaptureRect = new Rect(CaptureRect.x, CaptureRect.y, side, side);
+                }
+                e.Use();
             }
             else if (e.type == EventType.MouseUp && e.button == 0)
             {
-                _isDragging = false;
-                _isResizing = false;
+                if (_panelMove || _panelResize)
+                    e.Use();
+                _panelMove = false;
+                _panelResize = false;
             }
         }
     }

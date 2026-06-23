@@ -189,6 +189,19 @@ namespace HS2SandboxPlugin
             Changed?.Invoke();
         }
 
+        /// <summary>Removes several display groups by id in one batch-aware pass (used by group-edit
+        /// commit so the removal coalesces with the re-add into a single save/notify).</summary>
+        public void RemoveDisplayGroups(ICollection<string> ids)
+        {
+            if (ids == null || ids.Count == 0)
+                return;
+            var idSet = new HashSet<string>(ids, StringComparer.Ordinal);
+            if (_displayGroups.RemoveAll(g => idSet.Contains(g.Id)) == 0)
+                return;
+            RebuildIndex();
+            NotifyChanged();
+        }
+
         /// <summary>Removes display groups that contain any animation from the given categories.</summary>
         public void RemoveDisplayGroupsTouchingCategories(IList<AnimCatalogRef> categories)
         {
