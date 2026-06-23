@@ -17,7 +17,6 @@ One `.cfg` per plugin GUID, e.g.:
 | `com.hs2.sandbox.posebrowser.cfg` | Pose Browser |
 | `com.hs2.sandbox.animbrowser.cfg` | Anim Browser |
 | `com.hs2.sandbox.sonscale.cfg` | Son Scale |
-| `com.hs2.sandbox.cfg` | All-in-one (Search Bars section) |
 
 Use **Configuration Manager** or edit these files while Studio is closed.
 
@@ -64,7 +63,7 @@ Use **Configuration Manager** or edit these files while Studio is closed.
 Section **`Search Bars`** → **`Additional Parent Paths`**
 
 - One Unity `GameObject` path per line
-- Bound in all-in-one config or SearchBarManager plugin config
+- Bound in the SearchBarManager plugin config
 - See [SearchBarManager](SearchBarManager)
 
 ## Backup recommendations

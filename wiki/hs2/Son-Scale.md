@@ -14,7 +14,7 @@
 
 ## Opening
 
-1. Install Son Scale + `sonscale-icon.png`
+1. Install Son Scale
 2. Select a **character** in the Studio workspace
 3. Click **Son scale** on the left toolbar
 4. Enable split scaling and adjust sliders in the Manipulate panel

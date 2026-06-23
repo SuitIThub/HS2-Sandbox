@@ -19,7 +19,6 @@
 
 | Module | DLL | GUID |
 |--------|-----|------|
-| All-in-one | `HS2SandboxPlugin.dll` | `com.hs2.sandbox` |
 | CopyScript | `HS2Sandbox.CopyScript.dll` | `com.hs2.sandbox.copyscript` |
 | Timeline | `HS2Sandbox.Timeline.dll` | `com.hs2.sandbox.timeline` |
 | SearchBarManager | `HS2Sandbox.SearchBarManager.dll` | `com.hs2.sandbox.searchbarmanager` |

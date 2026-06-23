@@ -5,7 +5,6 @@
 ### Getting started
 - [Requirements](Requirements)
 - [Installation](Installation)
-- [All-in-one vs split](All-in-One-vs-Split-Modules)
 - [Supported games](Supported-Games-and-Modules)
 - [Troubleshooting](Troubleshooting)
 

@@ -22,15 +22,14 @@ Injects **search fields** onto long Studio UI lists (wear categories, custom lis
 BepInEx config section **`Search Bars`** → **`Additional Parent Paths`**
 
 - One Unity `GameObject` path per line
-- Also available in all-in-one config (`com.hs2.sandbox.cfg`)
 
 Example paths depend on your Studio version and UI mod stack — add paths to parent containers of lists you want searchable.
 
 ## Typical use
 
-Install when you want search bars without the full all-in-one package, or alongside other split modules (SearchBarManager does not duplicate a sidebar feature).
+Install alongside other split modules — SearchBarManager has no sidebar button and does not duplicate any other module's feature.
 
-**Do not** load SearchBarManager twice (all-in-one + split SearchBarManager).
+**Do not** load the SearchBarManager DLL twice.
 
 ## Troubleshooting
 

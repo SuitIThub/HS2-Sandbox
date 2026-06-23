@@ -17,7 +17,7 @@ An **action timeline** for Studio: ordered steps with **Run**, **Pause**, and **
 
 ## Opening the window
 
-1. Install Timeline + `timeline-icon.png`
+1. Install Timeline
 2. Start Studio
 3. Click the **Timeline** icon on the left toolbar
 

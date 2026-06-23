@@ -14,6 +14,10 @@
 
   <ItemGroup>
     <Content Include="$(AssetsRoot)timeline-icon.png" CopyToOutputDirectory="Always" Link="timeline-icon.png" />
+    <EmbeddedResource Include="$(AssetsRoot)timeline-icon.png">
+      <LogicalName>$(AssemblyName).timeline-icon.png</LogicalName>
+      <Link>timeline-icon.png</Link>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>

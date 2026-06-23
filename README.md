@@ -3,7 +3,6 @@
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey?style=flat-square)](LICENSE)
 [![CI](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/SuitIThub/HS2-Sandbox/actions/workflows/main.yml)
 
-[![All-in-one](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=All-in-one&query=%24.allInOne&style=flat-square&color=0366d6)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/HS2SandboxPlugin.cs)
 [![CopyScript](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=CopyScript&query=%24.copyScript&style=flat-square&color=2ea043)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/CopyScript/CopyScriptModulePlugin.cs)
 [![Timeline](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=Timeline&query=%24.timeline&style=flat-square&color=8957e5)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/Timeline/TimelineModulePlugin.cs)
 [![SearchBarManager](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuitIThub%2FHS2-Sandbox%2Fmain%2Fversions.json&label=SearchBarManager&query=%24.searchBarManager&style=flat-square&color=bc4c00)](https://github.com/SuitIThub/HS2-Sandbox/blob/main/Modules/SearchBarManager/SearchBarManagerModulePlugin.cs)
@@ -36,7 +35,6 @@ BepInEx plugins for **Honey Select 2**, **Koikatsu Sunshine**, and **Koikatsu** 
   - [Anim Browser (HS2)](#hs2-sandbox--anim-browser-hs2sandboxanimbrowserdll)
   - [Anim Browser (KKS)](#kks-sandbox--anim-browser-kkssandboxanimbrowserdll)
   - [Anim Browser (KK)](#kk-sandbox--anim-browser-kksandboxanimbrowserdll)
-- [All-in-one build](#all-in-one-build)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [For developers](#for-developers)
@@ -52,7 +50,7 @@ BepInEx plugins for **Honey Select 2**, **Koikatsu Sunshine**, and **Koikatsu** 
 
 ## What you get
 
-You can install **one DLL that includes everything**, or pick **individual modules** if you only want specific features. After installation, most tools appear as **buttons on the Studio left sidebar**; open a window from there and work as usual in Studio.
+Install the **individual modules** you want. After installation, most tools appear as **buttons on the Studio left sidebar**; open a window from there and work as usual in Studio.
 
 Each module below has a **Download** link to the latest release build.
 
@@ -77,7 +75,7 @@ Many timeline commands that talk to **other plugins** (for example VNGE, Fashion
 
 Adds **search fields** on long Studio lists (for example wear/custom categories) so you can filter items quickly instead of scrolling forever.
 
-**Typical use:** install this module if you only want search bars, or use the all-in-one build. There is no separate sidebar button—the bars appear on the panels they attach to.
+**Typical use:** install this module when you want search bars. There is no separate sidebar button—the bars appear on the panels they attach to.
 
 ### HS2 Sandbox — Son scale (`HS2Sandbox.SonScale.dll`)
 [Download Son scale](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SonScale.dll)
@@ -112,14 +110,14 @@ Browse, tag, favorite, save, and apply poses from your **`UserData/studio/pose`*
 
 Same pose library browser for **Koikatsu Sunshine** **Chara Studio**. Uses your game’s **`UserData/studio/pose`** folder, with the same tagging, favorites, compact layouts, and file tools as the HS2 build.
 
-**Typical use:** install **`KKSSandbox.PoseBrowser.dll`** (and `pose-icon.png` beside it) under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.PoseBrowser.dll`**—they are separate game builds. The in-game update check reads **`poseBrowserKks`** / **`poseBrowserKksDownload`** from [`versions.json`](versions.json).
+**Typical use:** install **`KKSSandbox.PoseBrowser.dll`** under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.PoseBrowser.dll`**—they are separate game builds. The in-game update check reads **`poseBrowserKks`** / **`poseBrowserKksDownload`** from [`versions.json`](versions.json).
 
 ### KK Sandbox — Pose Browser (`KKSandbox.PoseBrowser.dll`)
 [Download Pose Browser (KK)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-22-posebrowser%2Bposebrowserkk%2Bposebrowserkks-5.7.2%2B1.2.2%2B2.6.2/KKSandbox.PoseBrowser.dll)
 
 Same pose library browser for original **Koikatsu** **Chara Studio** (Unity 5.6 / .NET 3.5). Uses your game’s **`UserData/studio/pose`** folder with the same tagging, favorites, and file tools as the HS2/KKS builds.
 
-**Typical use:** install **`KKSandbox.PoseBrowser.dll`** (and `pose-icon.png` beside it) under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`poseBrowserKk`** / **`poseBrowserKkDownload`** from [`versions.json`](versions.json).
+**Typical use:** install **`KKSandbox.PoseBrowser.dll`** under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`poseBrowserKk`** / **`poseBrowserKkDownload`** from [`versions.json`](versions.json).
 
 ### HS2 Sandbox — Anim Browser (`HS2Sandbox.AnimBrowser.dll`)
 [Download Anim Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-23-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.3.0%2B1.3.0%2B1.3.0/HS2Sandbox.AnimBrowser.dll)
@@ -133,23 +131,14 @@ Browse Studio's **animation catalog**, apply animations to selected characters, 
 
 Same animation browser for **Koikatsu Sunshine** **Chara Studio**: category tree, grid/list views, search, playback controls, grouping/merging, and thumbnail capture. No hover preview on KKS.
 
-**Typical use:** install **`KKSSandbox.AnimBrowser.dll`** (and `anim-icon.png` beside it) under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.AnimBrowser.dll`**. The in-game update check reads **`animBrowserKks`** / **`animBrowserKksDownload`** from [`versions.json`](versions.json).
+**Typical use:** install **`KKSSandbox.AnimBrowser.dll`** under `BepInEx/plugins/`. Do not load this DLL together with **`HS2Sandbox.AnimBrowser.dll`**. The in-game update check reads **`animBrowserKks`** / **`animBrowserKksDownload`** from [`versions.json`](versions.json).
 
 ### KK Sandbox — Anim Browser (`KKSandbox.AnimBrowser.dll`)
 [Download Anim Browser (KK)](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-23-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.3.0%2B1.3.0%2B1.3.0/KKSandbox.AnimBrowser.dll)
 
 Same animation browser for original **Koikatsu** **Chara Studio** (Unity 5.6 / .NET 3.5). Uses the same shared code as the HS2/KKS builds.
 
-**Typical use:** install **`KKSandbox.AnimBrowser.dll`** (and `anim-icon.png` beside it) under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`animBrowserKk`** / **`animBrowserKkDownload`** from [`versions.json`](versions.json).
-
----
-
-## All-in-one build
-[Download All-in-one](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-05-28-posebrowser-4.3.2/HS2SandboxPlugin.dll)
-
-**`HS2SandboxPlugin.dll`** bundles every feature above in a single plugin: sidebar toggles for CopyScript, Timeline, Son scale, Notebook, and Pose Browser, plus search bars and workspace tree lock built in.
-
-Choose this if you want the full set without managing several DLLs. See [Installation](#installation) for the important rule: **do not** load the all-in-one DLL together with split modules that duplicate the same features.
+**Typical use:** install **`KKSandbox.AnimBrowser.dll`** under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`animBrowserKk`** / **`animBrowserKkDownload`** from [`versions.json`](versions.json).
 
 ---
 
@@ -167,19 +156,11 @@ Choose this if you want the full set without managing several DLLs. See [Install
 
 1. Install [BepInEx 5](https://github.com/BepInEx/BepInEx/releases) for Honey Select 2 if needed.
 2. Install **HS2API** from your usual HS2 mod channels if your pack does not already include it.
-3. Copy **either**:
-   - **`HS2SandboxPlugin.dll`** (all-in-one), **or**
-   - The individual **`HS2Sandbox.*.dll`** files you want  
-   into `BepInEx/plugins/` (subfolders are fine).
-4. Place the matching **PNG icons** next to each DLL that needs them (builds copy them to output):
-   - **All-in-one** beside `HS2SandboxPlugin.dll`: `copy-icon.png`, `timeline-icon.png`, `sonscale-icon.png`, `notes-icon.png`, `pose-icon.png`.
-   - Split modules ship their own icons (e.g. Pose Browser / Anim Browser / Notebook use `pose-icon.png` / `anim-icon.png` / `notes-icon.png`).
+3. Copy the individual **`HS2Sandbox.*.dll`** files you want into `BepInEx/plugins/` (subfolders are fine). Toolbar icons ship inside each DLL—nothing extra to copy.
 
-### Do not mix all-in-one with duplicate modules
+### Do not load a module twice
 
-**Never** install **`HS2SandboxPlugin.dll`** together with split modules for the **same** feature (for example all-in-one + `HS2Sandbox.SonScale.dll` or all-in-one + `HS2Sandbox.PoseBrowser.dll`). That can register components twice, duplicate Harmony patches, or run logic twice.
-
-**SearchBarManager** is the usual exception: you may combine it with other split modules if you want search bars without the full package—just avoid loading the same DLL twice, and still avoid all-in-one + any module that duplicates a feature it already includes.
+**Never** load the same module DLL more than once (for example the same DLL in two subfolders). That can register components twice, duplicate Harmony patches, or run logic twice.
 
 ---
 
@@ -191,7 +172,6 @@ Version badges read [`versions.json`](versions.json). CI updates that file **onc
 
 | Output | Project | Description |
 |--------|---------|-------------|
-| `HS2SandboxPlugin.dll` | `HS2SandboxPlugin.csproj` | **All-in-one**: every feature in a single plugin. |
 | `HS2Sandbox.CopyScript.dll` | `Modules/CopyScript` | CopyScript window + toolbar only. |
 | `HS2Sandbox.Timeline.dll` | `Modules/Timeline` | Action timeline window + toolbar only. |
 | `HS2Sandbox.SearchBarManager.dll` | `Modules/SearchBarManager` | Search bar injection only (no sandbox toolbar). |
@@ -205,7 +185,7 @@ Version badges read [`versions.json`](versions.json). CI updates that file **onc
 | `KKSSandbox.AnimBrowser.dll` | `targets/KKS/AnimBrowser` | Animation catalog browser for KKS Chara Studio (shared `src/AnimBrowser/`). |
 | `KKSandbox.AnimBrowser.dll` | `targets/KK/AnimBrowser` | Animation catalog browser for KK Chara Studio (shared `src/AnimBrowser/`, net35). |
 
-Shared code lives under `src/` (`Core/`, `PoseBrowser/`, `AnimBrowser/`, …) and HS2 modules under `targets/HS2/`. The all-in-one project compiles a superset via `HS2SandboxPlugin.csproj` (HS2 only).
+Shared code lives under `src/` (`Core/`, `PoseBrowser/`, `AnimBrowser/`, …) and HS2 modules under `targets/HS2/`.
 
 ### Plugin reference
 
@@ -213,13 +193,12 @@ Each split module is its own BepInEx plugin (`BepInPlugin`) with a stable GUID.
 
 | Module | GUID | BepIn dependencies | Notes |
 |--------|------|-------------------|--------|
-| All-in-one | `com.hs2.sandbox` | Soft: Studio Better Penetration | Registers all features; config **`Search Bars` → `Additional Parent Paths`**. |
 | CopyScript | `com.hs2.sandbox.copyscript` | None | Requires running CopyScript HTTP API. |
 | Timeline | `com.hs2.sandbox.timeline` | None | External-plugin commands need modified plugin builds (not in this repo). |
 | SearchBarManager | `com.hs2.sandbox.searchbarmanager` | None | Extra UI roots via **`Additional Parent Paths`**. |
 | Son scale | `com.hs2.sandbox.sonscale` | Soft: Studio Better Penetration | Harmony on BP `DanAgent.SetDanTarget` when present. |
 | Workspace tree lock | `com.hs2.sandbox.workspacetreelock` | None | Harmony on `Studio.TreeNodeObject` visibility helpers. |
-| Notebook | `com.hs2.sandbox.notebook` | None | Do not load with all-in-one. |
+| Notebook | `com.hs2.sandbox.notebook` | None | Notebook window + sidebar toggle. |
 | Pose Browser (HS2) | `com.hs2.sandbox.posebrowser` | None | ZIP exchange format: [`Modules/PoseBrowser/POSE_ZIP_FORMAT.md`](Modules/PoseBrowser/POSE_ZIP_FORMAT.md). |
 | Pose Browser (KKS) | `com.kks.sandbox.posebrowser` | None | Same shared code; built with `KKS` define from `targets/KKS/PoseBrowser`. |
 | Pose Browser (KK) | `com.kk.sandbox.posebrowser` | None | Same shared code; built with `KK` define from `targets/KK/PoseBrowser` (net35). |
@@ -239,7 +218,6 @@ Each split module is its own BepInEx plugin (`BepInPlugin`) with a stable GUID.
    ```
 
 4. Outputs:
-   - All-in-one: `bin/Release/HS2SandboxPlugin.dll`
    - HS2 modules: `targets/HS2/<Name>/bin/Release/HS2Sandbox.<Name>.dll`
    - KKS Pose Browser: `targets/KKS/PoseBrowser/bin/Release/KKSSandbox.PoseBrowser.dll`
    - KK Pose Browser: `targets/KK/PoseBrowser/bin/Release/KKSandbox.PoseBrowser.dll`
@@ -275,7 +253,7 @@ Restore may show **NU1603** warnings; builds usually still succeed.
 
 | Symptom | Likely cause |
 |---------|----------------|
-| Duplicate windows / double actions | All-in-one **and** split modules for the same feature loaded together. |
+| Duplicate windows / double actions | The same module DLL loaded more than once. |
 | Son scale does nothing | No Studio selection; Son scale disabled; wrong character. |
 | BP length integration silent | BP missing, wrong GUID, or API changed—check log for `Son scale:`. |
 | CopyScript always “offline” | API not running, wrong port, or firewall. |

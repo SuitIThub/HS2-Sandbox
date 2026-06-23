@@ -43,7 +43,6 @@ Most Better Repacks already include these APIs. Sandbox plugins should load **af
 
 - No local path to `HS2_Data/Managed` — the project uses **NuGet IllusionLibs**
 - No Visual Studio (build works with `dotnet` CLI)
-- No all-in-one **and** split modules for the same feature at the same time
 
 ## Next step
 

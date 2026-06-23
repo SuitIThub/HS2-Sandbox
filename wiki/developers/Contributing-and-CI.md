@@ -70,6 +70,6 @@ Include:
 - Game and module DLL version
 - Relevant section of `BepInEx/LogOutput.log`
 - Steps to reproduce
-- Whether all-in-one or split modules are loaded
+- Which module DLLs are loaded
 
 → [Building from source](Building-from-Source) · [Architecture](Architecture)

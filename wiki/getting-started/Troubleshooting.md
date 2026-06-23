@@ -4,8 +4,8 @@
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Duplicate windows / double actions | All-in-one **and** split module for same feature | Remove duplicate DLL — see [All-in-one vs split](All-in-One-vs-Split-Modules) |
-| No sidebar icon | Missing PNG next to DLL | Copy `*-icon.png` beside the plugin DLL |
+| Duplicate windows / double actions | Same module DLL loaded twice | Remove the duplicate DLL from `BepInEx/plugins/` |
+| No sidebar icon | Plugin failed to load | Check `BepInEx/LogOutput.log` for the module's load line and errors |
 | Plugin not in log at all | Wrong game DLL or BepInEx not installed | Check `BepInEx/LogOutput.log`; verify BepInEx 5 |
 | Build restore fails | Missing `nuget.config` or IllusionLibs access | Restore from repo root; check NuGet feeds |
 

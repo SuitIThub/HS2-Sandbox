@@ -4,7 +4,7 @@ Welcome to the official wiki for **[HS2-Sandbox](https://github.com/SuitIThub/HS
 
 ## What is HS2-Sandbox?
 
-HS2-Sandbox bundles Studio workflow tools: pose and animation libraries, automation, notes, search bars on long lists, finer character scaling, and practical UI helpers. Each feature can be installed **individually** as a module DLL, or (HS2 only) as a legacy **all-in-one** package.
+HS2-Sandbox bundles Studio workflow tools: pose and animation libraries, automation, notes, search bars on long lists, finer character scaling, and practical UI helpers. Each feature is installed **individually** as a module DLL.
 
 ## Supported games
 
@@ -17,11 +17,9 @@ HS2-Sandbox bundles Studio workflow tools: pose and animation libraries, automat
 ## Quick start
 
 1. Check [Requirements](Requirements) (BepInEx, HS2API/KKAPI/KKSAPI)
-2. Follow [Installation](Installation) — copy DLLs and icons to `BepInEx/plugins/`
+2. Follow [Installation](Installation) — copy DLLs to `BepInEx/plugins/`
 3. Launch Studio — most modules appear as **icons on the left sidebar**
 4. Open the module guide you need (see below)
-
-> **Important:** Do **not** load `HS2SandboxPlugin.dll` (all-in-one) **and** split modules for the same feature. See [All-in-one vs split modules](All-in-One-vs-Split-Modules).
 
 ## Module overview
 

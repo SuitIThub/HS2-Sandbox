@@ -17,35 +17,12 @@ Copy only the DLLs you need, for example:
 ```
 BepInEx/plugins/HS2-Sandbox/
   HS2Sandbox.PoseBrowser.dll
-  pose-icon.png
   HS2Sandbox.AnimBrowser.dll
-  anim-icon.png
 ```
 
-Subfolders are fine — BepInEx loads recursively.
+Subfolders are fine — BepInEx loads recursively. Toolbar icons ship inside each DLL — nothing extra to copy.
 
-### Alternative: All-in-one (HS2, legacy)
-
-**`HS2SandboxPlugin.dll`** bundles CopyScript, Timeline, Son Scale, Notebook, Pose Browser, SearchBarManager, and Workspace Tree Lock in **one** DLL.
-
-→ See [All-in-one vs split modules](All-in-One-vs-Split-Modules) — do **not** load it together with split DLLs for the same features.
-
-## 3. Icons (PNG)
-
-Toolbar icons must sit **next to the matching DLL**:
-
-| Icon file | Module |
-|-----------|--------|
-| `copy-icon.png` | CopyScript |
-| `timeline-icon.png` | Timeline |
-| `sonscale-icon.png` | Son Scale |
-| `notes-icon.png` | Notebook |
-| `pose-icon.png` | Pose Browser |
-| `anim-icon.png` | Anim Browser |
-
-Release builds copy icons to the output folder automatically. Missing icons mean no sidebar button.
-
-## 4. Game-specific DLL names
+## 3. Game-specific DLL names
 
 | Game | Pose Browser | Anim Browser |
 |------|--------------|--------------|
@@ -57,7 +34,7 @@ Release builds copy icons to the output folder automatically. Missing icons mean
 
 Details: [Supported games & modules](Supported-Games-and-Modules)
 
-## 5. First launch
+## 4. First launch
 
 1. Start **Studio** (`StudioNEOV2.exe` or `CharaStudio.exe`).
 2. Use the **left toolbar** — click icons for installed modules.
@@ -70,7 +47,7 @@ Details: [Supported games & modules](Supported-Games-and-Modules)
 | **SearchBarManager** | Search bars appear automatically on configured Studio panels |
 | **Workspace Tree Lock** | Middle-click in the workspace tree — no separate window |
 
-## 6. Configuration (optional)
+## 5. Configuration (optional)
 
 - **BepInEx Configuration Manager** — UI scale, hotkeys, auto-capture delay, etc.
 - Config files under `BepInEx/config/com.hs2.sandbox/` — see [Configuration & data files](Configuration-and-Data-Files)
@@ -80,8 +57,6 @@ Details: [Supported games & modules](Supported-Games-and-Modules)
 - [ ] BepInEx 5 installed
 - [ ] Correct game API present
 - [ ] Correct DLL(s) for your game
-- [ ] PNG icons next to DLLs
-- [ ] No all-in-one + duplicate split modules
 - [ ] CopyScript server running (only if using CopyScript)
 
 → Module manuals: [Home](Home)

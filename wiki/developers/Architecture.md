@@ -80,7 +80,7 @@ BepInEx Plugin (Awake/Start)
 | `SandboxGUI` | Window registry, visibility, draw loop |
 | `SubWindow` | Base for draggable IMGUI windows |
 | `SandboxServices` | Logger + ConfigFile |
-| `ToolbarIconLoader` | PNG from plugin directory |
+| `ToolbarIconLoader` | Toolbar PNG — file next to the DLL first, then embedded resource |
 | `StudioCharacterSelection` | Cached Studio selection |
 | `CharacterPriority/` | Priority lists for multi-character apply |
 | `PoseBrowserWikiRegistration` | HS2Wiki pages (reflection) |

@@ -15,7 +15,7 @@ Connects Studio to an external **CopyScript HTTP API** on your PC for file track
 
 ## Opening the window
 
-1. Install the CopyScript module + `copy-icon.png`
+1. Install the CopyScript module
 2. Start **StudioNEOV2**
 3. Click the **CopyScript** icon on the left toolbar
 

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "copyScript": "1.0.0",
+  "copyScript": "1.0.1",
   "copyScriptDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.CopyScript.dll",
-  "timeline": "1.0.0",
+  "timeline": "1.0.1",
   "timelineDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.Timeline.dll",
   "searchBarManager": "1.0.0",
   "searchBarManagerDownload": "https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-09-copyscript%2Bnotebook%2Bposebrowser%2Bposebrowserkk%2Bposebrowserkks%2Bsearchbarmanager%2Bsonscale%2Btimeline%2Bworkspacetreelock-1.0.0%2B1.0.1%2B5.5.0%2B1.0.0%2B2.4.0%2B1.0.0%2B1.1.1%2B1.0.0%2B1.0.7/HS2Sandbox.SearchBarManager.dll",

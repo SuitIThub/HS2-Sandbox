@@ -36,8 +36,6 @@ Or interactively:
 - 8 HS2 modules under `targets/HS2/`
 - Pose Browser + Anim Browser for HS2, KKS, KK
 
-All-in-one (`_deprecated/HS2SandboxPlugin.csproj`) is **not** in the solution.
-
 ## Build outputs
 
 | Target | Path |
@@ -46,7 +44,7 @@ All-in-one (`_deprecated/HS2SandboxPlugin.csproj`) is **not** in the solution.
 | KKS Pose/Anim | `targets/KKS/<Name>/bin/Release/KKSSandbox.<Name>.dll` |
 | KK Pose/Anim | `targets/KK/<Name>/bin/Release/KKSandbox.<Name>.dll` |
 
-Icons are copied next to the DLL automatically (`CopyToOutputDirectory=Always`).
+Toolbar icons are embedded into each DLL as an `EmbeddedResource` (and also copied next to the DLL via `CopyToOutputDirectory=Always`), so a deployed module needs no separate icon file.
 
 ## Deploy (development)
 

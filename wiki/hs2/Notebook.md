@@ -14,7 +14,7 @@ A simple **in-game notepad** for shot lists, ideas, and reminders — opened fro
 
 ## Opening
 
-1. Install Notebook + `notes-icon.png`
+1. Install Notebook
 2. Click the **notes** icon on the left toolbar
 
 ## Features

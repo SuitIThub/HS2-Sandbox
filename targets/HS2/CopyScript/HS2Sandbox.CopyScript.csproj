@@ -13,6 +13,10 @@
 
   <ItemGroup>
     <Content Include="$(AssetsRoot)copy-icon.png" CopyToOutputDirectory="Always" Link="copy-icon.png" />
+    <EmbeddedResource Include="$(AssetsRoot)copy-icon.png">
+      <LogicalName>$(AssemblyName).copy-icon.png</LogicalName>
+      <Link>copy-icon.png</Link>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
