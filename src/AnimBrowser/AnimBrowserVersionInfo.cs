@@ -3,7 +3,7 @@ namespace HS2SandboxPlugin
     /// <summary>
     /// Anim Browser module version (<c>versions.json</c> keys are updated by CI after each release).
     /// CI reads all <c>Version = "…"</c> lines in this file by index (see <c>.github/plugins.manifest.json</c>):
-    /// 0 = KKS, 1 = KK, 2 = HS2 (#else).
+    /// 0 = KKS, 1 = KK, 2 = HS2, 3 = AI (#else).
     /// </summary>
     public static class AnimBrowserVersionInfo
     {
@@ -19,12 +19,18 @@ namespace HS2SandboxPlugin
         public const string VersionsJsonVersionKey = "animBrowserKk";
         public const string VersionsJsonDownloadKey = "animBrowserKkDownload";
         public const string UpdateCheckUserAgent = "KKSandbox-AnimBrowser-UpdateCheck";
-#else
+#elif HS2
         public const string Version = "1.3.0";
         public const string StandaloneDllAssetName = "HS2Sandbox.AnimBrowser.dll";
         public const string VersionsJsonVersionKey = "animBrowser";
         public const string VersionsJsonDownloadKey = "animBrowserDownload";
         public const string UpdateCheckUserAgent = "HS2Sandbox-AnimBrowser-UpdateCheck";
+#else
+        public const string Version = "1.3.0";
+        public const string StandaloneDllAssetName = "AISandbox.AnimBrowser.dll";
+        public const string VersionsJsonVersionKey = "animBrowserAi";
+        public const string VersionsJsonDownloadKey = "animBrowserAiDownload";
+        public const string UpdateCheckUserAgent = "AISandbox-AnimBrowser-UpdateCheck";
 #endif
 
         public const string GitHubRepo = "SuitIThub/HS2-Sandbox";

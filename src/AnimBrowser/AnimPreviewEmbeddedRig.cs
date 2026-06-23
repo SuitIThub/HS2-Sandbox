@@ -106,11 +106,13 @@ namespace HS2SandboxPlugin
             if (clip == null)
                 return;
 
-#if KK
-            // Unity 5.6: AnimationClip.SampleAnimation only writes when the Animator carries a
-            // Controller that references the clip (on a bare Animator it writes nothing). Assign the
-            // clip's source controller, kept disabled so its own state machine doesn't overwrite our
-            // explicit sample during the animation update. See [[animbrowser-clip-sampling-runtime]].
+#if KK || AI
+            // Unity 5.6 (KK) and Unity 2018.2 (AI): AnimationClip.SampleAnimation only writes when the
+            // Animator carries a Controller that references the clip (on a bare Animator it logs
+            // "Non-Legacy animations cannot be sampled ... without an Animator" and writes nothing).
+            // Assign the clip's source controller, kept disabled so its own state machine doesn't
+            // overwrite our explicit sample during the animation update. HS2/KKS (2018.4/2019.4) sample
+            // a bare Animator fine. See [[animbrowser-clip-sampling-runtime]].
             if (_animator != null && _controller != null)
             {
                 if (_animator.runtimeAnimatorController != _controller)

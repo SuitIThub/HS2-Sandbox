@@ -4,13 +4,13 @@
   "manualRereleaseGroups": [
     {
       "key": "posebrowser",
-      "displayName": "Pose Browser (HS2 + KKS + KK)",
-      "memberKeys": ["posebrowser", "posebrowserkks", "posebrowserkk"]
+      "displayName": "Pose Browser (HS2 + KKS + KK + AI)",
+      "memberKeys": ["posebrowser", "posebrowserkks", "posebrowserkk", "posebrowserai"]
     },
     {
       "key": "animbrowser",
-      "displayName": "Anim Browser (HS2 + KKS + KK)",
-      "memberKeys": ["animbrowser", "animbrowserkks", "animbrowserkk"]
+      "displayName": "Anim Browser (HS2 + KKS + KK + AI)",
+      "memberKeys": ["animbrowser", "animbrowserkks", "animbrowserkk", "animbrowserai"]
     }
   ],
   "entries": [
@@ -150,6 +150,21 @@
       }
     },
     {
+      "key": "posebrowserai",
+      "displayName": "Pose Browser (AI)",
+      "projectName": "AISandbox.PoseBrowser",
+      "versionFile": "src/PoseBrowser/PoseBrowserVersionInfo.cs",
+      "versionMatchIndex": 3,
+      "releaseArtifactPath": "targets/AI/PoseBrowser/bin/Release/AISandbox.PoseBrowser.dll",
+      "releaseDllFileName": "AISandbox.PoseBrowser.dll",
+      "versionsJsonKey": "poseBrowserAi",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### AI Sandbox — Pose Browser (`AISandbox.PoseBrowser.dll`)",
+        "downloadLabel": "Pose Browser (AI)"
+      }
+    },
+    {
       "key": "animbrowser",
       "displayName": "Anim Browser (HS2)",
       "projectName": "HS2Sandbox.AnimBrowser",
@@ -192,6 +207,21 @@
       "readme": {
         "heading": "### KK Sandbox — Anim Browser (`KKSandbox.AnimBrowser.dll`)",
         "downloadLabel": "Anim Browser (KK)"
+      }
+    },
+    {
+      "key": "animbrowserai",
+      "displayName": "Anim Browser (AI)",
+      "projectName": "AISandbox.AnimBrowser",
+      "versionFile": "src/AnimBrowser/AnimBrowserVersionInfo.cs",
+      "versionMatchIndex": 3,
+      "releaseArtifactPath": "targets/AI/AnimBrowser/bin/Release/AISandbox.AnimBrowser.dll",
+      "releaseDllFileName": "AISandbox.AnimBrowser.dll",
+      "versionsJsonKey": "animBrowserAi",
+      "releaseDetect": true,
+      "readme": {
+        "heading": "### AI Sandbox — Anim Browser (`AISandbox.AnimBrowser.dll`)",
+        "downloadLabel": "Anim Browser (AI)"
       }
     },
     {

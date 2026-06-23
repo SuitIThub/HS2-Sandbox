@@ -362,9 +362,11 @@ namespace HS2SandboxPlugin
                 {
                     _activeClips[i] = clip;
                     RuntimeAnimatorController? controller = null;
-#if KK
-                    // KK only: SampleAnimation needs the rig's Animator to carry a controller that
-                    // references the clip. HS2/KKS leave this null and sample on a bare Animator.
+#if KK || AI
+                    // KK (Unity 5.6) and AI (Unity 2018.2): SampleAnimation needs the rig's Animator
+                    // to carry a controller that references the clip, else it logs "Non-Legacy
+                    // animations cannot be sampled ... without an Animator" and writes nothing
+                    // (→ T-pose). HS2/KKS (2018.4/2019.4) leave this null and sample on a bare Animator.
                     AnimClipLoader.TryGetCachedController(item, out controller);
 #endif
                     rig.ApplyAnimation(item, clip, controller, 0f);

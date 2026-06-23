@@ -59,16 +59,17 @@ on:
         default: false
         type: boolean
       rerelease_posebrowser:
-        description: "Rerelease — Pose Browser (HS2 + KKS + KK)"
+        description: "Rerelease — Pose Browser (HS2 + KKS + KK + AI)"
         required: false
         default: false
         type: boolean
       rerelease_animbrowser:
-        description: "Rerelease — Anim Browser (HS2 + KKS + KK)"
+        description: "Rerelease — Anim Browser (HS2 + KKS + KK + AI)"
         required: false
         default: false
         type: boolean
 # >> rerelease-inputs:end
+
 
 
 

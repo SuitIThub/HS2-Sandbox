@@ -1,4 +1,4 @@
-#if HS2
+#if HS2 || AI
 using System;
 using System.Collections.Generic;
 using System.Linq;

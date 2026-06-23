@@ -302,7 +302,8 @@ namespace HS2SandboxPlugin
             var sb = new StringBuilder(128);
             sb.Append("humanMotion=").Append(clip.humanMotion);
             sb.Append(" legacy=").Append(clip.legacy);
-#if !KK
+            // hasMotionCurves/hasRootCurves: Unity 2018.3+ (HS2/KKS). Absent on KK (5.6) and AI (2018.2).
+#if !KK && !AI
             sb.Append(" hasMotionCurves=").Append(clip.hasMotionCurves);
             sb.Append(" hasRootCurves=").Append(clip.hasRootCurves);
 #endif

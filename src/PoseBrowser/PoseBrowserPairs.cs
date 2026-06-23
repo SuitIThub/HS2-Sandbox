@@ -88,7 +88,7 @@ namespace HS2SandboxPlugin
         }
     }
 
-#if HS2
+#if HS2 || AI
     internal struct OciHeelzStatePair
     {
         public OCIChar Oci;

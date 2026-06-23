@@ -1,9 +1,9 @@
-#if HS2 || KK || KKS
+#if HS2 || AI || KK || KKS
 using System;
 using System.IO;
 using System.Reflection;
 using System.Xml;
-#if HS2
+#if HS2 || AI
 using AIChara;
 #endif
 using BepInEx.Bootstrap;
@@ -25,6 +25,11 @@ namespace HS2SandboxPlugin
         internal const string PeAssemblyName = "HS2PE";
         internal const string ExtSaveKey = "hs2pe";
         internal const string PluginDisplayName = "HS2PE";
+#elif AI
+        internal const string PePluginGuid = "com.joan6694.illusionplugins.poseeditor";
+        internal const string PeAssemblyName = "AIPE";
+        internal const string ExtSaveKey = "aipe";
+        internal const string PluginDisplayName = "AIPE";
 #elif KK || KKS
         internal const string PePluginGuid = "com.joan6694.kkplugins.kkpe";
         internal const string PeAssemblyName = "KKPE";
@@ -287,7 +292,7 @@ namespace HS2SandboxPlugin
                 xw.WriteAttributeString("version", _peVersion);
                 try
                 {
-#if HS2
+#if HS2 || AI
                     xw.WriteAttributeString("name", ((ChaFile)ociChar.charInfo.chaFile).parameter.fullname);
 #else
                     xw.WriteAttributeString("name", ociChar.charInfo.chaFile.parameter.fullname);

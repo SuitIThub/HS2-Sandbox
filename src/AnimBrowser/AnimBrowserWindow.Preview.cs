@@ -10,6 +10,12 @@ namespace HS2SandboxPlugin
         private AnimPreviewStage? _previewStage;
         private int _previewHoverIndex = -1;
         private float _previewHoverRowScreenY = -1f;
+        // Direct geometric hover capture, written by EmitPreviewHoverSensor during Repaint and consumed
+        // at end of frame. Fallback for GUI.tooltip, which on some Unity-IMGUI versions (AI / 2018.2)
+        // does not populate for empty-content GUIStyle.none sensors on plain hover (only when an event
+        // flows, e.g. a click). rect.Contains is equivalent and reliable on every target.
+        private int _previewHoverIndexPending = -1;
+        private float _previewHoverRowScreenYPending = -1f;
         private const float ListPreviewPopupSizeBase = 240f;
         private AnimDisplayEntry? _debouncedHoverEntry;
         private string _debouncedHoverKey = string.Empty;
@@ -149,27 +155,59 @@ namespace HS2SandboxPlugin
                 return;
 
             GUI.Label(rect, new GUIContent(string.Empty, BuildPreviewHoverTooltip(visibleIndex)), PreviewHoverSensorStyle);
+
+            // Direct hover capture (Repaint only): independent of both GUI.tooltip AND
+            // Event.current.mousePosition. On AI / Unity 2018.2 runtime IMGUI, Event.current.mousePosition
+            // is only refreshed when an input event flows (so plain hover never registers) — but
+            // Input.mousePosition is live every frame. Convert it into the current GUI-local space
+            // (no GUI.matrix is used, so ScreenToGUIPoint only undoes the scroll/group offset) and test
+            // the same rect the click handler uses. Y is flipped: Input is bottom-left, GUI is top-left.
+            if (Event.current.type == EventType.Repaint)
+            {
+                float screenMouseYTopLeft = Screen.height - Input.mousePosition.y;
+                Vector2 localMouse = GUIUtility.ScreenToGUIPoint(
+                    new Vector2(Input.mousePosition.x, screenMouseYTopLeft));
+                if (rect.Contains(localMouse))
+                {
+                    _previewHoverIndexPending = visibleIndex;
+                    _previewHoverRowScreenYPending = screenMouseYTopLeft;
+                }
+            }
         }
 
         private void TryCapturePreviewHoverFromTooltip()
         {
             _previewHoverIndex = -1;
             if (!_options.enableHoverPreview)
+            {
+                _previewHoverIndexPending = -1;
                 return;
+            }
 
             string tip = GUI.tooltip;
-            if (string.IsNullOrEmpty(tip) || !tip.StartsWith(PreviewHoverTooltipPrefix, System.StringComparison.Ordinal))
-                return;
+            if (!string.IsNullOrEmpty(tip) && tip.StartsWith(PreviewHoverTooltipPrefix, System.StringComparison.Ordinal))
+            {
+                string indexText = tip.Substring(PreviewHoverTooltipPrefix.Length);
+                if (int.TryParse(indexText, out int index) && index >= 0 && index < _visibleEntries.Count)
+                {
+                    _previewHoverIndex = index;
+                    // Capture the mouse's screen-space Y so the list-view popup can sit at the hovered row.
+                    // (mousePosition is window-relative inside the window callback — convert to screen.)
+                    _previewHoverRowScreenY = GUIUtility.GUIToScreenPoint(new Vector2(0f, Event.current.mousePosition.y)).y;
+                    GUI.tooltip = string.Empty;
+                }
+            }
 
-            string indexText = tip.Substring(PreviewHoverTooltipPrefix.Length);
-            if (!int.TryParse(indexText, out int index) || index < 0 || index >= _visibleEntries.Count)
-                return;
+            // Fallback: GUI.tooltip didn't resolve (e.g. AI / Unity 2018.2 IMGUI doesn't populate it on
+            // plain hover). Use the geometric capture recorded by EmitPreviewHoverSensor this frame.
+            if (_previewHoverIndex < 0 && _previewHoverIndexPending >= 0 &&
+                _previewHoverIndexPending < _visibleEntries.Count)
+            {
+                _previewHoverIndex = _previewHoverIndexPending;
+                _previewHoverRowScreenY = _previewHoverRowScreenYPending;
+            }
 
-            _previewHoverIndex = index;
-            // Capture the mouse's screen-space Y so the list-view popup can sit at the hovered row.
-            // (mousePosition is window-relative inside the window callback — convert to screen.)
-            _previewHoverRowScreenY = GUIUtility.GUIToScreenPoint(new Vector2(0f, Event.current.mousePosition.y)).y;
-            GUI.tooltip = string.Empty;
+            _previewHoverIndexPending = -1;
         }
 
         /// <summary>

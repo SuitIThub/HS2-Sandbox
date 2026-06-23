@@ -1,0 +1,34 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <SrcRoot>$(MSBuildThisFileDirectory)..\..\src\</SrcRoot>
+    <AssetsRoot>$(MSBuildThisFileDirectory)..\..\assets\</AssetsRoot>
+    <DefineConstants>$(DefineConstants);AI</DefineConstants>
+  </PropertyGroup>
+
+  <!-- AI-Shoujo (AI Girl) game-specific references.
+       AI runs Unity 2018.2.21f1 (net4x, StudioNEOV2, AIChara namespace) — closest relative of HS2.
+       Mirror HS2/KKS: generic UnityEngine.Modules meta-package pinned to AI's Unity version,
+       plus the AIGirl-specific UI / Assembly-CSharp / API packages. -->
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2018.2.21" IncludeAssets="compile" />
+    <PackageReference Include="IllusionLibs.AIGirl.UnityEngine.UI" Version="2018.2.21.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionLibs.AIGirl.Assembly-CSharp" Version="2020.5.29.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="IllusionModdingAPI.AIAPI" Version="1.43.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="ExtensibleSaveFormat.AIGirl" Version="21.1.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

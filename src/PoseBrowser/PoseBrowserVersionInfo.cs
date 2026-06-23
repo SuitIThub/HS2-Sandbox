@@ -3,7 +3,7 @@ namespace HS2SandboxPlugin
     /// <summary>
     /// Pose Browser module version (<c>versions.json</c> keys are updated by CI after each release).
     /// CI reads all <c>Version = "…"</c> lines in this file by index (see <c>.github/plugins.manifest.json</c>):
-    /// 0 = KKS, 1 = KK, 2 = HS2 (#else).
+    /// 0 = KKS, 1 = KK, 2 = HS2, 3 = AI (#else).
     /// </summary>
     public static class PoseBrowserVersionInfo
     {
@@ -19,12 +19,18 @@ namespace HS2SandboxPlugin
         public const string VersionsJsonVersionKey = "poseBrowserKk";
         public const string VersionsJsonDownloadKey = "poseBrowserKkDownload";
         public const string UpdateCheckUserAgent = "KKSandbox-PoseBrowser-UpdateCheck";
-#else
+#elif HS2
         public const string Version = "5.7.2";
         public const string StandaloneDllAssetName = "HS2Sandbox.PoseBrowser.dll";
         public const string VersionsJsonVersionKey = "poseBrowser";
         public const string VersionsJsonDownloadKey = "poseBrowserDownload";
         public const string UpdateCheckUserAgent = "HS2Sandbox-PoseBrowser-UpdateCheck";
+#else
+        public const string Version = "5.7.2";
+        public const string StandaloneDllAssetName = "AISandbox.PoseBrowser.dll";
+        public const string VersionsJsonVersionKey = "poseBrowserAi";
+        public const string VersionsJsonDownloadKey = "poseBrowserAiDownload";
+        public const string UpdateCheckUserAgent = "AISandbox-PoseBrowser-UpdateCheck";
 #endif
 
         public const string GitHubRepo = "SuitIThub/HS2-Sandbox";

@@ -119,6 +119,12 @@ Same pose library browser for original **Koikatsu** **Chara Studio** (Unity 5.6 
 
 **Typical use:** install **`KKSandbox.PoseBrowser.dll`** under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`poseBrowserKk`** / **`poseBrowserKkDownload`** from [`versions.json`](versions.json).
 
+### AI Sandbox — Pose Browser (`AISandbox.PoseBrowser.dll`)
+
+Same pose library browser for **AI-Shoujo** **Studio NEO V2** (Unity 2018.2). Shares the HS2 engine family (AIChara / StudioNEOV2), so it includes the same tagging, favorites, file tools, **Heelz Control** (requires AI_Heelz), and **AIPE** advanced-mode pose compatibility as the HS2 build.
+
+**Typical use:** install **`AISandbox.PoseBrowser.dll`** under `BepInEx/plugins/AI-Sandbox/` (or your preferred folder). Do not load this DLL together with **`HS2Sandbox.PoseBrowser.dll`**—they are separate game builds. The in-game update check reads **`poseBrowserAi`** / **`poseBrowserAiDownload`** from [`versions.json`](versions.json).
+
 ### HS2 Sandbox — Anim Browser (`HS2Sandbox.AnimBrowser.dll`)
 [Download Anim Browser](https://github.com/SuitIThub/HS2-Sandbox/releases/download/release-r2026-06-23-animbrowser%2Banimbrowserkk%2Banimbrowserkks-1.3.0%2B1.3.0%2B1.3.0/HS2Sandbox.AnimBrowser.dll)
 
@@ -139,6 +145,12 @@ Same animation browser for **Koikatsu Sunshine** **Chara Studio**: category tree
 Same animation browser for original **Koikatsu** **Chara Studio** (Unity 5.6 / .NET 3.5). Uses the same shared code as the HS2/KKS builds.
 
 **Typical use:** install **`KKSandbox.AnimBrowser.dll`** under `BepInEx/plugins/KK-Sandbox/` (or your preferred folder). The in-game update check reads **`animBrowserKk`** / **`animBrowserKkDownload`** from [`versions.json`](versions.json).
+
+### AI Sandbox — Anim Browser (`AISandbox.AnimBrowser.dll`)
+
+Same animation browser for **AI-Shoujo** **Studio NEO V2** (Unity 2018.2): category tree, grid/list views, search, playback controls, grouping/merging, and thumbnail capture. Shares the HS2 engine family, so it also provides the live **hover preview** stick-figure rig.
+
+**Typical use:** install **`AISandbox.AnimBrowser.dll`** under `BepInEx/plugins/AI-Sandbox/` (or your preferred folder). Do not load this DLL together with **`HS2Sandbox.AnimBrowser.dll`**. The in-game update check reads **`animBrowserAi`** / **`animBrowserAiDownload`** from [`versions.json`](versions.json).
 
 ---
 

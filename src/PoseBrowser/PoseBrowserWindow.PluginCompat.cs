@@ -1,4 +1,4 @@
-#if HS2 || KK || KKS
+#if HS2 || AI || KK || KKS
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -7,7 +7,7 @@ namespace HS2SandboxPlugin
 {
     public partial class PoseBrowserWindow
     {
-#if HS2
+#if HS2 || AI
         private string _heelzOffTagsEdit = "";
         private string _heelzOnTagsEdit = "";
         private bool _heelzTagEditsInitialized;
@@ -33,13 +33,13 @@ namespace HS2SandboxPlugin
                 "Integrations with other BepInEx plugins. Settings appear only when the plugin is installed.",
                 wrap);
 
-#if HS2
+#if HS2 || AI
             DrawHeelzCompatibilityBlock(wrap);
 #endif
             DrawPeCompatibilityBlock(wrap);
         }
 
-#if HS2
+#if HS2 || AI
         private void DrawHeelzCompatibilityBlock(GUIStyle wrap)
         {
             GUILayout.Space(10f);

@@ -85,6 +85,12 @@ $gameConfig = @{
         StudioProcessNames = @("CharaStudio", "Koikatsu")
         StudioLabel = "CharaStudio"
     }
+    AI = @{
+        DeployDir = "D:\Games\AI Shoujo BetterRepack R15\BepInEx\plugins\AI-Sandbox"
+        StudioExe = "D:\Games\AI Shoujo BetterRepack R15\StudioNEOV2.exe"
+        StudioProcessNames = @("StudioNEOV2", "AI-Syoujyo")
+        StudioLabel = "StudioNEOV2 (AI)"
+    }
 }
 
 function Read-MultiChoice {
@@ -143,6 +149,7 @@ $gameLabels = @{
     HS2 = "Honey Select 2 (HS2)"
     KKS = "Koikatsu Sunshine (KKS)"
     KK  = "Koikatsu (KK)"
+    AI  = "AI-Shoujo (AI)"
 }
 
 $moduleCatalog = @(
@@ -227,7 +234,7 @@ $moduleCatalog = @(
     @{
         Key = "PoseBrowser"
         DisplayName = "PoseBrowser"
-        Games = @("HS2", "KKS", "KK")
+        Games = @("HS2", "KKS", "KK", "AI")
         Targets = @{
             HS2 = @{
                 BuildPath = "targets\HS2\PoseBrowser\HS2Sandbox.PoseBrowser.csproj"
@@ -247,12 +254,18 @@ $moduleCatalog = @(
                 DeployFileName = "KKSandbox.PoseBrowser.dll"
                 DeactivatedFileName = "KKSandbox.PoseBrowser.dl_"
             }
+            AI = @{
+                BuildPath = "targets\AI\PoseBrowser\AISandbox.PoseBrowser.csproj"
+                BuiltDllRelPath = "targets\AI\PoseBrowser\bin\Release\AISandbox.PoseBrowser.dll"
+                DeployFileName = "AISandbox.PoseBrowser.dll"
+                DeactivatedFileName = "AISandbox.PoseBrowser.dl_"
+            }
         }
     },
     @{
         Key = "AnimBrowser"
         DisplayName = "AnimBrowser"
-        Games = @("HS2", "KKS", "KK")
+        Games = @("HS2", "KKS", "KK", "AI")
         Targets = @{
             HS2 = @{
                 BuildPath = "targets\HS2\AnimBrowser\HS2Sandbox.AnimBrowser.csproj"
@@ -271,6 +284,12 @@ $moduleCatalog = @(
                 BuiltDllRelPath = "targets\KK\AnimBrowser\bin\Release\KKSandbox.AnimBrowser.dll"
                 DeployFileName = "KKSandbox.AnimBrowser.dll"
                 DeactivatedFileName = "KKSandbox.AnimBrowser.dl_"
+            }
+            AI = @{
+                BuildPath = "targets\AI\AnimBrowser\AISandbox.AnimBrowser.csproj"
+                BuiltDllRelPath = "targets\AI\AnimBrowser\bin\Release\AISandbox.AnimBrowser.dll"
+                DeployFileName = "AISandbox.AnimBrowser.dll"
+                DeactivatedFileName = "AISandbox.AnimBrowser.dl_"
             }
         }
     }
@@ -333,7 +352,7 @@ if ($multiGameModules.Count -gt 0) {
             Select-Object -Unique
     )
     $availableGameKeys = @(
-        @("HS2", "KKS", "KK") | Where-Object { $availableGameKeys -contains $_ }
+        @("HS2", "KKS", "KK", "AI") | Where-Object { $availableGameKeys -contains $_ }
     )
 
     $moduleNames = ($multiGameModules | ForEach-Object { $_.DisplayName }) -join ", "

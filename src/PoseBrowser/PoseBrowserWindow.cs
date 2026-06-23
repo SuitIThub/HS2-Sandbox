@@ -1104,7 +1104,7 @@ namespace HS2SandboxPlugin
             _tagDb.RecordLastUsed(item);
             _dataService.ApplyPoseToSelected(item);
             RecordPoseHistoryAfterSingleApply(item);
-#if HS2
+#if HS2 || AI
             HeelzControlService.ApplyTagRulesForSelectedCharacters(
                 _dataService.GetSelectedCharacters(), item.Tags);
 #endif
@@ -1411,7 +1411,7 @@ namespace HS2SandboxPlugin
                 SetVisible(false);
         }
 
-#if HS2
+#if HS2 || AI
         private void ToggleHeelzControlWindow()
         {
             var gui = FindObjectOfType<SandboxGUI>();
@@ -2308,7 +2308,7 @@ namespace HS2SandboxPlugin
             if (GUILayout.Button(new GUIContent($"View ({LayoutTierShortLabel()})", "Cycle: Full → compact list → mini"), PoseBrowserScale.W(110f), PoseBrowserScale.H(24f)))
                 CycleLayoutTier();
 
-#if HS2
+#if HS2 || AI
             if (GUILayout.Button("Heelz", PoseBrowserScale.W(52f), PoseBrowserScale.H(24f)))
                 ToggleHeelzControlWindow();
 #endif
@@ -2994,7 +2994,7 @@ namespace HS2SandboxPlugin
                 foreach (var t in group.Tags)
                     set.Add(t);
             }
-#if HS2
+#if HS2 || AI
             foreach (var t in HeelzControlService.GetAllRuleTags())
                 set.Add(t);
 #endif
@@ -5770,7 +5770,7 @@ namespace HS2SandboxPlugin
                 rich);
 
 
-#if HS2
+#if HS2 || AI
             GUILayout.Space(8f);
             GUILayout.Label("<b>Heelz Control</b>", rich);
             GUILayout.Label(
@@ -5785,7 +5785,7 @@ namespace HS2SandboxPlugin
             GUILayout.Space(8f);
             GUILayout.Label("<b>Options panel</b>", rich);
             GUILayout.Label(
-#if HS2
+#if HS2 || AI
                 "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle Heelz Control; toggle undocked pose stash; no text field focused).\n" +
 #else
                 "Card width, items per page (0 = all on one scroll), <b>Apply stored relative positions when applying a group</b>, <b>Adjust relative layout for body height (saved per pose)</b> (requires relative positions), select/deselect all filtered, and a read-only list of <b>keyboard shortcuts</b>. Assign keys in BepInEx <b>Configuration Manager</b> → section <b>Pose Browser · Keyboard shortcuts</b> (next/previous pose; next/previous browse target; undo/redo; toggle undocked pose stash; no text field focused).\n" +
@@ -6031,7 +6031,7 @@ namespace HS2SandboxPlugin
             }
             GUILayout.Label($"{Mathf.Round(_compactHoverThumbnailWidth)} px");
 
-#if HS2 || KK || KKS
+#if HS2 || AI || KK || KKS
             DrawPluginCompatibilitySection(wrap);
 #endif
 

@@ -90,7 +90,7 @@ namespace HS2SandboxPlugin
 
             _poseHistory.Undo(_dataService, selected, HistoryMaxEntries);
             _poseHistory.SaveToDiskIfDirty();
-#if HS2
+#if HS2 || AI
             ResetHeelzOverridesForCharacters(selected);
 #endif
         }
@@ -109,12 +109,12 @@ namespace HS2SandboxPlugin
 
             _poseHistory.Redo(_dataService, selected, HistoryMaxEntries);
             _poseHistory.SaveToDiskIfDirty();
-#if HS2
+#if HS2 || AI
             ResetHeelzOverridesForCharacters(selected);
 #endif
         }
 
-#if HS2
+#if HS2 || AI
         private static void ResetHeelzOverridesForCharacters(IEnumerable<Studio.OCIChar> characters)
         {
             foreach (var oci in characters)

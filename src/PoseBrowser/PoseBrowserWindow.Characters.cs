@@ -121,7 +121,7 @@ namespace HS2SandboxPlugin
                     _tagDb.RecordLastUsed(pose);
                 });
 
-#if HS2
+#if HS2 || AI
             HeelzControlService.ApplyTagRulesForMultiApply(chars, poses);
 #endif
 
