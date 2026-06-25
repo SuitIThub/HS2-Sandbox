@@ -2046,6 +2046,7 @@ namespace HS2SandboxPlugin
         {
             var frame = new RunFrame { Cmds = cmds, Idx = startIndex };
             _runningStack.Add(frame);
+            ctx.CommandListScope.Add(cmds);
 
             int index = startIndex;
             while (index >= 0 && index < cmds.Count && !_stopRequested)
@@ -2100,8 +2101,7 @@ namespace HS2SandboxPlugin
                 if (cmd is CheckpointCommand cp)
                 {
                     string name = cp.GetCheckpointName(ctx);
-                    if (!string.IsNullOrEmpty(name))
-                        ctx.CheckpointRegistry[name] = (cmds, index);
+                    ctx.RegisterCheckpoint(name, cmds, index);
                 }
 
                 while (_isPaused && !_stopRequested)
@@ -2151,6 +2151,7 @@ namespace HS2SandboxPlugin
                 }
             }
 
+            ctx.CommandListScope.RemoveAt(ctx.CommandListScope.Count - 1);
             _runningStack.Remove(frame);
         }
 
@@ -2167,8 +2168,7 @@ namespace HS2SandboxPlugin
                 if (cmds[i] is CheckpointCommand cp)
                 {
                     string name = cp.GetCheckpointName(ctx);
-                    if (!string.IsNullOrEmpty(name))
-                        ctx.CheckpointRegistry[name] = (cmds, i);
+                    ctx.RegisterCheckpoint(name, cmds, i);
                 }
                 else if (cmds[i] is SubTimelineCommand sub)
                     PreScanCheckpoints(sub.SubCommands, ctx);

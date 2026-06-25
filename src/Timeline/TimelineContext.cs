@@ -14,12 +14,17 @@ namespace HS2SandboxPlugin
         public MonoBehaviour Runner { get; set; } = null!;
 
         /// <summary>
-        /// Checkpoint name → (command list that contains it, index within that list).
-        /// Populated dynamically as checkpoints are executed at any nesting level.
-        /// The same name across levels is last-write-wins; checkpoint names should be unique.
+        /// Checkpoint name → all (command list, index) pairs with that name.
+        /// Populated by pre-scan and updated as checkpoints execute (for runtime variable names).
         /// </summary>
-        public Dictionary<string, (List<TimelineCommand> List, int Idx)> CheckpointRegistry { get; }
-            = new Dictionary<string, (List<TimelineCommand> List, int Idx)>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, List<(List<TimelineCommand> List, int Idx)>> CheckpointRegistry { get; }
+            = new Dictionary<string, List<(List<TimelineCommand> List, int Idx)>>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Nesting stack of command lists currently executing (root → innermost).
+        /// Used to resolve duplicate checkpoint names to the nearest enclosing scope.
+        /// </summary>
+        public List<List<TimelineCommand>> CommandListScope { get; } = new List<List<TimelineCommand>>();
 
         /// <summary>
         /// When set by a Jump/Loop/If command, the runner navigates to this (list, index) next.
@@ -69,10 +74,52 @@ namespace HS2SandboxPlugin
         /// </summary>
         public bool ReturnRequested { get; set; }
 
+        public void RegisterCheckpoint(string name, List<TimelineCommand> list, int idx)
+        {
+            if (string.IsNullOrEmpty(name) || list == null) return;
+            if (!CheckpointRegistry.TryGetValue(name, out var entries))
+            {
+                entries = new List<(List<TimelineCommand> List, int Idx)>();
+                CheckpointRegistry[name] = entries;
+            }
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (ReferenceEquals(entries[i].List, list) && entries[i].Idx == idx)
+                {
+                    entries[i] = (list, idx);
+                    return;
+                }
+            }
+
+            entries.Add((list, idx));
+        }
+
         public void SetJumpTarget(string checkpointName)
         {
-            if (CheckpointRegistry.TryGetValue(checkpointName, out var target))
-                JumpTarget = target;
+            if (string.IsNullOrEmpty(checkpointName)) return;
+            if (!CheckpointRegistry.TryGetValue(checkpointName, out var entries) || entries.Count == 0)
+                return;
+
+            for (int s = CommandListScope.Count - 1; s >= 0; s--)
+            {
+                var scopeList = CommandListScope[s];
+                (List<TimelineCommand> List, int Idx)? best = null;
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    if (!ReferenceEquals(entries[i].List, scopeList)) continue;
+                    if (!best.HasValue || entries[i].Idx < best.Value.Idx)
+                        best = entries[i];
+                }
+
+                if (best.HasValue)
+                {
+                    JumpTarget = best;
+                    return;
+                }
+            }
+
+            JumpTarget = entries[entries.Count - 1];
         }
     }
 }

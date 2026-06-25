@@ -10,7 +10,7 @@ namespace HS2SandboxPlugin
     {
         public const string PluginGuid = "com.hs2.sandbox.timeline";
         public const string PluginName = "HS2 Sandbox - Timeline";
-        public const string PluginVersion = "1.0.1";
+        public const string PluginVersion = "1.0.2";
 
         private static Texture2D _timelineIcon = null!;
         private static ToolbarToggle _timelineToolbarToggle = null!;
